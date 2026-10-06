@@ -59,7 +59,7 @@ test('AlphaEarth annual pixels, technical curves and explicit placeholder result
   await page.getByRole('button', { name: 'Volver al mapa', exact: true }).click();
 });
 
-test('Draw, save and edit boundaries; admin session and saved fields survive reload', async ({ page }) => {
+test('Draw, save and edit boundaries; reload respects the selected demo or server mode', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'Dibujar parcela', exact: true }).click();
   await expect(page.getByText('Dibuja los límites de tu parcela')).toBeVisible();
@@ -79,7 +79,15 @@ test('Draw, save and edit boundaries; admin session and saved fields survive rel
   await expect(page.getByRole('button', { name: 'Guardar límites', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Guardar límites', exact: true }).click();
   await expect(page.getByText('Límites ajustados', { exact: false })).toBeVisible();
-  await page.reload(); await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '198');
+  await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '198');
+  await page.reload();
+  if (process.env.AGROCEBADA_DEMO === '1') {
+    await expect(page.getByRole('button', { name: 'Entrar a AgroCebada' })).toBeVisible();
+    await login(page);
+    await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '197');
+  } else {
+    await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '198');
+  }
   await page.getByRole('button', { name: 'Abrir menú de testuser' }).click();
   await page.getByRole('menuitem', { name: 'Administración' }).click();
   await expect(page.getByRole('heading', { name: 'Usuarios del espacio' })).toBeVisible();

@@ -5,6 +5,7 @@ import { getArea } from 'ol/sphere';
 export const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 export const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 export const EXAMPLE_YIELD = 4.2;
+export const IS_DEMO = import.meta.env?.VITE_DEMO === 'true';
 export const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 export const fmt = (n: number | null | undefined, digits = 2) => n == null || !Number.isFinite(n) ? '—' : new Intl.NumberFormat('es-MX', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
 export const dateKey = (year: number, month: number) => `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -57,6 +58,10 @@ export const geometryBounds = (geometry: Geometry) => {
 };
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (IS_DEMO) {
+    const { demoApi } = await import('./demo');
+    return demoApi<T>(path, options);
+  }
   const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers } });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'No pudimos completar la solicitud.');

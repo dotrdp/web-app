@@ -2,6 +2,23 @@
 
 React/Material UI atlas for the Reto AgroCebada. The interface is an original FIRA adaptation of the React Material Admin dashboard structure. It uses the real Agrocebada map found in `/home/rd/code/ds-mx.c/ds-mx.c/public/agrocebada/` and its original QGIS/FIRA data in the neighboring `dataset/` directory.
 
+## Public demo deployment
+
+The demo at **https://agrocebada.datascience-mexico.com** is deployed from `subdomains/agrocebada/` in `/home/rd/code/ds-mx.c/ds-mx.c`. It uses a separate Cloudflare Worker with static assets; its custom domain is declared in `wrangler.jsonc`.
+
+```sh
+npm ci
+npm run dev:demo
+npm run test:e2e:demo
+npm run deploy
+```
+
+`build:demo` selects `.env.demo` and replaces server API calls with a browser-only demo adapter. The administrator credentials remain **testuser / Fira2026!**. Login, drawn parcels, boundary edits, and analyses exist only in page memory and reset when the page reloads or the user signs out. The demo has no backend, database, session cookie, localStorage, sessionStorage, or uploaded workspace state. Each visitor has an independent session. The fixed **4.2 t/ha** placeholder remains explicit, and downloads still work.
+
+The original map datasets and raster PNGs are served from `public/data/` and `public/rasters/`. Python caches, source datasets, local server state and credentials are excluded from the deployment. `npm run build` and the Node server commands below retain the original local server mode; use `build:demo` for this public demo.
+
+Run browser tests against the deployed site with `AGROCEBADA_DEMO=1 PLAYWRIGHT_BASE_URL=https://agrocebada.datascience-mexico.com npm run test:e2e`.
+
 Start the local app at **http://localhost:8080**:
 
 ```sh

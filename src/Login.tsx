@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Button, IconButton, InputAdornment, TextField } from '@mui/material';
 import { ArrowRight, Eye, EyeOff, Sprout, Satellite, ShieldCheck, MapPin } from 'lucide-react';
-import { api } from './lib';
+import { api, IS_DEMO } from './lib';
 import type { User } from './types';
 
 export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
@@ -33,7 +33,7 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
         <Button fullWidth variant="contained" type="submit" disabled={busy} endIcon={<ArrowRight size={17}/>} className="login-submit">{busy ? 'Entrando…' : 'Entrar a AgroCebada'}</Button>
       </form>
       <div className="demo-login"><div><ShieldCheck size={18}/><b>Cuenta administradora de prueba</b></div><p><span>Usuario <code>testuser</code></span><span>Contraseña <code>Fira2026!</code></span></p><Button size="small" onClick={() => { setUsername('testuser'); setPassword('Fira2026!'); setError(''); }}>Usar cuenta de prueba <ArrowRight size={13}/></Button></div>
-      <div className="login-footnote"><Sprout size={15}/>Tecnología que empieza en la tierra.</div>
+      <div className="login-footnote"><Sprout size={15}/>{IS_DEMO ? 'Demo: los cambios se pierden al recargar la página.' : 'Tecnología que empieza en la tierra.'}</div>
     </div><footer>AgroCebada 2026 <span>Hecho para el Reto FIRA</span></footer></main>
   </div>;
 }
