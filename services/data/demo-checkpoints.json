@@ -1,0 +1,13 @@
+{
+  "month": "2025-07",
+  "unknownFields": [
+    {"state":"Hidalgo","coordinates":[-99.0167529416033,20.219802098325143]},
+    {"state":"Puebla","coordinates":[-97.81583676634406,18.993409690016847]},
+    {"state":"Tlaxcala","coordinates":[-97.99699737230009,19.45095283885023]}
+  ],
+  "waterViews": [
+    {"state":"Hidalgo","coordinates":[-99.37156035956426,20.15168237742358]},
+    {"state":"Puebla","coordinates":[-98.12097543936237,18.909554105186427]},
+    {"state":"Tlaxcala","coordinates":[-98.18896399333816,19.567737875342086]}
+  ]
+}

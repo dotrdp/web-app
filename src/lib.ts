@@ -49,7 +49,7 @@ export function mergedParcels(atlas: Atlas, workspace: Workspace): Parcel[] {
     const bounds = geometryBounds(geometry);
     original.push({ type: 'Feature', geometry, properties: { id: field.id, name: field.name, municipality: 'Terreno personalizado', state: 'Mi parcela', crop: 'Cebada', area: override?.area || field.area, group: 'custom', observedYield: null, predictedYield: EXAMPLE_YIELD, predictionSource: 'placeholder', centroid: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2], bounds, elevation: null, slope: null, edited: !!override } });
   }
-  return original;
+  return workspace.accessibleParcelIds ? original.filter(p => workspace.accessibleParcelIds!.includes(p.properties.id)) : original;
 }
 
 export const geometryBounds = (geometry: Geometry) => {
@@ -58,7 +58,7 @@ export const geometryBounds = (geometry: Geometry) => {
 };
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  if (IS_DEMO) {
+  if (IS_DEMO && !/^\/api\/(imagery|segmentation)(\/|$)/.test(path)) {
     const { demoApi } = await import('./demo');
     return demoApi<T>(path, options);
   }

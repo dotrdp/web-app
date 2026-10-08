@@ -1,90 +1,119 @@
 # AgroCebada · FIRA 2026
 
-React/Material UI atlas for the Reto AgroCebada. The interface is an original FIRA adaptation of the React Material Admin dashboard structure. It uses the real Agrocebada map found in `/home/rd/code/ds-mx.c/ds-mx.c/public/agrocebada/` and its original QGIS/FIRA data in the neighboring `dataset/` directory.
+Public demo: **https://agrocebada.datascience-mexico.com**. React, Material UI and OpenLayers retain the original 197 parcels, climate/terrain, Landsat and AlphaEarth products. A same-origin Cloudflare Worker connects live imagery and fixed SAM 2.1 tiny inference to rig.
 
-## Public demo deployment
-
-The demo at **https://agrocebada.datascience-mexico.com** is deployed from `subdomains/agrocebada/` in `/home/rd/code/ds-mx.c/ds-mx.c`. It uses a separate Cloudflare Worker with static assets; its custom domain is declared in `wrangler.jsonc`.
+## Run and deploy
 
 ```sh
 npm ci
 npm run dev:demo
-npm run test:e2e:demo
+npm run build:demo
 npm run deploy
 ```
 
-`build:demo` selects `.env.demo` and replaces server API calls with a browser-only demo adapter. The administrator credentials remain **testuser / Fira2026!**. Login, drawn parcels, boundary edits, and analyses exist only in page memory and reset when the page reloads or the user signs out. The demo has no backend, database, session cookie, localStorage, sessionStorage, or uploaded workspace state. Each visitor has an independent session. The fixed **4.2 t/ha** placeholder remains explicit, and downloads still work.
+The demo development server runs at `http://127.0.0.1:8082`, proxying scientific requests to port 8090. `build:demo` uses `.env.demo`. Accounts, assignments, parcels, corrections and analyses exist only in page memory; reload/logout resets them. The public demo creates no session cookie, localStorage, sessionStorage or account database. Scientific caches on rig persist independently.
 
-The original map datasets and raster PNGs are served from `public/data/` and `public/rasters/`. Python caches, source datasets, local server state and credentials are excluded from the deployment. `npm run build` and the Node server commands below retain the original local server mode; use `build:demo` for this public demo.
+| Account | Role | Initial access |
+| --- | --- | --- |
+| `testuser` | Administrador | All 197 parcels; accounts, roles, status and assignments |
+| `tecnico` | Técnico | Productor 1's 99 assigned parcels |
+| `productor1` | Productor | 99 assigned parcels |
+| `productor2` | Productor | 98 assigned parcels |
 
-Run browser tests against the deployed site with `AGROCEBADA_DEMO=1 PLAYWRIGHT_BASE_URL=https://agrocebada.datascience-mexico.com npm run test:e2e`.
+All seeded passwords are `Fira2026!`. The account menu demonstrates assignment boundaries while retaining page memory. Productor / Análisis Pro changes presentation; the dispatcher separately checks permissions for every workspace read/write. Original geometries remain immutable; corrections are separate overrides.
 
-Start the local app at **http://localhost:8080**:
+`npm run dev` and `npm run build && npm start` preserve the original local server at port 8080, with scrypt authentication, session cookies and a persistent local workspace. Use **demo** commands for the public deployment and simulated roles.
+
+## Login and map
+
+- Actual looping GIF artwork combines georeferenced Esri imagery, INEGI boundaries and supplied parcels. Desktop is 48% artwork / 52% login; mobile ≤700 px has a compact banner above the form. The logo and copy remain HTML. Reduced motion explicitly selects a WebP poster.
+- Desktop GIF: 720×1050, 120 frames, 10 seconds, 280,965 bytes. Mobile: 780×320, 120 frames, 10 seconds, 157,702 bytes. Both use optimized palettes, partial frames and infinite loops, with no player UI. Three storyboard frames per format and source metadata are in `public/artwork/`.
+- All pages use a persistent sidebar adapted from Stealth UI's navbar, with a pill that follows the pointer and returns to the current page. The existing AgroCebada logo and account actions remain in the side menu; smaller screens use a left drawer. Pro settings open in a right drawer. Productor and Técnico accounts have no top bar and use the full available viewport height. Administrators retain a slim presentation bar. Floating search accepts parcel ID, municipality or coordinates. No parcel is initially selected.
+- Stealth UI square icon buttons group layers (Rendimiento, Vegetación, Agua, Clima and Terreno), parcel tools, map navigation, direct basemap selection and monthly playback. Shared tooltips provide their names on hover and keyboard focus, with subtle press motion. Each toolbar independently compacts to a single icon and reopens, including when its data controls are disabled. Selected layers, dates, basemaps and compact preferences survive page navigation in memory; logout/reload resets the demo.
+- Compact +/− zoom buttons control the actual OpenLayers view from levels 5–19 and disable at its limits. The water MNDWI threshold uses a Stealth slider in Análisis Pro, ranging from −1 to 1 in 0.05 steps with a default of 0. Its value bubble, pointer/touch drag and keyboard controls update the water tiles and map legend directly. React Aria retains group navigation, selected states, disabled controls and focus restoration. April–October fit the mobile dock; native date editing retains its own keys. Fullscreen keeps side panels available. `src/IconButton.tsx`, `src/MapSlider.tsx` and `src/Navbar.tsx` adapt Stealth UI's MIT-licensed sources to the app's CSS (`public/licenses/stealth-ui-MIT.txt`); React Aria grouping retains Intent UI's MIT attribution. Reduced motion disables springs, press scaling and drawer transitions.
+- Map setup uses a request-driven agent timeline with parallel sources, elapsed time, expandable results and retry. Spectrum UI's nine-dot loading state also appears during imagery preparation and live delineation. Timers are hidden from screen readers; reduced motion disables the dots and text shimmer. Adapted components are in `src/AgentProgress.tsx`, with the Apache-2.0 license in `public/licenses/spectrum-ui.txt`.
+- Every page retains its cards, table columns and units during loading, with `—` values and the shared dotted indicator. Pending administration writes, example analyses and delineation areas use the same placeholders. Errors stop their animation and offer retry; pages with cached data show their values immediately. Unconnected model metrics remain explicitly labeled as pending.
+- July 2025 is the opening month. April–October are directly available; the date picker covers 2022–2025. Playback waits for imagery, stops on service errors and pauses during editing or segmentation. Yield, terrain and annual AlphaEarth disable monthly playback.
+- Selection opens a floating card; mobile uses a scrollable bottom sheet. Análisis Pro contains thresholds, water opacity, climate/terrain controls, historical Landsat, annual AlphaEarth and provenance exports. Selection/map movement preserve raster sources, with bounded browser caches.
+- Rendimiento colors recorded 2025 yields only; missing values remain neutral. Yield estimates remain the explicit **4.2 t/ha example**, labeled `PLACEHOLDER_SIN_INFERENCIA`. No yield prediction model runs.
+
+## Rig service
+
+Use **uv** and a CUDA GPU. `services/model-version.json` pins the official SAM commit and checkpoint SHA-256. No training or weight updates occur. The supplied systemd units target `%h/code/fira2026/webapp`; adjust paths if installing elsewhere.
 
 ```sh
-npm install
-npm run dev
+bash services/setup.sh
+mkdir -p ~/.config/systemd/user
+cp services/agrocebada-*.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now agrocebada-imagery.service agrocebada-tunnel.service
+loginctl enable-linger "$USER"
+uv run --no-project --python services/.venv/bin/python python services/prewarm.py
 ```
 
-The server binds to `127.0.0.1:8080`. For a production build:
+Setup installs the locked Python environment, verifies fixed weights, prepares a private service token and builds all 48 manifests. Cloudflared must be installed at `/usr/local/bin/cloudflared`. Credentials stay in the ignored `.data-cache/deployment/` directory with mode 600 and never enter the browser bundle. The API refuses to start without its token.
+
+For a newly configured Worker, create the `AGROCEBADA_SERVICE` KV binding in `wrangler.jsonc`, then install the same server token:
 
 ```sh
-npm run build
-npm start
+npx wrangler secret put SERVICE_TOKEN < .data-cache/deployment/service-token
+npm run deploy
 ```
 
-The test administrator is **testuser**, password **Fira2026!**. This is the explicitly requested local demo account. Authentication runs on the server: scrypt password hash, HttpOnly/SameSite session cookie, protected workspace endpoints, and admin authorization. Session expiry is 12 hours. Sessions end on server restart; saved parcels and analyses persist in `.data-cache/server/workspace.json`. `ADMIN_PASSWORD` changes the seed password when creating a fresh workspace. `STATE_DIR`, `PORT`, and `HOST` can configure the runtime without editing code.
+The existing Cloudflare authorization can deploy Workers but cannot edit DNS. A supervised Cloudflare Tunnel therefore registers its changing HTTPS origin through the token-protected `/__service/register` endpoint into KV. The public frontend keeps its existing custom domain and uses only same-origin endpoints. Registration repeats after restarts/reboots; both rig units automatically restart and use user lingering.
 
-## Features
+| Endpoint | Behavior |
+| --- | --- |
+| `GET /api/imagery/health` | Service/model availability |
+| `GET /api/imagery/manifests/YYYY-MM` | Version, scenes, dates, calibration and tile template |
+| `GET /api/imagery/tiles/{version}/{month}/{product}/{z}/{x}/{y}.png` | RGB, NDVI or MNDWI; optional threshold |
+| `POST /api/segmentation/proposals` | WGS84 prompts, month, imagery version and request ID |
 
-- Map with the 197 original parcel geometries, 138 training / 59 prediction parcels and 1301.05 declared hectares. INEGI boundaries for Hidalgo, Puebla and Tlaxcala.
-- Search by ID, municipio, state, or coordinates (`latitude, longitude` or `longitude, latitude`); click parcels or clusters to inspect/zoom.
-- Month pills and year selection. The 144 original monthly precipitation/Tmin/Tmax renders cover 2022–2025. Elevation and slope are the original 120 m INEGI products. The CRS and original QGIS raster extents are retained.
-- **Landsat Collection 2 Level 2 NDVI**, 48 monthly composites from 2022–2025. The threshold actually masks individual raster pixels; optionally it also filters parcels by their valid-pixel mean. Missing data are never replaced with values. At up to 30 m native resolution, tiny parcels can have no valid pixel centers in a month.
-- **AlphaEarth**, all 64 embedding dimensions for every parcel/year, 2017–2025. Native 10 m RGB previews are shown when zooming into parcels. A00/A01/A02 are a fixed display stretch; they do not represent vegetation health. The dataset is annual, so month buttons are disabled for this layer.
-- Farmer and technical views; original satellite NDVI curves, monthly climate, all 64 AlphaEarth axes, scene provenance and exports.
-- Draw a terrain polygon, save it, edit vertices, and analyze the result. Edits are stored separately and preserve original dataset boundaries. Environmental summaries on edited parcels still refer to the original boundaries, which is disclosed in the interface.
-- CSV/GeoJSON and annual-vector downloads, persisted saved analyses, administrator view, desktop and mobile layouts.
+Scientific endpoints bypass the browser demo adapter. Public manifests omit source asset URLs and signed credentials. Limits: 16 KiB bodies, 240 requests/minute/client, four concurrent tile computations with a bounded queue, and one inference. Native data/tiles use a persistent 40 GiB LRU cache; successful public tiles also use Cloudflare caching.
 
-## Model placeholder
+During rig outages the welcome screen and original atlas products remain available. New layers/delineation report unavailability with retry/manual controls. Cold tiles may need a retry while native observations are prepared; prewarming prioritizes the July opening view and statewide overview.
 
-**No prediction model is imported, loaded, trained, or executed.** Every estimated yield is the fixed placeholder **4.2 t/ha**, prominently labeled “Ejemplo”. The example production is simply area × 4.2. Original recorded yields are shown separately. Precision metrics and prediction explanations are pending; the technical view makes that status explicit. API analysis responses include `status: "placeholder"`, and CSV exports label example values and carry `PLACEHOLDER_SIN_INFERENCIA`.
+## Scientific products and delineation
 
-## Data preparation with uv
+`services/data/states.geojson` contains the **complete** INEGI Hidalgo/Puebla/Tlaxcala boundaries. Source dates/checksums are alongside it. Public display boundaries are simplified only for cartography. Coverage is never restricted to the old parcel rectangle or a processing crop.
 
-The application itself is JavaScript/TypeScript and runs from its portable `public/data/` and `public/rasters/` files. Python is used only to prepare/reproduce the scientific data. Use **uv** for all Python commands. The preparation scripts use the existing system GDAL, NumPy, Pillow, PyProj, Shapely and requests environment:
+All 48 Sentinel-2 L2A manifests cover every intersecting footprint and 16 MGRS tiles. Reprocessed duplicates use the newest baseline/generation. Deterministic per-pixel mosaics order observations by scene cloud percentage, acquisition date and ID. SCL 4/5/6/7 are retained; fill, defects, shadows, clouds, cirrus and snow are masked. Source planes retain acquisition provenance. Classification can be imperfect; water is displayed as **candidates**, not confirmed boundaries.
 
-```sh
-uv run --no-project --python /usr/bin/python3 python scripts/export_data.py
-uv run --no-project --python /usr/bin/python3 python scripts/fetch_landsat.py --years 2025 2024 2023 2022
-```
+Original, unharmonized Planetary Computer DNs use `DN × 0.0001 − 0.1` at processing baseline ≥04.00 and zero offset earlier. DN zero is missing. Calibration was checked against original product XML. RGB/NDVI use aligned 10 m grids. Green reflectance is area-averaged onto the 20 m SWIR1 grid **before** `(green − SWIR1) / (green + SWIR1)`. Cyan candidates default to MNDWI ≥0. Missing observations remain transparent without fabricated values or interpolation. Native indices are computed before tile resampling.
 
-`export_data.py` only reads the neighboring original dataset and writes the webapp's own output files. It preserves parcel x/y precision; simplifies only the INEGI display boundaries; and exports the original 146 QGIS raster renders. Per-parcel climate values come from the existing feature-table extraction and are matched using its row crosswalk. Sentinel-2/Planet NDVI curves use valid supplied observations with cloud cover ≤30%, monthly means and explicit missing months.
+Renderer version 2 creates weighted display overviews after native index computation and thresholding, preserving transparent missing data. Its versioned manifests retain the original native imagery version so existing native caches and segmentation provenance stay reproducible. The July 2025 native grid, statewide zoom 6–9 overviews and zoom 10–11 opening view are prewarmed.
 
-AlphaEarth means are computed after nonlinear dequantization, weighted by exact parcel/cell area fractions, then normalized to unit length. The signed int8 source uses −128 as NoData. Previews preserve the UTM 14N native raster grid and use RGB A00/A01/A02 with the fixed [−0.25,0.25] display stretch. Preview PNGs and the normalized 64-axis vectors are included for all 1,773 parcel-years.
+Fixed SAM 2.1 tiny uses an unstyled, georeferenced RGB crop of the selected imagery version. Edge-touching results expand the crop up to 5120 m. The editable WGS84 response includes scenes, prompts, crop grid, model version, confidence and latency. Prompt constraints are checked again after geometry processing. Ambiguity/missing observations are reported. The current editor accepts one exterior; excluded interior holes require manual correction.
 
-`fetch_landsat.py` reads COG windows through the Planetary Computer catalog. It restricts scenes to **Landsat 8/9**, WRS path 026 / row 046, which covers the study area. It selects up to two scenes with the lowest scene cloud cover each month, converts red/NIR DN to reflectance using **×0.0000275 − 0.2**, and masks fill, dilated cloud, cirrus, cloud, shadow, snow and red/NIR saturation. NDVI is the monthly valid-pixel median. Parcel statistics are native 30 m pixel-center samples. The display image is averaged to a 640-pixel-wide EPSG:3857 grid; NDVI is encoded at 1e−4 precision in its R/G channels and validity in alpha. The browser decodes these values, colors them, and applies the selected inclusive threshold. Display resolution is lower than the native data, especially when zoomed closely. Native monthly GeoTIFFs remain in `.data-cache/landsat/`; scene IDs, dates, coverage and PNG SHA-256 values are in `public/data/landsat.json`.
+Proposals remain separate from saved parcels. Users add inclusion/exclusion points, retry, adjust vertices, cancel, export and explicitly save. Abort/revision checks prevent stale responses from replacing drafts. Exports preserve proposed/corrected geometry for later training. Outlines are approximate at 10 m and require confirmation. This release adds no alerts, crop diagnoses, field visits or cloud prediction.
 
-The satellite/street basemaps use external Esri/OpenStreetMap tiles and need internet. Parcel geometry, climate/terrain, AlphaEarth and NDVI layers are served locally. A lost basemap connection does not remove the local scientific layers or parcel boundaries. Data preparation uses live public endpoints only when regenerating missing Landsat months.
-
-## Verification
+## Verification and rollback
 
 ```sh
-npm run build
+npm run check
 npm test
 npm run test:e2e
+AGROCEBADA_DEMO=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8082 npm run test:e2e
+uv run --no-project --python services/.venv/bin/python python -m unittest discover -s services -p 'test_*.py' -v
+uv run --no-project --python services/.venv/bin/python python services/verify_live.py
 ```
 
-Unit/integration checks cover all 197 parcel records, all 146 climate/terrain renders, all 1,773 embedding vectors/previews, 48 Landsat 8/9 composites, exact threshold/no-data behavior, filters/coordinate order, safe boundary overrides, CSV placeholder labels, geometry validity, authentication/admin authorization, and persisted placeholder results.
+Tests cover original data, calibration, masks, water aggregation, statewide manifests, tile seams, GIF resources/budgets, assignments, geometry, crop expansion and prompt constraints. Playwright checks loading/reduced motion, full map layouts, historical products, drawing/delineation, exports, stale requests and permissions. Evidence is retained in ignored `test-results/` and `.data-cache/verification/`.
 
-Playwright exercises actual browser login, search, month changes, decoded raster thresholding, annual AlphaEarth pixels, technical curves, placeholder analysis, drawing/editing/persistence, admin/logout and mobile overflow. It starts an isolated server on 8081 with its own temporary workspace so the demo user's saved data are not modified. Screenshots are saved under `test-results/`. Install Chromium with `npx playwright install chromium` when needed, or set `CHROMIUM_PATH` to an existing installation. `node scripts/inspect.mjs` captures the actual app at port 8080 into `/tmp/agrocebada-preview/`.
+`node scripts/check_recovery.mjs` performs a controlled rig outage and crash restart against the development demo. Run during a maintenance window. Live verification tests an unknown field in each state, real RGB/NDVI/water tiles outside the parcel cluster, and reference IoU against AGC_001. Model scores are not measured boundary accuracy; the unknown fields have no surveyed ground truth.
 
-## Sources and credits
+The previous frontend is archived at `.data-cache/rollback/frontend-before-20261007.tar.gz`, with Cloudflare versions in `cloudflare-before.json`. Previous public Worker: `9089d611-586a-4cc1-8d0a-24eb4f50509f`. Restore with `npx wrangler rollback 9089d611-586a-4cc1-8d0a-24eb4f50509f`, or redeploy the archived frontend. Fixed model source/checkpoint/version remain preserved independently.
 
-- User ideas: `/home/rd/.codex/attachments/068a4c91-326e-431d-97b7-d835e07601e0/pasted-text-1.txt`.
-- [React Material Admin reference](https://flatlogic.com/templates/react-material-admin-full/demo). No commercial template source was copied.
-- FIRA Reto AgroCebada 2026 original shapefile/CSV/climate delivery and QGIS project, with source checksums in `public/data/provenance.json`.
-- [INEGI Marco Geoestadístico](https://www.inegi.org.mx/servicios/catalogounico.html).
-- [Google/Google DeepMind AlphaEarth encoding and source documentation](https://developers.google.com/earth-engine/guides/aef_on_gcs_readme), CC BY 4.0; regional subsets/previews are derivatives with out-of-parcel pixels masked.
-- [Microsoft Planetary Computer Landsat C2 L2](https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2) / USGS; [NDVI definition](https://www.usgs.gov/landsat-missions/landsat-normalized-difference-vegetation-index).
-- QGIS/qgis2web original climate/terrain rendering, OpenLayers map engine, Material UI, Lucide icons, Inter and Manrope fonts.
+## Sources and reproduction
+
+- [Copernicus products](https://sentiwiki.copernicus.eu/web/s2-products), [processing/SCL](https://sentiwiki.copernicus.eu/web/s2-processing) and [Planetary Computer Sentinel-2](https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a).
+- [MNDWI scientific reference](https://lpdaac.usgs.gov/documents/1370/GFCC_ATBD.pdf).
+- [Official SAM 2](https://github.com/facebookresearch/sam2), pinned in `services/model-version.json`.
+- [Spectrum UI AI assistant blocks](https://ui.spectrumhq.in/blocks/ai-assistants#agent-steps), Apache-2.0; loading-state and agent-steps adapted for the application.
+- [INEGI Marco Geoestadístico](https://www.inegi.org.mx/servicios/catalogounico.html); source metadata in `services/data/boundary-sources.json`.
+- FIRA original shapefile/CSV/climate delivery and QGIS project; checksums in `public/data/provenance.json`.
+- [AlphaEarth source/encoding](https://developers.google.com/earth-engine/guides/aef_on_gcs_readme), CC BY 4.0. All 1,773 parcel-year previews and normalized 64-axis vectors are preserved. A00/A01/A02 are a display stretch, not vegetation health.
+- [Landsat C2 L2](https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2) / USGS: 48 preserved Landsat 8/9 composites, native 30 m statistics, scale 0.0000275, offset −0.2, QA masks and missing values.
+- Login cartography: Esri World Imagery, INEGI and FIRA boundaries. Reproduce with `uv run --no-project --python /usr/bin/python3 python scripts/render_login.py`; its manifest records extents/checksums. The login needs no runtime map service.
+
+Original preparation remains in `scripts/export_data.py` and `scripts/fetch_landsat.py`, using the neighboring supplied `dataset/` without changing original sources. OpenLayers, Material UI, Lucide, Inter and Manrope supply the interface.

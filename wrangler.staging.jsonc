@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "agrocebada-staging",
+  "main": "server/worker.mjs",
+  "account_id": "53adcd7fd655b8c6613a1949280e3341",
+  "compatibility_date": "2026-04-04",
+  "workers_dev": true,
+  "preview_urls": false,
+  "kv_namespaces": [
+    {
+      "binding": "AGROCEBADA_SERVICE",
+      "id": "e057b076e6154e998edb742d22c4b95d"
+    }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*",
+      "/__service/*"
+    ]
+  },
+  "routes": []
+}

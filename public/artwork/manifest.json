@@ -1,0 +1,50 @@
+{
+  "desktop": {
+    "width": 720,
+    "height": 1050,
+    "frames": 120,
+    "durationMs": 10000,
+    "loop": 0,
+    "bounds3857": [
+      -10988602.207492976,
+      2201029.0864848234,
+      -10964602.207492976,
+      2236029.0864848234
+    ],
+    "source": "Esri World Imagery; INEGI; FIRA supplied parcels",
+    "sourceRequest": {
+      "bbox": "-10988602.207492976,2201029.0864848234,-10964602.207492976,2236029.0864848234",
+      "bboxSR": 3857,
+      "imageSR": 3857,
+      "size": "720,1050",
+      "format": "jpg",
+      "f": "image"
+    },
+    "sourceSha256": "08bcca957cbb33e0a6cf0d8e2216abce7593526c39039b1fe90a680026ad3b2b",
+    "bytes": 280965
+  },
+  "mobile": {
+    "width": 780,
+    "height": 320,
+    "frames": 120,
+    "durationMs": 10000,
+    "loop": 0,
+    "bounds3857": [
+      -10995202.207492976,
+      2213028.3172540544,
+      -10961202.207492976,
+      2226977.035202772
+    ],
+    "source": "Esri World Imagery; INEGI; FIRA supplied parcels",
+    "sourceRequest": {
+      "bbox": "-10995202.207492976,2213028.3172540544,-10961202.207492976,2226977.035202772",
+      "bboxSR": 3857,
+      "imageSR": 3857,
+      "size": "780,320",
+      "format": "jpg",
+      "f": "image"
+    },
+    "sourceSha256": "a9476c9111d4fa0320f23e57be8c7d6ffd35da7c00f81631d580c450587c963d",
+    "bytes": 157702
+  }
+}

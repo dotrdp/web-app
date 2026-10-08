@@ -52,6 +52,13 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
     next();
   });
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: 'placeholder', port: Number(process.env.PORT || 8080) }));
+  app.use(['/api/imagery', '/api/segmentation'], async (req, res) => {
+    try {
+      const token = process.env.AGROCEBADA_SERVICE_TOKEN || await readFile(path.join(root,'.data-cache/deployment/service-token'),'utf8').then(s=>s.trim()).catch(()=> '');
+      const response = await fetch('http://127.0.0.1:8090'+req.originalUrl, { method: req.method, headers: { 'Content-Type':'application/json', 'X-AgroCebada-Service-Token': token }, body: req.method==='POST' ? JSON.stringify(req.body) : undefined, signal: AbortSignal.timeout(95000) });
+      res.status(response.status).set('Content-Type',response.headers.get('Content-Type') || 'application/json').send(Buffer.from(await response.arrayBuffer()));
+    } catch { res.status(503).json({ error:'Servicio de imágenes no disponible. Puedes seguir usando el atlas.' }); }
+  });
   app.get('/api/auth/session', (req, res) => res.json({ user: req.user ? publicUser(req.user) : null }));
   app.post('/api/auth/login', (req, res) => {
     const ip = req.ip;

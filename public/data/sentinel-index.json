@@ -1,0 +1,1402 @@
+{
+  "source": "Copernicus / Microsoft Planetary Computer",
+  "states": [
+    "Hidalgo",
+    "Puebla",
+    "Tlaxcala"
+  ],
+  "months": [
+    {
+      "month": "2022-01",
+      "version": "s2-v1-b61c7c372e68d344",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 152
+    },
+    {
+      "month": "2022-02",
+      "version": "s2-v1-5c837bc6ee2c5617",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 124
+    },
+    {
+      "month": "2022-03",
+      "version": "s2-v1-cd39fb0b0b4ba31a",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2022-04",
+      "version": "s2-v1-b570126817549d64",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 132
+    },
+    {
+      "month": "2022-05",
+      "version": "s2-v1-5cd7036c8cb3b924",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 152
+    },
+    {
+      "month": "2022-06",
+      "version": "s2-v1-599fe0d1cf8dd0e8",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2022-07",
+      "version": "s2-v1-ca396f5f0c44b5c5",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2022-08",
+      "version": "s2-v1-a13b300844e579b2",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 147
+    },
+    {
+      "month": "2022-09",
+      "version": "s2-v1-268c102b9d98b86b",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2022-10",
+      "version": "s2-v1-d1ffa06f5aae6f06",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2022-11",
+      "version": "s2-v1-f7f9f3c249b3fda0",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 122
+    },
+    {
+      "month": "2022-12",
+      "version": "s2-v1-2329e08d57bfcf1c",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 123
+    },
+    {
+      "month": "2023-01",
+      "version": "s2-v1-28a6debe98894c63",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 150
+    },
+    {
+      "month": "2023-02",
+      "version": "s2-v1-a17c6cd54b20309c",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 113
+    },
+    {
+      "month": "2023-03",
+      "version": "s2-v1-a74f62c78aa03988",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-04",
+      "version": "s2-v1-e91697347ceaa1c8",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-05",
+      "version": "s2-v1-176e6b7dfbcfb067",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 145
+    },
+    {
+      "month": "2023-06",
+      "version": "s2-v1-c157ab061f3f9779",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-07",
+      "version": "s2-v1-1b1ab6c16ec9bf1c",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-08",
+      "version": "s2-v1-929e55533820af6b",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 147
+    },
+    {
+      "month": "2023-09",
+      "version": "s2-v1-b1135a9375af6535",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-10",
+      "version": "s2-v1-729f98cd7ab4497a",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-11",
+      "version": "s2-v1-06e0f8ff845424c8",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2023-12",
+      "version": "s2-v1-24fca13d6929b2a5",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 129
+    },
+    {
+      "month": "2024-01",
+      "version": "s2-v1-2eac6239403da8a9",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 152
+    },
+    {
+      "month": "2024-02",
+      "version": "s2-v1-100cd272ca588eec",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 124
+    },
+    {
+      "month": "2024-03",
+      "version": "s2-v1-e9cdd44c0c1534d3",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 152
+    },
+    {
+      "month": "2024-04",
+      "version": "s2-v1-f2dfbdbeeb30b057",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2024-05",
+      "version": "s2-v1-3093308d113f3ad0",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2024-06",
+      "version": "s2-v1-4f72b0e1c05a0e00",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2024-07",
+      "version": "s2-v1-ffd33ed29e9bdbc5",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 136
+    },
+    {
+      "month": "2024-08",
+      "version": "s2-v1-ee405c8c73826f7a",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2024-09",
+      "version": "s2-v1-b0e19afa7b44d893",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 106
+    },
+    {
+      "month": "2024-10",
+      "version": "s2-v1-43ef19e11fb94620",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2024-11",
+      "version": "s2-v1-8fbd5a3b0ecd3d71",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 138
+    },
+    {
+      "month": "2024-12",
+      "version": "s2-v1-6d3b561af002b07e",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 152
+    },
+    {
+      "month": "2025-01",
+      "version": "s2-v1-3ea6d05d5e250667",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 129
+    },
+    {
+      "month": "2025-02",
+      "version": "s2-v1-bdba3232f78c239a",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 115
+    },
+    {
+      "month": "2025-03",
+      "version": "s2-v1-1867eb1a71ae4deb",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 175
+    },
+    {
+      "month": "2025-04",
+      "version": "s2-v1-be3719020cf51bc0",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 175
+    },
+    {
+      "month": "2025-05",
+      "version": "s2-v1-ab7de024f3c9af55",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 170
+    },
+    {
+      "month": "2025-06",
+      "version": "s2-v1-82312ee8007adaf2",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 175
+    },
+    {
+      "month": "2025-07",
+      "version": "s2-v1-ee5e94f7bdf91f01",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 179
+    },
+    {
+      "month": "2025-08",
+      "version": "s2-v1-7dd4f5ac22619b35",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 175
+    },
+    {
+      "month": "2025-09",
+      "version": "s2-v1-5cc0f08555fe67e5",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 170
+    },
+    {
+      "month": "2025-10",
+      "version": "s2-v1-40c7b70690eed555",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 170
+    },
+    {
+      "month": "2025-11",
+      "version": "s2-v1-51b7d86b1636d184",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 175
+    },
+    {
+      "month": "2025-12",
+      "version": "s2-v1-60cbbb21b56cc05e",
+      "tiles": [
+        "14QMF",
+        "14QMG",
+        "14QMH",
+        "14QMJ",
+        "14QNE",
+        "14QNF",
+        "14QNG",
+        "14QNH",
+        "14QNJ",
+        "14QPE",
+        "14QPF",
+        "14QPG",
+        "14QPH",
+        "14QPJ",
+        "14QQF",
+        "14QQG"
+      ],
+      "resolution": {
+        "rgb": 10,
+        "ndvi": 10,
+        "mndwi": 20
+      },
+      "boundarySha256": "b21bd0a2b9e4520d742c670ed9df9cd517bacda9e4aaefceab878b856e7f8643",
+      "sceneCount": 184
+    }
+  ]
+}

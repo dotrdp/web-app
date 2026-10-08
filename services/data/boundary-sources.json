@@ -1,0 +1,66 @@
+{
+  "downloaded_utc": "2026-09-15T00:32:17.101543+00:00",
+  "documentation": "https://www.inegi.org.mx/servicios/catalogounico.html",
+  "sources": [
+    {
+      "file": "raw/estados_13.geojson",
+      "url": "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgee/13",
+      "count": 1,
+      "metadata": {
+        "Fuente_informacion_vectorial": "INEGI. Marco Geoestadístico, diciembre de 2025",
+        "Fuente_informacion_estadistica": "INEGI. Censo de Población y Vivienda, 2020"
+      },
+      "sha256": "1e1bbc161b43046231904f5c557d3c1d65bb9fd104d00eefd760659de9c4a6ef"
+    },
+    {
+      "file": "raw/estados_21.geojson",
+      "url": "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgee/21",
+      "count": 1,
+      "metadata": {
+        "Fuente_informacion_vectorial": "INEGI. Marco Geoestadístico, diciembre de 2025",
+        "Fuente_informacion_estadistica": "INEGI. Censo de Población y Vivienda, 2020"
+      },
+      "sha256": "a8afc802cd68c604deac8f549ce6b411f327cfe49f64c0c49142c1d8a48af23b"
+    },
+    {
+      "file": "raw/estados_29.geojson",
+      "url": "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgee/29",
+      "count": 1,
+      "metadata": {
+        "Fuente_informacion_vectorial": "INEGI. Marco Geoestadístico, diciembre de 2025",
+        "Fuente_informacion_estadistica": "INEGI. Censo de Población y Vivienda, 2020"
+      },
+      "sha256": "4fd1d29ce59b48569a49ff4ae5e9d26fc7f71179f0e0089444c760915cf5bd5a"
+    },
+    {
+      "file": "raw/municipios_13.geojson",
+      "url": "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/13",
+      "count": 84,
+      "metadata": {
+        "Fuente_informacion_vectorial": "INEGI. Marco Geoestadístico, diciembre de 2025",
+        "Fuente_informacion_estadistica": "INEGI. Censo de Población y Vivienda, 2020"
+      },
+      "sha256": "979a842b8d15e21dde93efabbf259c635bb0c33ff6e014e9af8d361fae369a9e"
+    },
+    {
+      "file": "raw/municipios_21.geojson",
+      "url": "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/21",
+      "count": 217,
+      "metadata": {
+        "Fuente_informacion_vectorial": "INEGI. Marco Geoestadístico, diciembre de 2025",
+        "Fuente_informacion_estadistica": "INEGI. Censo de Población y Vivienda, 2020"
+      },
+      "sha256": "1bff711bc36c7cfb99b3872ca8df7bf26d9b37b9be8c52de9176e58bd471a1a8"
+    },
+    {
+      "file": "raw/municipios_29.geojson",
+      "url": "https://gaia.inegi.org.mx/wscatgeo/v2/geo/mgem/29",
+      "count": 60,
+      "metadata": {
+        "Fuente_informacion_vectorial": "INEGI. Marco Geoestadístico, diciembre de 2025",
+        "Fuente_informacion_estadistica": "INEGI. Censo de Población y Vivienda, 2020"
+      },
+      "sha256": "4b94279048bfd60701681a1c5659d83d938226b1b9a614b009393783da4cdb59"
+    }
+  ]
+}

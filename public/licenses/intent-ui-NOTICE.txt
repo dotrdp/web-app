@@ -1,0 +1,11 @@
+AgroCebada's map toolbar components are adapted from Intent UI's public registry:
+https://intentui.com/r/toolbar.json
+https://intentui.com/r/toggle.json
+https://intentui.com/r/separator.json
+
+Intent UI, Copyright (c) 2024 Irsyad A. Panjaitan, is distributed under the MIT license.
+The complete license is included in intent-ui-MIT.txt.
+
+The adaptation uses React Aria Components and the project's CSS instead of Tailwind.
+It preserves Toolbar, ToolbarGroup, ToolbarItem, and ToolbarSeparator composition,
+disabled group propagation, orientation, and React Aria keyboard navigation.

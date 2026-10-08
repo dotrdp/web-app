@@ -1,0 +1,16 @@
+[Unit]
+Description=AgroCebada agrocebada-tunnel on rig
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/code/fira2026/webapp
+EnvironmentFile=%h/code/fira2026/webapp/.data-cache/deployment/service.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/code/fira2026/webapp/services/.venv/bin/python services/tunnel_supervisor.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

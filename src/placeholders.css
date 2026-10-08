@@ -1,0 +1,68 @@
+.loading-value { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; min-width: 65px; min-height: 24px; color: #6b7f61; vertical-align: middle; white-space: nowrap; }
+.loading-value-number { font: inherit; font-variant-numeric: tabular-nums; }
+.loading-value > small { display: inline; margin: 0; color: #728369; font-size: .6em; font-weight: 400; }
+.loading-value .loading-dots { font-size: 0; }
+.loading-value.stopped .loading-dots > span, .page-placeholder.stopped .loading-dots > span { animation: none; opacity: .35; }
+.page-placeholder > .loading-state { margin: 0 0 22px; }
+.placeholder-waiting { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #6d7e62; margin: 20px 0; }
+.page-placeholder-content { display: grid; gap: 22px; min-width: 0; }
+.placeholder-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 17px; min-width: 0; }
+.placeholder-metrics > .data-card { padding: 20px; min-width: 0; }
+.placeholder-metrics > .data-card > span:first-child { display: block; font-size: 11px; color: #6d7e62; }
+.placeholder-metrics .loading-value { display: flex; margin: 13px 0; font: 600 27px 'Manrope Variable', sans-serif; }
+.placeholder-line { display: block; width: 88%; max-width: 290px; height: 8px; background: #edf1e7; border-radius: 3px; margin: 10px 0; }
+.placeholder-line.short { width: 55%; }
+.placeholder-intro { padding: 26px; }
+.placeholder-intro h2 { color: #3e5735; font: 650 24px 'Manrope Variable', sans-serif; margin: 0 0 8px; }
+.placeholder-intro p { margin: 0; color: #6d7e62; font-size: 12px; }
+.placeholder-intro .loading-value { margin-top: 16px; font-size: 26px; }
+.placeholder-table-card .data-card-header h3 { margin: 0; }
+.placeholder-table-row td { height: 64px; }
+.placeholder-table-row .loading-value { min-width: 95px; }
+.placeholder-table-row .loading-value > small { font-size: 10px; }
+.placeholder-chart { height: 190px; display: flex; flex-direction: column; gap: 31px; position: relative; margin: 0 24px 20px; padding: 27px 0 13px; }
+.placeholder-chart > .loading-value { position: absolute; top: 52px; left: 50%; transform: translateX(-50%); z-index: 1; background: #fff; padding: 8px 12px; border-radius: 8px; font-size: 25px; }
+.placeholder-chart-axis { display: block; border-top: 1px dashed #e5ebde; width: 100%; }
+.placeholder-embedding { margin-top: 0; }
+.placeholder-source { padding: 24px; min-height: 235px; }
+.placeholder-source h3 { min-height: 44px; color: #506745; font-size: 14px; margin: 0 0 18px; }
+.placeholder-source .loading-value { margin-top: 18px; font-size: 23px; }
+.placeholder-list-item { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 24px; border-top: 1px solid #edf1e7; }
+.placeholder-list-item .loading-value { font-size: 22px; }
+.placeholder-list-item .placeholder-line { max-width: 50%; }
+.map-setup-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 20px 0 22px; }
+.map-setup-values > div { padding: 10px; background: #f0f5e9; border: 1px solid #e7eddf; border-radius: 9px; }
+.map-setup-values > div > span:first-child { display: block; font-size: 9px; color: #6b7b61; margin-bottom: 4px; }
+.map-setup-values .loading-value { font-size: 18px; gap: 6px; min-width: 0; }
+.map-setup-values .loading-dots { width: 12px; height: 12px; grid-template-columns: repeat(3, 3px); flex-basis: 12px; }
+.map-setup-values .loading-dots > span { width: 3px; height: 3px; }
+.map-setup-card { max-height: calc(100dvh - 90px); overflow-y: auto; }
+.model-metric-cards .loading-value { font: 400 30px 'Manrope Variable', sans-serif; margin: 11px 0 0; }
+.model-status-label { display: inline-flex; margin-top: 12px; font-size: 10px; }
+.technical-stats .loading-value { font: 600 24px 'Manrope Variable', sans-serif; margin: 10px 0 6px; }
+.technical-stats .loading-value-number { display: inline; font: inherit; color: inherit; }
+.metric-placeholder-row .loading-value { display: flex; justify-content: center; font-size: 20px; }
+.metric-placeholder-row .loading-value-number { display: inline; font: inherit; }
+.analysis-result .loading-value { font-family: 'Manrope Variable', sans-serif; font-size: 36px; }
+.analysis-result-bottom .loading-value { display: flex; justify-content: center; font-size: 17px; }
+.analysis-result-bottom .loading-value-number { display: inline; font: inherit; }
+.analysis-loading > .loading-state { margin: 18px 0 10px; }
+.login-submit .loading-dots, .delineation-footer .MuiButton-root .loading-dots { color: currentColor; }
+.admin-loading { padding: 0 24px 14px; }
+.admin-loading > .loading-state { margin: 0; }
+.admin-row-busy { display: inline-flex; gap: 8px; align-items: center; }
+.admin-row-busy .loading-value { font-size: 14px; }
+.admin-page .MuiAlert-root .MuiButton-root { white-space: nowrap; }
+@media (max-width: 700px) {
+  .placeholder-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+  .placeholder-metrics > .data-card { padding: 16px; }
+  .placeholder-intro { padding: 21px; }
+  .placeholder-intro h2 { font-size: 21px; }
+  .placeholder-chart { margin-inline: 18px; }
+  .placeholder-source { padding: 21px; min-height: 210px; }
+  .page-placeholder-content { gap: 16px; }
+  .map-setup-card { max-height: calc(100dvh - 116px); }
+  .map-setup-values { gap: 7px; }
+  .map-setup-values > div { padding: 9px 7px; }
+  .admin-loading { padding-inline: 15px; }
+}

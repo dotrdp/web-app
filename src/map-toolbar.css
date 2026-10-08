@@ -1,0 +1,76 @@
+/* Small square Stealth controls on quiet, raised surfaces. */
+.map-icon-toolbar { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; overflow: auto; scrollbar-width: none; }
+.map-icon-toolbar::-webkit-scrollbar { display: none; }
+.map-icon-toolbar[data-orientation="vertical"], .map-icon-toolbar[data-orientation="vertical"] .map-icon-toolbar-group { flex-direction: column; }
+.map-icon-toolbar-group { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.map-icon-toolbar-separator { border: 0; background: #dfe3d9; flex-shrink: 0; margin: 0 3px; }
+.map-icon-toolbar-separator[aria-orientation="vertical"] { width: 1px; height: 18px; }
+.map-icon-toolbar-separator:not([aria-orientation="vertical"]) { width: 18px; height: 1px; margin: 3px 0; }
+.compact-toolbar { display: inline-flex; align-items: center; max-width: 100%; padding: 4px; border: 1px solid #dfe3d9; border-radius: 10px; background: #fcfdf9; box-shadow: 0 1px 0 #fff inset, 0 8px 24px -12px #0007; }
+.compact-toolbar-content { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; }
+.compact-toolbar-content[hidden] { display: none; }
+.compact-toolbar-expanded { flex: 1; }
+.toolbar-compact-controls { position: sticky; right: 0; z-index: 2; border-left: 1px solid #dfe3d9; padding-left: 3px; background: #fcfdf9; }
+.toolbar-compact-toggle { color: #929a8b; }
+.toolbar-compact-summary { color: #315c3c; }
+.compact-toolbar[data-orientation="vertical"] .toolbar-compact-controls { border-left: 0; border-top: 1px solid #dfe3d9; padding-left: 0; padding-top: 3px; }
+.compact-toolbar[data-compact="true"] { width: max-content; }
+.map-primary-controls { width: min(460px, calc(100% - 48px)); }
+.map-layer-toolbar { display: flex; width: max-content; margin-top: 10px; }
+.map-tools-toolbar { display: flex; width: max-content; margin-top: 8px; }
+.map-tools-toolbar .analyze-terrain-tool { width: auto; padding: 0 10px; color: #31583c; }
+.map-tools-toolbar .analyze-terrain-tool:hover { background: #e9f0e2; }
+.full-map .map-navigation-toolbar { position: absolute; left: 24px; bottom: 24px; z-index: 5; }
+.full-map .map-basemap-toolbar { position: absolute; left: 84px; bottom: 94px; z-index: 5; }
+.full-map .map-coordinates { bottom: 51px; left: 84px; }
+.full-map .ol-scale-line { left: 84px; }
+.map-time-dock { position: absolute; z-index: 6; bottom: 24px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 450px); }
+.map-time-toolbar { min-width: 0; flex-shrink: 1; }
+.map-time-toolbar .month-dock-tools .stealth-icon-button { width: 36px; font-size: 10px; }
+.map-time-date { display: flex; align-items: center; gap: 7px; flex-shrink: 0; border-left: 1px solid #dfe3d9; padding-left: 4px; }
+.map-time-date .month-picker { width: 32px; height: 32px; border-radius: 8px; }
+.map-time-date .month-picker:hover { background: #f0f2ec; }
+.map-time-date .month-picker:focus-within { outline: 2px solid #6f9064; outline-offset: -2px; }
+.map-time-date .dock-year { font-size: 10px; margin-right: 6px; white-space: nowrap; }
+.map-time-date .annual-picker { height: 32px; min-width: 70px; border: 1px solid #dfe3d9; border-radius: 8px; color: #31583c; background: #fcfdf9; font: inherit; font-size: 12px; }
+.map-time-dock[data-compact="true"] { max-width: none; }
+.full-map:fullscreen { height: 100dvh; width: 100dvw; }
+
+@media (max-width: 1250px) and (min-width: 701px) {
+  .map-time-dock { max-width: calc(100% - 420px); }
+  .map-time-date .dock-year { display: none; }
+  .map-time-toolbar .month-dock-tools .stealth-icon-button { width: 30px; font-size: 9px; }
+  .full-map .map-legend { bottom: 138px; }
+}
+@media (max-width: 1000px) and (min-width: 701px) {
+  .floating-parcel, .delineation-card { top: 202px; max-height: calc(100% - 292px); }
+  .map-time-dock { left: auto; right: 24px; transform: none; max-width: calc(100% - 236px); }
+}
+@media (max-width: 700px) {
+  .map-primary-controls { width: calc(100% - 24px); }
+  .map-layer-toolbar { margin-top: 9px; }
+  .map-tools-toolbar { margin-top: 7px; }
+  .map-tools-toolbar .analyze-terrain-tool { font-size: 11px; }
+  .full-map .map-navigation-toolbar { left: 12px; bottom: 116px; }
+  .full-map .map-basemap-toolbar { left: 74px; bottom: 116px; }
+  .full-map .map-legend { bottom: 179px; min-width: 150px; max-width: 174px; }
+  .full-map .ol-scale-line { left: 12px; bottom: 89px; }
+  .full-map .map-status { top: 220px; max-width: calc(100% - 24px); }
+  .map-time-dock { left: 12px; right: 12px; bottom: 24px; transform: none; max-width: none; }
+  .map-time-toolbar { gap: 2px; }
+  .map-time-toolbar .map-icon-toolbar-group { gap: 2px; }
+  .map-time-toolbar .month-dock-tools .stealth-icon-button { width: 28px; height: 44px; font-size: 9px; border-radius: 6px; }
+  .map-time-toolbar .map-icon-toolbar-separator { margin: 0 1px; }
+  .map-time-dock .toolbar-compact-toggle { width: 32px; }
+  .map-time-date { padding-left: 3px; }
+  .map-time-date .month-picker { width: 32px; height: 44px; }
+  .map-time-date .dock-year { display: none; }
+  .map-time-dock:has(.annual-picker) .map-time-date { max-width: 83px; }
+  .map-time-date .annual-picker { height: 44px; }
+  .map-time-dock[data-compact="true"] { right: auto; }
+  .imagery-caption { bottom: 91px; }
+}
+@media (forced-colors: active) {
+  .compact-toolbar { border-color: ButtonBorder; }
+  .map-icon-toolbar-separator { background: ButtonBorder; }
+}

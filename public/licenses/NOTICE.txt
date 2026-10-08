@@ -1,0 +1,5 @@
+AgroCebada includes adapted Loading State and Agent Steps components from
+Spectrum UI by Arihant Jain (https://github.com/arihantcodes/spectrum-ui).
+Spectrum UI is distributed under the Apache License, Version 2.0; see
+spectrum-ui.txt. The adaptation replaces Tailwind styling, adds Spanish
+labels, actual request timing and accessible map-loading behavior.
