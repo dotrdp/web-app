@@ -1,25 +1,23 @@
 import { test, expect } from '@playwright/test';
 
-test('Login hero renders the dot-matrix headline, particles and the data globe on desktop and mobile', async ({ page }) => {
+test('Login pairs a quiet form with the study-area map on desktop and a compact map banner on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/');
-  const story = page.locator('.login-story');
+  await expect(page.getByRole('heading', { name: 'Inicia sesión', level: 1 })).toBeVisible();
+  const story = page.getByRole('complementary', { name: 'El atlas AgroCebada' });
   await expect(story.getByRole('heading', { name: 'El campo tiene mucho que contarte.' })).toBeVisible();
-  expect(await story.locator('h1').evaluate(e => getComputedStyle(e).fontFamily)).toContain('Geist Pixel');
-  await expect(page.locator('.login-particles')).toBeVisible();
-  const globe = page.locator('.globe-canvas'); await expect(globe).toBeVisible();
-  await expect.poll(() => globe.evaluate(e => getComputedStyle(e).opacity), { timeout: 20_000 }).toBe('1');
-  expect(await page.locator('video').count()).toBe(0);
-  const storyBox = (await story.boundingBox())!, form = (await page.locator('.login-main').boundingBox())!;
-  expect(storyBox.width).toBeGreaterThan(form.width); expect(form.x).toBeGreaterThanOrEqual(storyBox.width - 1);
+  await expect.poll(() => page.locator('.login-map').evaluate(e => getComputedStyle(e).backgroundImage)).toContain('login-topo.jpg');
+  const response = await page.request.get('/artwork/login-topo.jpg'); expect(response.headers()['content-type']).toContain('image/jpeg');
+  const form = (await page.locator('.login-main').boundingBox())!, storyBox = (await story.boundingBox())!;
+  expect(form.x).toBe(0); expect(storyBox.x).toBeGreaterThanOrEqual(form.width - 1); expect(storyBox.width).toBeGreaterThan(form.width);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(async () => (await story.boundingBox())!.height).toBe(330);
-  expect((await page.locator('.login-main').boundingBox())!.y).toBeGreaterThanOrEqual(330);
+  await expect.poll(async () => (await story.boundingBox())!.height).toBe(180);
+  expect((await page.locator('.login-main').boundingBox())!.y).toBeGreaterThanOrEqual(180);
+  await expect(story.getByRole('heading', { name: 'El campo tiene mucho que contarte.' })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
-test('A slow globe does not block signing in', async ({ page }) => {
-  await page.route('**/assets/Globe*', () => new Promise(() => {}));
-  await page.route('**/src/Globe.tsx*', () => new Promise(() => {}));
+test('A slow map image does not block signing in', async ({ page }) => {
+  await page.route('**/artwork/login-topo.jpg', () => new Promise(() => {}));
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Usar cuenta de prueba' }).click(); await page.getByRole('button', { name: 'Entrar a AgroCebada' }).click(); await expect(page.getByTestId('map')).toBeVisible();
   await page.unrouteAll({ behavior: 'ignoreErrors' });

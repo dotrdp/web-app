@@ -1,6 +1,5 @@
-import { RotateCcw } from 'lucide-react';
+import { CloudOff, Map as MapIcon, RotateCcw } from 'lucide-react';
 import { AgentSteps, LoadingState, LoadingValue } from './AgentProgress';
-import { DotLoader } from './Loader';
 import type { AgentStep } from './AgentProgress';
 
 export type SetupTaskId = 'parcels' | 'details' | 'layers' | 'landsat' | 'provenance' | 'workspace' | 'map';
@@ -18,16 +17,16 @@ export default function MapSetup({ tasks, error, onRetry }: { tasks: SetupTasks;
   const ready = steps.filter(s => s.status === 'success').length;
   return <section className="map-setup-card" aria-labelledby="map-setup-title" data-error={!!error || undefined}>
     <div className="map-setup-head">
-      <span className="map-setup-radar"><DotLoader name={error ? 'lunar' : 'radar'} size={44} bloom={!error}/></span>
+      <span className="map-setup-radar">{error ? <CloudOff size={22} strokeWidth={1.6}/> : <MapIcon size={22} strokeWidth={1.6}/>}</span>
       <div>
-        <div className="map-setup-eyebrow kicker">AgroCebada · tu territorio</div>
-        <h1 id="map-setup-title" className="pixel">{error ? 'Falta una fuente del mapa' : 'Preparando tu mapa'}</h1>
+        <div className="map-setup-eyebrow">Atlas AgroCebada</div>
+        <h1 id="map-setup-title">{error ? 'Falta una fuente del mapa' : 'Preparando tu mapa'}</h1>
         <p className="map-setup-description">Hidalgo, Puebla y Tlaxcala, en una sola vista.</p>
       </div>
     </div>
     <div className="map-setup-summary">
       {error ? <span role="status">La carga no pudo completarse</span> : <LoadingState label="Conectando el territorio" startedAt={tasks.parcels.startedAt}/>}
-      <span className="map-setup-count pixel" aria-hidden="true">{ready}<small>/{steps.length}</small></span>
+      <span className="map-setup-count" aria-hidden="true">{ready}<small>/{steps.length}</small></span>
     </div>
     <div className="map-setup-meter" aria-hidden="true">{steps.map(step => <span key={step.id} data-status={step.status}>{Array.from({ length: 6 }, (_, i) => <i key={i} style={{ animationDelay: `${i * 90}ms` }}/>)}</span>)}</div>
     <div className="map-setup-values" aria-hidden="true">{['Parcelas', 'Observaciones', 'Capas'].map(label => <div key={label}><span>{label}</span><LoadingValue label={`${label} pendientes`} active={!error}/></div>)}</div>

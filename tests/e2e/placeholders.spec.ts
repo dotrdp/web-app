@@ -28,8 +28,8 @@ for (const [view, title] of [['parcels', 'Mis parcelas'], ['technical', 'Anális
     await expect(placeholder).toHaveCount(0);
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
     if (view === 'technical') {
-      await expect(page.locator('.page-placeholder[data-phase="waiting"]')).toBeVisible();
-      expect(await page.locator('.placeholder-waiting .loading-dots > span').first().evaluate(e => getComputedStyle(e).animationName)).toBe('none');
+      await expect(page.getByRole('heading', { name: 'Selecciona una parcela' })).toBeVisible();
+      await expect(page.locator('.page-placeholder')).toHaveCount(0);
       await page.getByRole('combobox', { name: 'Parcela del análisis' }).click();
       await page.getByRole('option', { name: 'AGC_001', exact: true }).click();
       await expect(page.locator('.page-placeholder')).toHaveCount(0);

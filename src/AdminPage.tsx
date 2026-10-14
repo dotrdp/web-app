@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, MenuItem, Pagination, Select, TextField } from '@mui/material';
-import { Download, FileJson, Link2, Plus, Search, Users } from 'lucide-react';
+import { Download, Plus, Search } from 'lucide-react';
 import { api, download, normalize } from './lib';
 import { ROLE_NAMES } from './demo';
 import { LoadingDots, LoadingState, LoadingValue } from './AgentProgress';
@@ -46,7 +46,7 @@ export default function AdminPage({ currentUser, parcels, workspace, onChanged }
 
     <section className="data-card">
       <div className="data-card-header">
-        <div className="card-heading"><span className="card-icon"><Users size={15}/></span><div><h2>Usuarios del espacio</h2><p>{usersLoading ? 'Cargando cuentas…' : `${users.length} cuentas · ${activeCount} activas`}</p></div></div>
+        <div className="card-heading"><div><h2>Usuarios del espacio</h2><p>{usersLoading ? 'Cargando cuentas…' : `${users.length} cuentas · ${activeCount} activas`}</p></div></div>
         <Button variant={creating ? 'outlined' : 'contained'} disabled={disabled} onClick={() => setCreating(!creating)} startIcon={<Plus size={15}/>}>Crear usuario</Button>
       </div>
       {creating && <form className="admin-create" onSubmit={create}>
@@ -75,18 +75,18 @@ export default function AdminPage({ currentUser, parcels, workspace, onChanged }
 
     <section className="data-card">
       <div className="data-card-header">
-        <div className="card-heading"><span className="card-icon"><Link2 size={15}/></span><div><h2>Asignaciones de parcelas</h2><p>El técnico accede únicamente a los productores y parcelas asignados.</p></div></div>
+        <div className="card-heading"><div><h2>Asignaciones de parcelas</h2><p>El técnico accede únicamente a los productores y parcelas asignados.</p></div></div>
         <Button variant="outlined" startIcon={<Download size={14}/>} disabled={disabled} onClick={() => download('demo-asignaciones.json', JSON.stringify(workspace.assignments, null, 2), 'application/json')}>Exportar</Button>
       </div>
       <div className="table-toolbar">
-        <TextField className="toolbar-search admin-parcel-search" size="small" label="Buscar parcela para asignar" value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} slotProps={{ input: { endAdornment: <Search size={15} className="field-icon"/> } }}/>
+        <TextField className="toolbar-search admin-parcel-search" size="small" label="Buscar parcela para asignar" value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} slotProps={{ input: { endAdornment: <Search size={15} strokeWidth={1.75} className="field-icon"/> } }}/>
         <span className="toolbar-count">{usersLoading ? <LoadingValue label="Cantidad de parcelas pendiente"/> : <><b>{filtered.length}</b> parcelas de demo</>}</span>
       </div>
       <div className="table-scroll"><table className="parcel-table" aria-label="Asignaciones de parcelas"><thead><tr><th>Parcela</th><th>Productor</th><th>Técnico</th><th><span className="sr-only">Acciones</span></th></tr></thead><tbody>
         {usersLoading ? <PlaceholderTableRows columns={['', '', '', '']}/> : filtered.slice((page - 1) * 10, page * 10).map(p => {
           const a = workspace.assignments?.find(a => a.parcelId === p.properties.id), pending = busy === 'parcel-' + p.properties.id;
           return <tr key={p.properties.id}>
-            <td><span className="cell-stack"><b className="mono">{p.properties.name || p.properties.id}</b><small>{p.properties.municipality}</small></span></td>
+            <td><span className="cell-stack"><b>{p.properties.name || p.properties.id}</b><small>{p.properties.municipality}</small></span></td>
             <td>{pending ? <LoadingValue label={`Actualizando productor de ${p.properties.id}`}/> : <Select className="table-select" size="small" disabled={disabled} value={a?.producerId || ''} onChange={e => void assign(p.properties.id, { producerId: e.target.value })} inputProps={{ 'aria-label': `Productor de ${p.properties.id}` }}>{users.filter(u => u.role === 'producer' && u.active).map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}</Select>}</td>
             <td>{pending ? <LoadingValue label={`Actualizando técnico de ${p.properties.id}`}/> : <Select className="table-select" size="small" disabled={disabled} value={a?.technicianId || ''} onChange={e => void assign(p.properties.id, { technicianId: e.target.value || null })} displayEmpty inputProps={{ 'aria-label': `Técnico de ${p.properties.id}` }}><MenuItem value="">Sin técnico</MenuItem>{users.filter(u => u.role === 'technician' && u.active).map(u => <MenuItem key={u.id} value={u.id}>{u.username}</MenuItem>)}</Select>}</td>
             <td className="row-action">{p.properties.group === 'custom' && <Button size="small" color="error" disabled={disabled} onClick={() => void perform('parcel-' + p.properties.id, async () => { await api(`/api/fields/${p.properties.id}`, { method: 'DELETE' }); await onChanged(); })}>Eliminar parcela de demo</Button>}</td>
@@ -97,7 +97,6 @@ export default function AdminPage({ currentUser, parcels, workspace, onChanged }
     </section>
 
     <section className="data-card export-card">
-      <span className="card-icon"><FileJson size={15}/></span>
       <div><h3>Correcciones y procedencia</h3><p>GeoJSON con los límites corregidos, su propietario y la procedencia de cada delimitación.</p></div>
       <Button variant="outlined" disabled={disabled} startIcon={<Download size={14}/>} onClick={() => download('demo-correcciones.geojson', JSON.stringify({ type: 'FeatureCollection', features: workspace.fields.map(f => ({ type: 'Feature', geometry: workspace.overrides[f.id]?.geometry || f.geometry, properties: { name: f.name, ownerId: f.ownerId, segmentation: f.segmentation } })) }, null, 2), 'application/geo+json')}>Exportar correcciones y procedencia</Button>
     </section>

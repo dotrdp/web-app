@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -17,20 +17,21 @@ import Feature from 'ol/Feature';
 import type { FeatureLike } from 'ol/Feature';
 import { fromLonLat, toLonLat, transformExtent } from 'ol/proj';
 import { extend, createEmpty, intersects } from 'ol/extent';
-import { defaults as defaultControls, ScaleLine } from 'ol/control';
+import { Attribution, defaults as defaultControls, ScaleLine } from 'ol/control';
 import Draw from 'ol/interaction/Draw';
 import Modify from 'ol/interaction/Modify';
 import proj4 from 'proj4';
 import { register } from 'ol/proj/proj4';
 import { MapboxVectorLayer } from 'ol-mapbox-style';
-import { Popover } from '@base-ui/react/popover';
-import { Layers, LocateFixed, Maximize, Minimize, Minus, Plus } from 'lucide-react';
+import Overlay from 'ol/Overlay';
+import LineString from 'ol/geom/LineString';
+import { getArea, getLength } from 'ol/sphere';
+import { Home, LocateFixed, Maximize, Minimize, Minus, Plus } from 'lucide-react';
 import type { Atlas, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Parcel, Raster } from './types';
 import { fmt } from './lib';
 import { coloredNdviUrl, ndviColor } from './ndvi';
 import { LoadingState } from './AgentProgress';
 import { ToolbarButton, ToolbarGroup, Toolbar } from './Toolbar';
-import { IconButton } from './IconButton';
 import './map.css';
 
 proj4.defs('EPSG:6372', '+proj=lcc +lat_0=12 +lon_0=-102 +lat_1=17.5 +lat_2=29.5 +x_0=2500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs');
@@ -42,20 +43,10 @@ const MIN_ZOOM = 5, MAX_ZOOM = 19;
 const DETAIL_ZOOM = 12.6;
 
 type Base = LayerSettings['base'];
-export const BASEMAPS: { key: Base; label: string; hint: string }[] = [
-  { key: 'light', label: 'Mapa claro', hint: 'Positron · OpenFreeMap' },
-  { key: 'dark', label: 'Mapa oscuro', hint: 'Dark · OpenFreeMap' },
-  { key: 'satellite', label: 'Satélite', hint: 'World Imagery · Esri' },
-];
 const VECTOR_STYLES: Partial<Record<Base, string>> = { light: 'https://tiles.openfreemap.org/styles/positron', dark: 'https://tiles.openfreemap.org/styles/dark' };
 const OPENFREEMAP = '<a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>';
 
-// Leaflet.markercluster's default bubble palette, as used by shadcn-map.
-const CLUSTER_TONES = [
-  { max: 8, halo: 'rgba(181,226,140,.6)', core: 'rgba(110,204,57,.75)' },
-  { max: 20, halo: 'rgba(241,211,87,.6)', core: 'rgba(240,194,12,.75)' },
-  { max: Infinity, halo: 'rgba(253,156,115,.6)', core: 'rgba(241,128,23,.75)' },
-];
+const ESRI_TOPO = 'Esri, TomTom, Garmin, FAO, NOAA, USGS, © OpenStreetMap contributors and the GIS User Community';
 const YIELD_RAMP: [number, number[]][] = [[0, [232, 178, 72]], [.5, [158, 206, 92]], [1, [47, 125, 50]]];
 function ramp(t: number) {
   const x = Math.min(1, Math.max(0, t));
@@ -66,16 +57,17 @@ function ramp(t: number) {
   return YIELD_RAMP.at(-1)![1];
 }
 
-export interface MapHandle { fitAll: () => void; fitParcel: (parcel: Parcel) => void; fitGeometry: (geometry: object) => void; locate: (coords: number[]) => void; draw: () => void; edit: (parcel: Parcel) => void; proposal: (geometry: Geometry | null) => void; editDraft: (geometry: Geometry) => void; cancel: () => void; finish: () => void; undo: () => void; geometry: () => Geometry | null }
+export type MeasureKind = 'distance' | 'area';
+export interface MapHandle { fitBounds: (bounds: number[]) => void; measure: (kind: MeasureKind | null) => void; showLocation: (coords: number[]) => void; exportPng: () => Promise<Blob | null>; fitAll: () => void; fitParcel: (parcel: Parcel) => void; fitGeometry: (geometry: object) => void; locate: (coords: number[]) => void; draw: () => void; edit: (parcel: Parcel) => void; proposal: (geometry: Geometry | null) => void; editDraft: (geometry: Geometry) => void; cancel: () => void; finish: () => void; undo: () => void; geometry: () => Geometry | null }
 interface Props {
   atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; mode: MapMode; year: number; keyDate: string; filters: MapFilters; settings: LayerSettings; manifest?: ImageryManifest | null; imageryVisible?: boolean;
-  controls?: ReactNode;
   onReady?: () => void; onImageryBusy?: (busy: boolean) => void; onImageryFailure?: () => void; onMapClick?: (coords: number[]) => void; onCancel?: () => void;
-  onBaseChange: (base: Base) => void; onOverlayChange?: (key: 'states' | 'municipalities', visible: boolean) => void; onSelect: (id: string) => void; onDraft: (geometry: Geometry | null) => void;
+  onMeasure?: (value: string | null) => void; onLocate?: () => void; locating?: boolean; onSelect: (id: string) => void; onDraft: (geometry: Geometry | null) => void;
 }
-type Runtime = { map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; images: ImageLayer<ImageStatic>[]; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; tileSources: globalThis.Map<string, XYZ>; embeddingLayers: globalThis.Map<string, ImageLayer<ImageStatic>>; municipalities: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; interaction: Draw | Modify | null; editingId: string | null };
+type Runtime = { map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; images: ImageLayer<ImageStatic>[]; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; tileSources: globalThis.Map<string, XYZ>; embeddingLayers: globalThis.Map<string, ImageLayer<ImageStatic>>; municipalities: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; interaction: Draw | Modify | null; editingId: string | null };
 
 function createBase(kind: Base): BaseLayer {
+  if (kind === 'topo') return new TileLayer({ zIndex: 0, preload: 1, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: ESRI_TOPO }) });
   if (kind === 'satellite') return new TileLayer({ zIndex: 0, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: 'Imagery © Esri, Maxar, Earthstar Geographics' }) });
   const layer = new MapboxVectorLayer({ styleUrl: VECTOR_STYLES[kind]!, source: 'openmaptiles', declutter: true, zIndex: 0, preload: 1 });
   layer.getSource()?.setAttributions(OPENFREEMAP);
@@ -86,6 +78,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   const host = useRef<HTMLDivElement>(null);
   const coordinates = useRef<HTMLSpanElement>(null);
   const scale = useRef<HTMLDivElement>(null);
+  const attribution = useRef<HTMLDivElement>(null);
   const latest = useRef(props); latest.current = props;
   const runtime = useRef<Runtime | null>(null);
   const [loading, setLoading] = useState(false);
@@ -109,11 +102,11 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
 
   function fitParcel(parcel: Parcel) {
     const r = runtime.current; if (!r) return;
-    r.map.getView().fit(transformExtent(parcel.properties.bounds, 'EPSG:4326', 'EPSG:3857'), { padding: [110, 420, 110, 80], maxZoom: 17.5, duration: 600 });
+    r.map.getView().fit(transformExtent(parcel.properties.bounds, 'EPSG:4326', 'EPSG:3857'), { padding: [80, 80, 120, 80], maxZoom: 16, duration: 600 });
   }
   function fitAll(duration = 450) {
     const r = runtime.current; const extent = r?.source.getExtent();
-    if (r && extent && !r.source.isEmpty()) r.map.getView().fit(extent, { padding: [96, 72, 96, 72], maxZoom: 12.4, duration });
+    if (r && extent && !r.source.isEmpty()) r.map.getView().fit(extent, { padding: [80, 72, 150, 72], maxZoom: 12.4, duration });
   }
   function cancel() {
     const r = runtime.current; if (!r) return;
@@ -135,7 +128,49 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const interaction = new Modify({ source: r.draftSource }); r.interaction = interaction; r.map.addInteraction(interaction);
     interaction.on('modifyend', () => latest.current.onDraft(currentGeometry()));
   }
+  function stopMeasure() {
+    const r = runtime.current; if (!r) return;
+    if (r.measure) r.map.removeInteraction(r.measure);
+    r.measure = null; r.measureSource.clear(); r.measureTip.setPosition(undefined); latest.current.onMeasure?.(null);
+  }
+  function measure(kind: MeasureKind | null) {
+    stopMeasure(); const r = runtime.current; if (!r || !kind) return;
+    const draw = new Draw({ source: r.measureSource, type: kind === 'area' ? 'Polygon' : 'LineString', style: measureStyles(true) });
+    const label = (geometry: LineString | Polygon) => {
+      if (geometry instanceof Polygon) { const ha = getArea(geometry) / 10000; return ha >= 100 ? `${fmt(ha / 100, 2)} km²` : `${fmt(ha, 2)} ha`; }
+      const m = getLength(geometry); return m >= 1000 ? `${fmt(m / 1000, 2)} km` : `${fmt(m, 0)} m`;
+    };
+    draw.on('drawstart', event => {
+      r.measureSource.clear();
+      const geometry = event.feature.getGeometry() as LineString | Polygon;
+      geometry.on('change', () => { const text = label(geometry); r.measureTip.getElement()!.textContent = text; r.measureTip.setPosition(geometry instanceof Polygon ? geometry.getInteriorPoint().getCoordinates() : geometry.getLastCoordinate()); latest.current.onMeasure?.(text); });
+    });
+    r.measure = draw; r.map.addInteraction(draw);
+  }
   useImperativeHandle(ref, () => ({
+    fitBounds(bounds) { runtime.current?.map.getView().fit(transformExtent(bounds, 'EPSG:4326', 'EPSG:3857'), { padding: [80, 80, 80, 80], maxZoom: 13, duration: 600 }); },
+    measure,
+    showLocation(coords) {
+      const r = runtime.current; if (!r) return;
+      r.locationSource.clear(); r.locationSource.addFeature(new Feature(new Point(fromLonLat(coords))));
+      r.map.getView().animate({ center: fromLonLat(coords), zoom: 14, duration: 600 });
+    },
+    async exportPng() {
+      const r = runtime.current; if (!r) return null;
+      const size = r.map.getSize()!; const out = document.createElement('canvas'); out.width = size[0]; out.height = size[1];
+      const ctx = out.getContext('2d')!;
+      try {
+        for (const canvas of r.map.getViewport().querySelectorAll<HTMLCanvasElement>('.ol-layer canvas, canvas.ol-layer')) {
+          if (!canvas.width) continue;
+          const opacity = (canvas.parentNode as HTMLElement).style.opacity || canvas.style.opacity;
+          ctx.globalAlpha = opacity === '' ? 1 : Number(opacity);
+          const matrix = canvas.style.transform.match(/^matrix\(([^(]*)\)$/)?.[1].split(',').map(Number) ?? [1, 0, 0, 1, 0, 0];
+          ctx.setTransform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+          ctx.drawImage(canvas, 0, 0);
+        }
+        return await new Promise<Blob | null>(resolve => out.toBlob(resolve, 'image/png'));
+      } catch { return null; }
+    },
     fitAll: () => fitAll(550),
     fitParcel,
     fitGeometry(geometry) { const r = runtime.current; if (r) r.map.getView().fit(format.readGeometry(geometry).transform('EPSG:4326', 'EPSG:3857').getExtent(), { padding: [140, 80, 120, 80], duration: 500, maxZoom: 14 }); },
@@ -168,7 +203,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     if (p.mode === 'alphaearth') { const e = p.atlas.details[id]?.embedding[String(p.year)]?.values; return e ? e.slice(0, 3).map(n => Math.round(Math.min(255, Math.max(0, (n + .25) * 510)))) : null; }
     return null;
   }
-  function onDarkBase() { return latest.current.settings.base !== 'light'; }
+  function onDarkBase() { const base = latest.current.settings.base; return base === 'dark' || base === 'satellite'; }
 
   useEffect(() => {
     if (!host.current) return;
@@ -184,13 +219,13 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       const selected = feature.get('id') === p.selected?.properties.id;
       const rgb = parcelColor(feature), dark = onDarkBase();
       const tone = rgb ? rgb.join(',') : dark ? '235,238,233' : '75,82,77';
-      const styles = cached(`poly:${tone}:${selected}:${dark}`, () => {
-        const list = [new Style({ stroke: new Stroke({ color: selected ? (dark ? '#ffffff' : '#0d120f') : `rgba(${tone},${rgb ? .95 : .7})`, width: selected ? 2.5 : 1.5 }), fill: new Fill({ color: `rgba(${tone},${selected ? .42 : rgb ? .32 : .12})` }) })];
-        if (selected) list.unshift(new Style({ stroke: new Stroke({ color: dark ? 'rgba(13,18,15,.7)' : 'rgba(255,255,255,.95)', width: 6 }) }));
-        return list;
-      }) as Style[];
+      const styles = cached(`poly:${tone}:${selected}:${dark}`, () => selected
+        // The selected field is an outline only, so the imagery underneath stays readable.
+        ? [new Style({ stroke: new Stroke({ color: 'rgba(31,37,33,.85)', width: 4.5 }) }), new Style({ stroke: new Stroke({ color: '#ffffff', width: 2.5 }), fill: new Fill({ color: 'rgba(0,0,0,0)' }) })]
+        : [new Style({ stroke: new Stroke({ color: `rgba(${tone},${rgb ? .95 : .7})`, width: 1.5 }), fill: new Fill({ color: `rgba(${tone},${rgb ? .32 : .12})` }) })]) as Style[];
       if (resolution < 9) {
-        return [...styles, new Style({ text: new Text({ text: feature.get('name') || feature.get('id'), font: '600 11px Geist, system-ui, sans-serif', fill: new Fill({ color: dark ? '#fff' : '#0d120f' }), stroke: new Stroke({ color: dark ? 'rgba(13,18,15,.85)' : 'rgba(255,255,255,.95)', width: 3 }), overflow: false }) })];
+        const label = feature.get('name') || feature.get('id');
+        return [...styles, cached(`label:${label}`, () => new Style({ text: new Text({ text: label, font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: '#ffffff' }), stroke: new Stroke({ color: 'rgba(31,37,33,.9)', width: 3 }), overflow: true }) })) as Style];
       }
       return styles;
     } });
@@ -199,29 +234,30 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       const members = f.get('features') as Feature[];
       const n = members.length, selectedId = latest.current.selected?.properties.id;
       const isSelected = members.some(x => x.get('id') === selectedId), dark = onDarkBase();
-      if (n === 1) {
-        const rgb = parcelColor(members[0]);
-        const fill = rgb ? `rgb(${rgb.join(',')})` : dark ? '#f1f5ef' : '#111613';
-        return cached(`dot:${fill}:${isSelected}:${dark}`, () => [
-          ...(isSelected ? [new Style({ image: new Circle({ radius: 13, fill: new Fill({ color: dark ? 'rgba(255,255,255,.22)' : 'rgba(13,18,15,.16)' }) }) })] : []),
-          new Style({ image: new Circle({ radius: isSelected ? 8 : 6, fill: new Fill({ color: fill }), stroke: new Stroke({ color: '#ffffff', width: 2 }) }) }),
-        ]);
-      }
-      const tone = CLUSTER_TONES.find(t => n < t.max)!;
-      const radius = 14 + Math.min(6, Math.log2(n) * 1.4);
+      // One neutral marker system on every basemap and layer: data colour appears
+      // on the field outlines once the map is close enough to read them.
+      if (n === 1) return cached(`dot:${isSelected}`, () => [
+        ...(isSelected ? [new Style({ image: new Circle({ radius: 11, fill: new Fill({ color: 'rgba(30,107,71,.22)' }), stroke: new Stroke({ color: '#1e6b47', width: 3 }) }) })] : []),
+        new Style({ image: new Circle({ radius: 5.5, fill: new Fill({ color: '#ffffff' }), stroke: new Stroke({ color: '#1f2521', width: 2 }) }) }),
+      ]);
+      const radius = n < 10 ? 14 : n < 50 ? 17 : 20;
       return cached(`cluster:${n}:${isSelected}`, () => [
-        new Style({ image: new Circle({ radius: radius + 5, fill: new Fill({ color: tone.halo }), stroke: isSelected ? new Stroke({ color: '#0d120f', width: 2 }) : undefined }) }),
-        new Style({ image: new Circle({ radius, fill: new Fill({ color: tone.core }) }), text: new Text({ text: String(n), font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: '#0d120f' }) }) }),
+        new Style({ image: new Circle({ radius: radius + 1, fill: new Fill({ color: 'rgba(31,37,33,.92)' }), stroke: new Stroke({ color: isSelected ? '#1e6b47' : '#ffffff', width: isSelected ? 3 : 2 }) }), text: new Text({ text: String(n), font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: '#ffffff' }) }) }),
       ]);
     } });
+    const measureSource = new VectorSource(), locationSource = new VectorSource();
+    const measureLayer = new VectorLayer({ source: measureSource, zIndex: 110, style: measureStyles(false) });
+    const locationLayer = new VectorLayer({ source: locationSource, zIndex: 120, style: [new Style({ image: new Circle({ radius: 16, fill: new Fill({ color: 'rgba(37,99,235,.16)' }) }) }), new Style({ image: new Circle({ radius: 7, fill: new Fill({ color: '#2563eb' }), stroke: new Stroke({ color: '#fff', width: 2.5 }) }) })] });
+    const tip = document.createElement('div'); tip.className = 'measure-tip';
+    const measureTip = new Overlay({ element: tip, offset: [0, -14], positioning: 'bottom-center', stopEvent: false });
     const draftSource = new VectorSource();
     const draftLayer = new VectorLayer({ source: draftSource, zIndex: 100, style: draftStyles(false) });
     const initialBase = latest.current.settings.base;
     const bases: Runtime['bases'] = { [initialBase]: createBase(initialBase) };
-    const map = new Map({ target: host.current, layers: [bases[initialBase]!, imagery, municipalities, states, parcels, clusters, draftLayer], view: new View({ center: fromLonLat([-98.4, 19.755]), zoom: 10.85, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }), controls: defaultControls({ zoom: false, rotate: false, attributionOptions: { collapsible: false } }).extend([new ScaleLine({ bar: false, minWidth: 56, maxWidth: 84, target: scale.current ?? undefined })]) });
-    runtime.current = { map, source, parcels, clusters, bases, imagery, tileSources: new globalThis.Map(), embeddingLayers: new globalThis.Map(), municipalities, states, draftSource, draftLayer, images: [], interaction: null, editingId: null };
+    const map = new Map({ target: host.current, layers: [bases[initialBase]!, imagery, municipalities, states, parcels, clusters, draftLayer, measureLayer, locationLayer], overlays: [measureTip], view: new View({ center: fromLonLat([-98.4, 19.755]), zoom: 10.85, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }), controls: defaultControls({ zoom: false, rotate: false, attribution: false }).extend([new Attribution({ collapsible: false, target: attribution.current ?? undefined }), new ScaleLine({ bar: false, minWidth: 56, maxWidth: 84, target: scale.current ?? undefined })]) });
+    runtime.current = { map, source, parcels, clusters, bases, imagery, tileSources: new globalThis.Map(), embeddingLayers: new globalThis.Map(), municipalities, states, draftSource, draftLayer, measureSource, locationSource, measureTip, measure: null, images: [], interaction: null, editingId: null };
     map.on('singleclick', event => {
-      if (runtime.current?.interaction) return;
+      if (runtime.current?.interaction || runtime.current?.measure) return;
       if (latest.current.onMapClick) { latest.current.onMapClick(toLonLat(event.coordinate)); return; }
       const clicked = map.forEachFeatureAtPixel(event.pixel, (f, layer) => layer === parcels || layer === clusters ? f : undefined, { hitTolerance: 8 });
       if (!clicked) return;
@@ -258,7 +294,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const base = props.settings.base;
     if (!r.bases[base]) { r.bases[base] = createBase(base); r.map.getLayers().insertAt(0, r.bases[base]!); }
     for (const [key, layer] of Object.entries(r.bases)) layer!.setVisible(key === base);
-    const dark = base !== 'light';
+    const dark = base === 'dark' || base === 'satellite';
     r.states.setStyle(new Style({ stroke: new Stroke({ color: base === 'satellite' ? 'rgba(255,255,255,.8)' : dark ? 'rgba(241,245,239,.5)' : 'rgba(13,18,15,.42)', width: 1.25 }) }));
     r.municipalities.setStyle(new Style({ stroke: new Stroke({ color: dark ? 'rgba(255,255,255,.28)' : 'rgba(13,18,15,.18)', width: 1, lineDash: [3, 4] }) }));
   }, [props.settings.base]);
@@ -349,73 +385,39 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       else await document.documentElement.requestFullscreen();
     } catch { setError('No pudimos abrir la pantalla completa en este navegador.'); }
   }
-  const base = BASEMAPS.find(b => b.key === props.settings.base)!;
   return <div className="map-canvas-wrap" data-testid="map" data-mode={props.mode} data-base={props.settings.base} data-zoom={viewZoom.toFixed(2)} data-parcel-count={props.parcels.length} data-period={props.keyDate} data-valid-pixels={rasterInfo.valid} data-displayed-pixels={rasterInfo.displayed} data-embedding-count={embeddingCount} data-detail={viewZoom >= DETAIL_ZOOM || undefined}>
-    <div className="map-top-right">
-      {props.controls}
-      <div className="ui-group map-view-group">
-        <Popover.Root>
-          <Popover.Trigger render={<IconButton className="map-control" label="Capas del mapa" tooltip={`Capas · ${base.label}`} tooltipSide="bottom"><Layers/></IconButton>}/>
-          <Popover.Portal>
-            <Popover.Positioner side="bottom" align="end" sideOffset={8} collisionPadding={12} className="map-popover-positioner">
-              <Popover.Popup className="map-layers-popover" aria-label="Capas del mapa">
-                <p className="map-popover-label">Mapa base</p>
-                <div className="map-basemap-options" role="group" aria-label="Cartografía base">{BASEMAPS.map(b =>
-                  <button key={b.key} type="button" className="map-basemap-option" data-base={b.key} aria-pressed={props.settings.base === b.key} onClick={() => props.onBaseChange(b.key)}>
-                    <span className="map-basemap-swatch" aria-hidden="true"/><b>{b.label}</b><small>{b.hint}</small>
-                  </button>)}</div>
-                <div className="map-popover-separator"/>
-                <p className="map-popover-label">Superposiciones</p>
-                {([['states', 'Límites estatales', 'INEGI · 3 estados'], ['municipalities', 'Municipios', 'INEGI · 361 límites']] as const).map(([key, label, hint]) =>
-                  <button key={key} type="button" role="switch" className="map-overlay-switch" aria-checked={props.settings[key]} onClick={() => props.onOverlayChange?.(key, !props.settings[key])}>
-                    <span><b>{label}</b><small>{hint}</small></span><span className="ui-switch" aria-hidden="true"/>
-                  </button>)}
-              </Popover.Popup>
-            </Popover.Positioner>
-          </Popover.Portal>
-        </Popover.Root>
-        <IconButton className="map-control" label={fullscreen ? 'Salir de pantalla completa' : 'Mapa en pantalla completa'} tooltipSide="bottom" aria-pressed={fullscreen} disabled={document.fullscreenEnabled === false} onClick={() => void toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</IconButton>
-      </div>
-    </div>
-
     <Toolbar className="map-zoom-controls" aria-label="Navegación del mapa" orientation="vertical">
-      <ToolbarGroup className="ui-group" aria-label="Vista del mapa"><ToolbarButton className="map-control" label="Ver todas las parcelas" tooltipSide="left" isDisabled={!props.parcels.length} onClick={() => fitAll()}><LocateFixed/></ToolbarButton></ToolbarGroup>
-      <ToolbarGroup className="ui-group" aria-label="Zoom del mapa">
+      <ToolbarGroup className="map-control-group" aria-label="Vista del mapa">
+        <ToolbarButton className="map-control" label="Ver todas las parcelas" tooltipSide="left" isDisabled={!props.parcels.length} onClick={() => fitAll()}><Home/></ToolbarButton>
         <ToolbarButton className="map-control" label="Acercar mapa" tooltipSide="left" isDisabled={viewZoom >= MAX_ZOOM} onClick={() => zoomBy(1)}><Plus/></ToolbarButton>
         <ToolbarButton className="map-control" label="Alejar mapa" tooltipSide="left" isDisabled={viewZoom <= MIN_ZOOM} onClick={() => zoomBy(-1)}><Minus/></ToolbarButton>
+        {props.onLocate && <ToolbarButton className="map-control" label="Mi ubicación" tooltipSide="left" aria-busy={props.locating || undefined} onClick={props.onLocate}><LocateFixed/></ToolbarButton>}
+        <ToolbarButton className="map-control" label={fullscreen ? 'Salir de pantalla completa' : 'Mapa en pantalla completa'} tooltipSide="left" aria-pressed={fullscreen} isDisabled={document.fullscreenEnabled === false} onClick={() => void toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ToolbarButton>
       </ToolbarGroup>
     </Toolbar>
 
     {(loading || error) && <div className={`map-status ${error ? 'error' : ''}`} role="status">{loading && !error ? <LoadingState label="Cargando Landsat…"/> : <>{error}{['ndvi', 'water'].includes(props.mode) || props.imageryVisible ? <button className="ui-btn ui-btn-outline ui-btn-sm" onClick={() => { const source = runtime.current?.imagery.getSource(); if (source) { tileFailures.current.get(source)?.clear(); source.refresh(); } setError(''); }}>Reintentar imágenes</button> : null}</>}</div>}
 
-    <div className="map-legend">
-      <MapLegend mode={props.mode} year={props.year} settings={props.settings}/>
-      <div className="map-coordinates"><span ref={coordinates}>19.7540° N  98.4050° O</span><div className="map-scale" ref={scale}/></div>
+    <div className="map-statusbar">
+      <div className="map-attribution" ref={attribution}/>
+      <div className="map-statusbar-meta"><span className="map-coordinates" ref={coordinates}>19.7540° N  98.4050° O</span><span className="map-zoom-label">z {viewZoom.toFixed(1)}</span><div className="map-scale" ref={scale}/></div>
     </div>
 
     {/* The canvas follows the controls in the DOM so Tab reaches the controls first. */}
-    <div ref={host} className="map-canvas" tabIndex={0} role="application" aria-label="Mapa interactivo de parcelas de Hidalgo, Puebla y Tlaxcala" onKeyDown={e => { if (e.key === 'Escape') { cancel(); latest.current.onCancel?.(); } }}/>
+    <div ref={host} className="map-canvas" tabIndex={0} role="application" aria-label="Mapa interactivo de parcelas de Hidalgo, Puebla y Tlaxcala" onKeyDown={e => { if (e.key === 'Escape') { cancel(); measure(null); latest.current.onCancel?.(); } }}/>
   </div>;
 });
+
+function measureStyles(drawing: boolean) {
+  return [
+    new Style({ stroke: new Stroke({ color: 'rgba(255,255,255,.9)', width: 5 }) }),
+    new Style({ stroke: new Stroke({ color: '#2563eb', width: 2, lineDash: drawing ? [6, 5] : undefined }), fill: new Fill({ color: 'rgba(37,99,235,.12)' }), image: new Circle({ radius: 4, fill: new Fill({ color: '#ffffff' }), stroke: new Stroke({ color: '#2563eb', width: 2 }) }) }),
+  ];
+}
 
 function draftStyles(drawing: boolean) {
   return [
     new Style({ stroke: new Stroke({ color: 'rgba(13,18,15,.75)', width: 5 }) }),
     new Style({ stroke: new Stroke({ color: '#b9e769', width: 2.5, lineDash: drawing ? [6, 5] : undefined }), fill: new Fill({ color: 'rgba(185,231,105,.24)' }), image: new Circle({ radius: 5, fill: new Fill({ color: '#ffffff' }), stroke: new Stroke({ color: '#0d120f', width: 2 }) }) }),
   ];
-}
-
-function MapLegend({ mode, year, settings }: { mode: MapMode; year: number; settings: LayerSettings }) {
-  const climate = settings.precipitation ? ['Precipitación', '0', '1488 mm/mes', 'rain'] : settings.tmax ? ['Temperatura máxima', '4', '42 °C', 'heat'] : settings.tmin ? ['Temperatura mínima', '4', '42 °C', 'heat'] : null;
-  const terrain = settings.elevation ? ['Elevación', '8', '5608 m', 'elevation'] : settings.slope ? ['Pendiente', '0', '71°', 'slope'] : null;
-  const ramp = (title: string, from: string, to: string, kind: string, note?: string) => <div className="legend-block" key={title}><div className="legend-title"><b>{title}</b>{note && <span>{note}</span>}</div><div className={`legend-ramp ${kind}`}/><div className="legend-scale"><span>{from}</span><span>{to}</span></div></div>;
-  return <>
-    {mode === 'parcels' && <>{ramp('Rendimiento registrado', '0', '8 t/ha', 'yield', 'Ciclo 2025')}<div className="legend-key"><i className="legend-dot neutral"/>Sin valor registrado</div></>}
-    {mode === 'ndvi' && ramp('Vegetación · NDVI', '−1', '1', 'ndvi', 'Sentinel-2 · 10 m')}
-    {mode === 'landsat' && ramp('NDVI · Landsat C2', '−1', '1', 'ndvi', '30 m')}
-    {mode === 'water' && <div className="legend-block"><div className="legend-title"><b>Candidatos de agua</b><span>MNDWI ≥ {settings.waterThreshold ?? 0} · 20 m</span></div><div className="legend-key"><i className="legend-dot water"/>Píxeles sobre el umbral</div></div>}
-    {mode === 'alphaearth' && <div className="legend-block"><div className="legend-title"><b>AlphaEarth</b><span>Anual {year}</span></div><div className="legend-ramp alphaearth"/><div className="legend-scale"><span>A00 · A01 · A02</span><span>RGB</span></div></div>}
-    {climate && ramp(climate[0], climate[1], climate[2], climate[3])}
-    {terrain && ramp(terrain[0], terrain[1], terrain[2], terrain[3])}
-  </>;
 }

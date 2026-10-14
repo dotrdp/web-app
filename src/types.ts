@@ -28,4 +28,4 @@ export interface Override { geometry: Geometry; area: number; updatedAt: string 
 export interface Analysis { id: string; parcelId: string | null; name: string; area: number; geometry: Geometry; yield: number; production: number; status: 'placeholder'; createdAt: string }
 export interface Workspace { analyses: Analysis[]; overrides: Record<string, Override>; fields: Field[]; assignments?: Assignment[]; accessibleParcelIds?: string[] }
 export interface MapFilters { query: string; state: string; group: string; ndviEnabled: boolean; ndviThreshold: number; onlyNdvi: boolean }
-export interface LayerSettings { precipitation: boolean; tmin: boolean; tmax: boolean; elevation: boolean; slope: boolean; municipalities: boolean; states: boolean; opacity: number; base: 'light' | 'dark' | 'satellite'; waterThreshold?: number; waterOpacity?: number }
+export interface LayerSettings { precipitation: boolean; tmin: boolean; tmax: boolean; elevation: boolean; slope: boolean; municipalities: boolean; states: boolean; opacity: number; base: 'topo' | 'light' | 'dark' | 'satellite'; waterThreshold?: number; waterOpacity?: number }

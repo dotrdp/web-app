@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openSidebar } from './navigation';
+import { openSidebar, choosePresentation } from './navigation';
 
 async function login(page: Page, imageryAvailable = false) {
   if (imageryAvailable) {
@@ -14,14 +14,14 @@ async function login(page: Page, imageryAvailable = false) {
   await expect(page.locator('.map-setup-overlay')).toHaveCount(0);
 }
 
-test('Data layer buttons pair icons with labels, share tooltips on icon-only controls and select with the keyboard', async ({ page }) => {
+test('Layer rows pair icons with labels, icon-only map controls share tooltips, and rows select with the keyboard', async ({ page }) => {
   await login(page);
   const layers = page.getByRole('toolbar', { name: 'Capas del territorio' });
   for (const name of ['Rendimiento', 'Vegetación', 'Agua', 'Clima', 'Terreno']) {
     const button = layers.getByRole('button', { name, exact: true });
     const bounds = (await button.boundingBox())!;
-    expect(bounds.height).toBe(34); expect(bounds.width).toBeGreaterThan(60);
-    await expect(button).toHaveText(name);
+    expect(bounds.height).toBeGreaterThanOrEqual(44); expect(bounds.width).toBeGreaterThan(200);
+    await expect(button).toContainText(name);
     await expect(button.locator('svg')).toHaveCount(1);
   }
   const zoomIn = page.getByRole('button', { name: 'Acercar mapa', exact: true });
@@ -35,7 +35,7 @@ test('Data layer buttons pair icons with labels, share tooltips on icon-only con
   await page.mouse.move(700, 400);
   const vegetation = layers.getByRole('button', { name: 'Vegetación', exact: true });
   await layers.getByRole('button', { name: 'Rendimiento', exact: true }).focus();
-  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
   await expect(vegetation).toBeFocused();
   await page.keyboard.press('Space');
   await expect(page.getByTestId('map')).toHaveAttribute('data-mode', 'ndvi');
@@ -84,7 +84,7 @@ test('Water index slider updates the MNDWI legend and actual tile threshold, wit
   const map = page.getByTestId('map'), initialZoom = await map.getAttribute('data-zoom');
   await page.getByRole('button', { name: 'Agua', exact: true }).click();
   await expect.poll(() => thresholds.includes('0')).toBe(true);
-  await page.getByRole('button', { name: 'Análisis Pro', exact: true }).click();
+  await choosePresentation(page, 'Análisis Pro');
   const panel = page.getByRole('dialog', { name: 'Análisis Pro' });
   const water = panel.getByRole('slider', { name: 'Umbral de agua MNDWI' });
   await expect(water).toHaveAttribute('min', '-1'); await expect(water).toHaveAttribute('max', '1');
@@ -112,31 +112,30 @@ test('Water index slider updates the MNDWI legend and actual tile threshold, wit
   const finalValue = await water.getAttribute('aria-valuenow');
   await expect(map).toHaveAttribute('data-zoom', initialZoom!); await expect(map).toHaveAttribute('data-period', '2025-07');
   await panel.getByRole('button', { name: 'Cerrar controles avanzados' }).click();
-  await page.getByRole('button', { name: 'Análisis Pro', exact: true }).click();
+  await choosePresentation(page, 'Análisis Pro');
   await expect(water).toHaveAttribute('aria-valuenow', finalValue!);
 });
 
-test('Vertical navbar pill follows the pointer and returns to the current route with the dot-matrix logo', async ({ page }) => {
+test('Navigation stays hidden behind the header menu and the map keeps only icon rails', async ({ page }) => {
   await login(page);
-  const nav = page.getByRole('navigation', { name: 'Navegación principal' });
-  const pill = page.locator('.stealth-navbar-pill'), mapLink = nav.getByRole('link', { name: 'Mapa', exact: true });
-  const sources = nav.getByRole('link', { name: 'Datos y fuentes', exact: true });
-  const aligned = (link: ReturnType<Page['locator']>) => expect.poll(async () => Math.abs((await pill.boundingBox())!.y - (await link.boundingBox())!.y)).toBeLessThan(1);
-  await expect(page.locator('.stealth-navbar-brand .dot-mark circle')).toHaveCount(25);
-  await expect(page.locator('.stealth-navbar-brand')).toContainText('AgroCebada');
-  await aligned(mapLink);
-  await sources.hover(); await aligned(sources);
-  await expect(mapLink).toHaveAttribute('aria-current', 'page');
-  await page.mouse.move(1000, 400); await aligned(mapLink);
-  await sources.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
+  await expect(page.locator('.app-header .logo-mark')).toBeVisible();
+  for (const name of ['Capas', 'Mapa base', 'Parcelas', 'Marcadores', 'Filtros']) expect(await page.getByRole('toolbar', { name: 'Paneles del mapa' }).getByRole('button', { name, exact: true }).innerText()).toBe('');
+  for (const name of ['Analizar mi terreno', 'Dibujar parcela', 'Medir distancia', 'Medir área', 'Exportar']) await expect(page.getByRole('toolbar', { name: 'Herramientas del mapa' }).getByRole('button', { name, exact: true })).toHaveText('');
+  await expect(page.getByRole('toolbar', { name: 'Navegación del mapa' }).getByRole('button', { name: 'Mi ubicación' })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir navegación' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Navegación y cuenta' });
+  const nav = drawer.getByRole('navigation', { name: 'Navegación principal' });
+  await expect(nav.getByRole('link', { name: 'Mapa', exact: true })).toHaveAttribute('aria-current', 'page');
+  await nav.getByRole('link', { name: 'Datos y fuentes', exact: true }).click();
+  await expect(drawer).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Cada dato tiene una historia.' })).toBeVisible();
-  await expect(sources).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Abrir navegación' }).click();
+  await expect(nav.getByRole('link', { name: 'Datos y fuentes', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
-  await aligned(sources);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await mapLink.hover(); await aligned(mapLink);
-  await mapLink.click();
-  await expect(page.getByTestId('map')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Abrir navegación' })).toBeFocused();
 });
 
 test.describe('Touch controls with reduced motion', () => {

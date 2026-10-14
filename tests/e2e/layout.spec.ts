@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { navigateSidebar, openAccount, openSidebar } from './navigation';
+import { navigateSidebar, openAccount, openSidebar, choosePresentation } from './navigation';
 
 async function login(page: Page, account = 'Usar cuenta de prueba') {
   await page.goto('/');
@@ -14,9 +14,9 @@ test('Map layer, month and basemap choices survive side navigation on the same m
   const map = page.getByTestId('map');
   await page.getByRole('button', { name: 'Clima', exact: true }).click();
   await page.getByRole('button', { name: 'Septiembre 2025', exact: true }).click();
-  await page.getByRole('button', { name: 'Capas del mapa', exact: true }).click();
+  await page.getByRole('toolbar', { name: 'Paneles del mapa' }).getByRole('button', { name: 'Mapa base', exact: true }).click();
   await page.getByRole('group', { name: 'Cartografía base' }).getByRole('button', { name: /Satélite/ }).click();
-  await page.keyboard.press('Escape');
+  await page.getByRole('toolbar', { name: 'Paneles del mapa' }).getByRole('button', { name: 'Capas', exact: true }).click();
   await expect(map).toHaveAttribute('data-mode', 'climate');
   await expect(map).toHaveAttribute('data-base', 'satellite');
   await expect(map).toHaveAttribute('data-period', '2025-09');
@@ -31,7 +31,7 @@ test('Map layer, month and basemap choices survive side navigation on the same m
   await expect(map).toHaveAttribute('data-period', '2025-09');
 });
 
-test('Producer and technician keep every permitted menu in the sidebar with no top bar', async ({ page }) => {
+test('Producer and technician keep every permitted view in the navigation menu under one header', async ({ page }) => {
   test.skip(process.env.AGROCEBADA_DEMO !== '1', 'Simulated demo roles');
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, 'Técnico');
@@ -40,16 +40,20 @@ test('Producer and technician keep every permitted menu in the sidebar with no t
     await expect(page.locator('.atlas-shell')).toHaveAttribute('data-role', role);
     await expect(page.locator('.atlas-header')).toHaveCount(0);
     await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '99');
-    const bounds = await page.getByTestId('map').boundingBox(); expect(bounds!.y).toBe(0); expect(bounds!.height).toBe(900);
+    const bounds = await page.getByTestId('map').boundingBox(); expect(bounds!.y).toBe(56); expect(bounds!.y + bounds!.height).toBe(900);
+    await openSidebar(page);
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Mis parcelas', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Administración', exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Navegación y cuenta' })).toHaveCount(0);
     for (const name of ['Mis parcelas', 'Análisis técnico', 'Modelo de ejemplo', 'Datos y fuentes']) {
       await navigateSidebar(page, name);
       await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
-      await expect(page.getByRole('complementary', { name: 'Menú lateral' })).toBeVisible();
-      await expect(page.locator('.atlas-header')).toHaveCount(0);
+      await expect(page.getByRole('dialog', { name: 'Navegación y cuenta' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Abrir navegación' })).toBeVisible();
     }
     await navigateSidebar(page, 'Mapa');
-    await page.getByRole('button', { name: 'Análisis Pro', exact: true }).click();
+    await choosePresentation(page, 'Análisis Pro');
     const settings = page.getByRole('dialog', { name: 'Análisis Pro' }); await expect(settings).toBeVisible();
     await expect.poll(async () => { const bounds = await settings.boundingBox(); return bounds!.x + bounds!.width; }).toBe(1440);
     expect((await settings.boundingBox())!.y).toBe(0);
@@ -79,11 +83,13 @@ test('Mobile side menus and map controls work without a producer header or page 
   await expect(menu).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth && document.documentElement.scrollHeight === innerHeight)).toBe(true);
   await openSidebar(page);
-  await page.getByRole('button', { name: 'Análisis Pro', exact: true }).click();
+  await choosePresentation(page, 'Análisis Pro');
   await expect(page.getByRole('dialog', { name: 'Análisis Pro' })).toBeVisible();
   await expect(menu).toHaveCount(0);
   await page.getByRole('button', { name: 'Cerrar controles avanzados' }).click();
+  await page.getByRole('toolbar', { name: 'Paneles del mapa' }).getByRole('button', { name: 'Capas', exact: true }).click();
   await page.getByRole('button', { name: 'Clima', exact: true }).click();
+  await page.getByRole('button', { name: 'Cerrar panel' }).click();
   await page.getByRole('button', { name: 'Octubre 2025', exact: true }).click();
   await expect(page.getByTestId('map')).toHaveAttribute('data-period', '2025-10');
   await openSidebar(page); await page.keyboard.press('Escape');

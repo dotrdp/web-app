@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Drawer, MenuItem, Select, Slider, Snackbar, TextField } from '@mui/material';
-import { CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronUp, Download, Droplets, Leaf, Map as MapIcon, Menu as MenuIcon, Mountain, Pause, PencilRuler, Pentagon, Play, Plus, ScanSearch, Search, SlidersHorizontal, ThermometerSun, X } from 'lucide-react';
+import { ChartNoAxesCombined, ChevronDown, ChevronUp, Download, FileJson, FileSpreadsheet, ImageDown, Map as MapIcon, PencilRuler, PenLine, Plus, Ruler, Search, SlidersHorizontal, SquareDashed, WandSparkles, X } from 'lucide-react';
 import AtlasMap from './AtlasMap';
-import type { MapHandle } from './AtlasMap';
+import type { MapHandle, MeasureKind } from './AtlasMap';
 import Login from './Login';
 import ParcelPanel from './ParcelPanel';
 import AnalysisDialog from './AnalysisDialog';
@@ -12,23 +12,27 @@ import AdminPage from './AdminPage';
 import MapSetup, { createSetupTasks } from './MapSetup';
 import type { SetupTaskId } from './MapSetup';
 import { LoadingDots, LoadingState, LoadingValue } from './AgentProgress';
-import { DotLoader, DotMark } from './Loader';
-import Particles from './Particles';
+import { Logo } from './Logo';
 import PagePlaceholder from './Placeholders';
-import Sidebar from './Sidebar';
+import AppHeader from './AppHeader';
+import NavMenu, { MapRail, PANELS, RailTip } from './ActionRail';
+import type { MapPanel } from './ActionRail';
+import { BasemapPanel, BookmarksPanel, FiltersPanel, LayersPanel, MODES, ParcelListPanel } from './MapPanels';
+import TimeSlider from './TimeSlider';
 import MapSlider from './MapSlider';
 import { IconButton } from './IconButton';
-import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarItem, ToolbarLayoutProvider } from './Toolbar';
+import { ToolbarLayoutProvider } from './Toolbar';
 import type { AgentStep } from './AgentProgress';
-import { api, dateKey, download, filterParcels, fmt, mergedParcels, MONTH_NAMES, MONTHS, normalize, parcelCsv, parseCoordinates, polygonArea } from './lib';
+import { api, dateKey, download, filterParcels, fmt, mergedParcels, MONTH_NAMES, normalize, parcelCsv, parseCoordinates, polygonArea } from './lib';
 import type { Analysis, Atlas, Field, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Override, Parcel, SegmentationPrompt, SegmentationProposal, User, View, Workspace } from './types';
 import './pages.css';
 
 const EMPTY_WORKSPACE: Workspace = { analyses: [], overrides: {}, fields: [] };
 const EMPTY_FILTERS: MapFilters = { query: '', state: 'all', group: 'all', ndviEnabled: true, ndviThreshold: -1, onlyNdvi: false };
-const DEFAULT_LAYERS: LayerSettings = { precipitation: false, tmin: false, tmax: false, elevation: false, slope: false, municipalities: false, states: true, opacity: .8, base: 'light', waterThreshold: 0, waterOpacity: .75 };
+const DEFAULT_LAYERS: LayerSettings = { precipitation: false, tmin: false, tmax: false, elevation: false, slope: false, municipalities: false, states: true, opacity: .8, base: 'topo', waterThreshold: 0, waterOpacity: .75 };
+const PAGE_LEDES: Record<View, string> = { map: '', parcels: 'Tus parcelas, rendimientos registrados y análisis guardados.', technical: 'Series mensuales y anuales de una parcela.', models: 'Dónde se integrará el modelo de rendimiento y cómo se evaluará.', sources: 'Fuentes, periodos y alcance de la información del atlas.', admin: 'Cuentas, funciones y asignación de parcelas.' };
+const shortcutKey = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const VIEWS: Record<View, string> = { map: 'Mapa', parcels: 'Mis parcelas', technical: 'Análisis técnico', models: 'Modelo de ejemplo', sources: 'Datos y fuentes', admin: 'Administración' };
-const MODES = [{ key: 'parcels', label: 'Rendimiento', icon: ChartNoAxesCombined }, { key: 'ndvi', label: 'Vegetación', icon: Leaf }, { key: 'water', label: 'Agua', icon: Droplets }, { key: 'climate', label: 'Clima', icon: ThermometerSun }, { key: 'terrain', label: 'Terreno', icon: Mountain }] as const;
 type SetupProgress = (id: SetupTaskId, update: Partial<AgentStep>) => void;
 async function loadAtlas(progress: SetupProgress): Promise<Atlas> {
   async function data<T>(file: string, id: SetupTaskId, result: (value: T) => string): Promise<T> {
@@ -64,7 +68,11 @@ export default function App() {
   const [year, setYear] = useState(2025), [month, setMonth] = useState(6), [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState<MapMode>('parcels');
   const [filters, setFilters] = useState<MapFilters>(EMPTY_FILTERS), [layers, setLayers] = useState<LayerSettings>(DEFAULT_LAYERS);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [panel, setPanel] = useState<MapPanel | null>(() => window.innerWidth > 1100 ? 'layers' : null);
+  const [sidePanel, setSidePanel] = useState<'export' | null>(null);
+  const [measureKind, setMeasureKind] = useState<MeasureKind | null>(null), [measureValue, setMeasureValue] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
   const [analysis, setAnalysis] = useState<Parcel | null>(null);
   const [draftMode, setDraftMode] = useState<'draw' | 'edit' | 'segment' | null>(null), [draft, setDraft] = useState<Geometry | null>(null), [fieldName, setFieldName] = useState('Mi parcela');
   const [saving, setSaving] = useState(false), [segmenting, setSegmenting] = useState(false), [segmentError, setSegmentError] = useState('');
@@ -77,6 +85,7 @@ export default function App() {
   const segmentationMonth = useRef('');
   const queuedPrompts = useRef<SegmentationPrompt[] | null>(null);
   const map = useRef<MapHandle>(null), key = dateKey(year, month);
+  const searchInput = useRef<HTMLInputElement>(null);
   const temporal = !['parcels', 'terrain', 'alphaearth'].includes(mode) && !draftMode;
   const liveImagery = ['ndvi', 'water'].includes(mode) || draftMode === 'segment';
 
@@ -118,11 +127,23 @@ export default function App() {
     else if (imageryError) { queuedPrompts.current = null; setSegmenting(false); setSegmentError(imageryError); }
   }, [manifest, imageryError, draftMode]);
   useEffect(() => () => { controller.current?.abort(); requestRevision.current++; }, []);
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); searchInput.current?.focus(); searchInput.current?.select(); } };
+    window.addEventListener('keydown', focusSearch); return () => window.removeEventListener('keydown', focusSearch);
+  }, []);
+  // Below 1600 px a details panel temporarily replaces the context panel instead of
+  // squeezing the map; the context panel returns when the details close.
+  const detailsOpen = !!(selectedId || draftMode || sidePanel);
+  const parkedPanel = useRef<MapPanel | null>(null);
+  useEffect(() => {
+    if (detailsOpen && window.innerWidth < 1600) setPanel(current => { if (!current || current === 'parcels') return current; parkedPanel.current = current; return null; });
+    if (!detailsOpen && parkedPanel.current) { setPanel(parkedPanel.current); parkedPanel.current = null; }
+  }, [detailsOpen]);
   const parcels = useMemo(() => atlas ? mergedParcels(atlas, workspace) : [], [atlas, workspace]);
   const selected = useMemo(() => parcels.find(p => p.properties.id === selectedId) || null, [parcels, selectedId]);
   const visibleParcels = useMemo(() => atlas ? filterParcels(parcels, { ...filters, onlyNdvi: mode === 'landsat' && filters.onlyNdvi }, atlas, key) : [], [parcels, filters, atlas, key, mode]);
 
-  function navigate(next: View) { if (next === 'admin' && user?.role !== 'admin') return; setView(next); window.location.hash = '/' + next; setSidebarOpen(false); setAdvanced(false); setPlaying(false); if (next !== 'map') cancelDraft(); }
+  function navigate(next: View) { if (next === 'admin' && user?.role !== 'admin') return; setView(next); window.location.hash = '/' + next; setNavOpen(false); setAdvanced(false); setPlaying(false); if (next !== 'map') cancelDraft(); }
   function switchMode(next: MapMode) { setMode(next); if (next !== 'alphaearth' && year < 2022) setYear(2025); setLayers(l => ({ ...l, precipitation: next === 'climate', tmin: false, tmax: false, elevation: next === 'terrain', slope: false })); }
   function chooseParcel(id: string, locate = false) { setSelectedId(id); if (locate) { const p = parcels.find(f => f.properties.id === id); if (p) setTimeout(() => map.current?.fitParcel(p), 40); } }
   async function search(event: React.FormEvent) {
@@ -137,9 +158,9 @@ export default function App() {
     } catch { setToast('No pudimos completar la búsqueda.'); }
   }
   function cancelDraft() { queuedPrompts.current = null; controller.current?.abort(); requestRevision.current++; map.current?.cancel(); setDraftMode(null); setDraft(null); setProposal(null); setPrompts([]); setSegmentError(''); setSegmenting(false); setAdjusting(false); }
-  function startDraw() { cancelDraft(); navigate('map'); setPlaying(false); setDraftMode('draw'); setCompactDelineation(false); setFieldName('Mi parcela'); setTimeout(() => map.current?.draw(), 50); }
-  function startSegment() { cancelDraft(); navigate('map'); setSelectedId(null); setPlaying(false); segmentationMonth.current = dateKey(year < 2022 ? 2025 : year, year < 2022 ? 6 : month); if (year < 2022) { setYear(2025); setMonth(6); } setDraftMode('segment'); setCompactDelineation(true); setFieldName('Mi parcela'); setPromptLabel(1); }
-  function startEdit() { if (!selected) return; cancelDraft(); setPlaying(false); setDraftMode('edit'); setCompactDelineation(false); setFieldName(selected.properties.name || selected.properties.id); map.current?.edit(selected); }
+  function startDraw() { cancelDraft(); stopMeasuring(); navigate('map'); setPlaying(false); setDraftMode('draw'); setCompactDelineation(false); setFieldName('Mi parcela'); setTimeout(() => map.current?.draw(), 50); }
+  function startSegment() { cancelDraft(); stopMeasuring(); navigate('map'); setSelectedId(null); setPlaying(false); segmentationMonth.current = dateKey(year < 2022 ? 2025 : year, year < 2022 ? 6 : month); if (year < 2022) { setYear(2025); setMonth(6); } setDraftMode('segment'); setCompactDelineation(true); setFieldName('Mi parcela'); setPromptLabel(1); }
+  function startEdit() { if (!selected) return; cancelDraft(); stopMeasuring(); setPlaying(false); setDraftMode('edit'); setCompactDelineation(false); setFieldName(selected.properties.name || selected.properties.id); map.current?.edit(selected); }
   async function infer(nextPrompts: SegmentationPrompt[]) {
     // A click that lands before this month's imagery manifest is kept and sent once it arrives.
     if (!manifest && !imageryError && nextPrompts.some(p => p.label === 1)) { queuedPrompts.current = nextPrompts; setPrompts(nextPrompts); setSegmenting(true); setSegmentError(''); return; }
@@ -166,59 +187,84 @@ export default function App() {
     } catch (e) { setToast((e as Error).message); } finally { setSaving(false); }
   }
   function exportProposal() { if (!draft || !proposal) return; download('propuesta-parcela.geojson', JSON.stringify({ type: 'Feature', geometry: draft, properties: { ...proposal.provenance, correctedGeometry: draft, saved: false } }, null, 2), 'application/geo+json'); }
-  async function logout() { await api('/api/auth/logout', { method: 'POST' }); setupRevision.current++; cancelDraft(); setUser(null); setAtlas(null); setSidebarOpen(false); setWorkspace(EMPTY_WORKSPACE); setSelectedId(null); navigate('map'); }
-  async function switchUser(username: string) { try { const d = await api<{ user: User }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password: 'Fira2026!' }) }); cancelDraft(); setSelectedId(null); setUser(d.user); setSidebarOpen(false); navigate('map'); } catch (e) { setToast((e as Error).message); } }
+  async function logout() { await api('/api/auth/logout', { method: 'POST' }); setupRevision.current++; cancelDraft(); setUser(null); setAtlas(null); setNavOpen(false); setWorkspace(EMPTY_WORKSPACE); setSelectedId(null); navigate('map'); }
+  async function switchUser(username: string) { try { const d = await api<{ user: User }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password: 'Fira2026!' }) }); cancelDraft(); setSelectedId(null); setUser(d.user); setNavOpen(false); navigate('map'); } catch (e) { setToast((e as Error).message); } }
   function presentation(next: boolean) { setTechnical(next); setAdvanced(next); }
+  function stopMeasuring() { if (measureKind) { setMeasureKind(null); setMeasureValue(null); map.current?.measure(null); } }
+  function toggleMeasure(kind: MeasureKind | null) { const next = kind && kind !== measureKind ? kind : null; if (next) cancelDraft(); setMeasureKind(next); setMeasureValue(null); map.current?.measure(next); }
+  function locateMe() {
+    if (!navigator.geolocation) { setToast('Este navegador no permite obtener tu ubicación.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(position => { setLocating(false); map.current?.showLocation([position.coords.longitude, position.coords.latitude]); setToast('Ubicación encontrada.'); }, () => { setLocating(false); setToast('No pudimos obtener tu ubicación.'); }, { enableHighAccuracy: true, timeout: 10000 });
+  }
+  async function exportMap() { const blob = await map.current?.exportPng(); if (!blob) { setToast('No pudimos exportar la imagen del mapa.'); return; } const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `agrocebada-mapa-${key}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 
   if (!user) return <Login checkingSession={user === undefined} onLogin={u => { setUser(u); setLoadError(''); }}/>;
-  if (!atlas && view === 'map') return <main className="map-setup-screen"><Particles quantity={220} size={1.3} opacity={.3} drift={.25}/><div className="map-setup-brand"><DotMark size={24} tone="leaf"/>AgroCebada</div><MapSetup tasks={setupTasks} error={loadError} onRetry={reload}/></main>;
-  const extraMode = mode === 'alphaearth' ? 'AlphaEarth' : mode === 'landsat' ? 'NDVI · Landsat C2' : null;
-  const periodLabel = mode === 'alphaearth' ? `Anual ${year}` : `${MONTH_NAMES[month]} ${year}`;
-  return <ToolbarLayoutProvider><div className={`atlas-shell ${view === 'map' ? 'map-route' : ''}`} data-role={user.role}>
-    <Sidebar user={user} view={view} views={VIEWS} parcelCount={parcels.length} loading={!atlas || setupVisible} open={sidebarOpen} technical={technical} onClose={() => setSidebarOpen(false)} onNavigate={navigate} onPresentation={presentation} onSwitchUser={username => void switchUser(username)} onLogout={() => void logout()}/>
-    <div className="atlas-content">
-      <button className="mobile-side-trigger" aria-label="Abrir navegación" onClick={() => setSidebarOpen(true)}><MenuIcon size={18}/></button>
-    {view === 'map' && atlas ? <main className="full-map" aria-label="Atlas territorial" data-draft={draftMode || undefined} data-panel={(selected && !draftMode) || draftMode ? 'open' : undefined}>
-      <div className="map-top-left">
-        <form className="floating-search" role="search" onSubmit={search}>
-          <Search size={16}/>
-          <input aria-label="Buscar municipio, ID o coordenadas" placeholder="Buscar parcela, municipio o coordenadas" value={filters.query} onChange={e => setFilters(f => ({ ...f, query: e.target.value }))}/>
-          {filters.query && <button className="clear-search" type="button" aria-label="Limpiar búsqueda" onClick={() => setFilters(EMPTY_FILTERS)}><X size={14}/></button>}
-          <button className="search-submit" type="submit" aria-label="Buscar" title="Buscar (Enter)"><kbd className="ui-kbd">↵</kbd></button>
-        </form>
-        <Toolbar className="map-mode-toolbar" aria-label="Capas del territorio">
-          <ToolbarGroup className="ui-group map-mode-group" aria-label="Datos del territorio">{MODES.map(m => <ToolbarItem key={m.key} className="map-mode" label={m.label} tooltip={false} isSelected={mode === m.key} onChange={() => switchMode(m.key)}><m.icon/><span>{m.label}</span></ToolbarItem>)}</ToolbarGroup>
-          {extraMode && <span className="ui-badge ui-badge-dark map-mode-extra">{extraMode}<button type="button" aria-label={`Quitar ${extraMode}`} onClick={() => switchMode('parcels')}><X size={12}/></button></span>}
-        </Toolbar>
-        {liveImagery && <div className={`imagery-caption ${imageryError ? 'unavailable' : ''}`} role={manifest || imageryError ? 'status' : undefined}>
-          {imageryError ? <><span>{imageryError}</span><button className="ui-btn ui-btn-outline ui-btn-sm" onClick={() => setImageryRevision(v => v + 1)}>Reintentar servicio</button></>
-            : !manifest || imageryBusy ? <><DotLoader name="scan" size={16}/><LoadingState label={manifest ? 'Preparando imágenes Sentinel-2…' : 'Cargando observaciones Sentinel-2…'}/></>
-            : <><span className="live-dot"/><span>{MONTH_NAMES[month]} {year} · Sentinel-2 L2A · {mode === 'water' ? 'MNDWI 20 m · candidatos de agua' : '10 m'} · sin observaciones: transparente</span></>}
-        </div>}
-      </div>
-      <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} mode={mode} year={year} keyDate={key} filters={filters} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'} onReady={mapReady} onImageryBusy={setImageryBusy} onImageryFailure={() => setPlaying(false)} onBaseChange={base => setLayers(l => ({ ...l, base }))} onOverlayChange={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))} onSelect={chooseParcel} onDraft={setDraft} onCancel={cancelDraft} onMapClick={draftMode === 'segment' && !adjusting ? coords => { if (!segmenting) void infer([...prompts, { coordinates: coords, label: promptLabel }]); } : undefined}
-        controls={<>
-          <button type="button" className="ui-btn ui-btn-primary map-cta analyze-terrain-tool" aria-label="Analizar mi terreno" aria-pressed={draftMode === 'segment'} onClick={startSegment}><ScanSearch/><span>Analizar mi terreno</span></button>
-          <div className="ui-group">
-            <IconButton className="map-control" label="Dibujar parcela" tooltipSide="bottom" aria-pressed={draftMode === 'draw'} onClick={startDraw}><Pentagon/></IconButton>
-            {technical && <IconButton className="map-control" label="Controles avanzados" tooltip="Análisis Pro" tooltipSide="bottom" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal/></IconButton>}
-          </div>
-        </>}/>
-      {setupVisible && <div className="map-setup-overlay"><MapSetup tasks={setupTasks} error={loadError} onRetry={reload}/></div>}
-      {selected && !draftMode && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} sensor={mode === 'landsat' ? 'Landsat C2' : 'Sentinel-2'} onClose={() => setSelectedId(null)} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAnalyze={() => setAnalysis(selected)} onTechnical={() => navigate('technical')} onNext={direction => { const index = visibleParcels.findIndex(p => p.properties.id === selectedId); if (visibleParcels.length) chooseParcel(visibleParcels[(index + direction + visibleParcels.length) % visibleParcels.length].properties.id); }}/>}
-      {draftMode && <section className={`delineation-card map-panel ${compactDelineation ? 'compact' : ''}`} aria-label="Delimitación de parcela">
-        <div className="delineation-heading">
-          <span className="delineation-icon">{draftMode === 'segment' ? <DotLoader name={segmenting ? 'spiral' : 'ring'} size={22} color="var(--leaf)"/> : <Pentagon size={16}/>}</span>
-          <div><span className="kicker">{draftMode === 'segment' ? 'SAM 2.1 · Sentinel-2' : draftMode === 'edit' ? 'Edición de límites' : 'Dibujo manual'}</span><h2>{draftMode === 'segment' ? 'Delimita tu terreno' : draftMode === 'edit' ? 'Corrige los límites' : 'Dibuja tu parcela'}</h2></div>
-          <IconButton className="delineation-collapse" label={compactDelineation ? 'Expandir controles de delimitación' : 'Contraer controles de delimitación'} onClick={() => setCompactDelineation(!compactDelineation)}>{compactDelineation ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</IconButton>
-          <IconButton label="Cancelar delimitación" onClick={cancelDraft}><X size={16}/></IconButton>
+  if (!atlas && view === 'map') return <main className="map-setup-screen"><div className="map-setup-brand"><Logo size={28}/></div><MapSetup tasks={setupTasks} error={loadError} onRetry={reload}/></main>;
+  const periodLabel = mode === 'alphaearth' ? `Anual ${year}` : mode === 'parcels' ? 'Ciclo 2025' : mode === 'terrain' ? 'Capa estática' : `${MONTH_NAMES[month]} ${year}`;
+  const activeMode = MODES.find(m => m.key === mode);
+  const filtered = filters.state !== 'all' || filters.group !== 'all';
+  const rightPanel = draftMode ? 'draft' : sidePanel === 'export' ? 'export' : selected ? 'parcel' : null;
+  const showTime = temporal || (mode === 'alphaearth' && !draftMode);
+  const panelTitle = (key: MapPanel) => PANELS.find(p => p.key === key)!.label;
+  return <ToolbarLayoutProvider><div className={`atlas-shell ${view === 'map' ? 'map-route' : 'page-route'}`} data-role={user.role}>
+    <AppHeader title={view === 'map' ? 'Atlas territorial' : VIEWS[view]} user={user} technical={technical} onMenu={() => setNavOpen(true)} onHome={() => navigate('map')} onPresentation={presentation} onSwitchUser={username => void switchUser(username)} onLogout={() => void logout()}/>
+    <NavMenu user={user} view={view} views={VIEWS} parcelCount={parcels.length} loading={!atlas || setupVisible} technical={technical} open={navOpen} onClose={() => setNavOpen(false)} onNavigate={navigate} onPresentation={presentation}/>
+    {view === 'map' && atlas ? <main className="full-map workspace" aria-label="Atlas territorial" data-left={panel || undefined} data-right={rightPanel || undefined}>
+      <MapRail panel={panel} filtered={filtered} onPanel={next => { parkedPanel.current = null; setPanel(current => current === next ? null : next); }}/>
+      {panel && <section className="context-panel" aria-labelledby="context-panel-title">
+        <header className="context-panel-head"><h2 id="context-panel-title">{panelTitle(panel)}</h2><IconButton label="Cerrar panel" size="sm" onClick={() => setPanel(null)}><X size={16}/></IconButton></header>
+        <div className="context-panel-body">
+          {panel === 'layers' && <LayersPanel mode={mode} technical={technical} settings={layers} year={year} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))}/>}
+          {panel === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
+          {panel === 'parcels' && <ParcelListPanel parcels={visibleParcels} atlas={atlas} keyDate={key} selectedId={selectedId} onSelect={id => chooseParcel(id, true)}/>}
+          {panel === 'filters' && <FiltersPanel state={filters.state} group={filters.group} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all' }))}/>}
+          {panel === 'bookmarks' && <BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/>}
         </div>
-        <div className="delineation-body">
-          <p className="delineation-help">{draftMode === 'segment' ? 'Haz clic dentro del terreno. Añade puntos para incluir o excluir áreas. Revisa la propuesta antes de guardarla.' : 'Ajusta los vértices. Al dibujar, un doble clic cierra el polígono.'}</p>
+      </section>}
+      <div className="map-stage">
+        <div className="map-top-left">
+          <form className="floating-search" role="search" onSubmit={search}>
+            <Search size={16} strokeWidth={1.7}/>
+            <input ref={searchInput} aria-label="Buscar municipio, ID o coordenadas" placeholder="Buscar parcela o lugar" value={filters.query} onChange={e => setFilters(f => ({ ...f, query: e.target.value }))}/>
+            {filters.query && <button className="clear-search" type="button" aria-label="Limpiar búsqueda" onClick={() => setFilters(f => ({ ...f, query: '' }))}><X size={14}/></button>}
+            <button className="search-submit" type="submit" aria-label="Buscar" title="Buscar · Enter"><kbd className="ui-kbd">{shortcutKey} K</kbd></button>
+          </form>
+          {liveImagery && (imageryError || !manifest || imageryBusy) && <div className={`imagery-caption ${imageryError ? 'unavailable' : ''}`} role={manifest || imageryError ? 'status' : undefined}>
+            {imageryError ? <><span>{imageryError}</span><button className="ui-btn ui-btn-outline ui-btn-sm" onClick={() => setImageryRevision(v => v + 1)}>Reintentar servicio</button></>
+              : <LoadingState label={manifest ? 'Preparando imágenes Sentinel-2…' : 'Cargando observaciones Sentinel-2…'}/>}
+          </div>}
+          {measureKind && <div className="measure-readout" role="status"><Ruler size={14}/><span>{measureKind === 'area' ? 'Área' : 'Distancia'}</span><b>{measureValue ?? 'Haz clic en el mapa'}</b><button type="button" className="text-button" onClick={() => toggleMeasure(null)}>Terminar</button></div>}
+        </div>
+        <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} mode={mode} year={year} keyDate={key} filters={filters} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'} onReady={mapReady} onImageryBusy={setImageryBusy} onImageryFailure={() => setPlaying(false)} onMeasure={setMeasureValue} onLocate={locateMe} locating={locating} onSelect={id => { setSidePanel(null); chooseParcel(id); }} onDraft={setDraft} onCancel={() => { cancelDraft(); setMeasureKind(null); }} onMapClick={draftMode === 'segment' && !adjusting ? coords => { if (!segmenting) void infer([...prompts, { coordinates: coords, label: promptLabel }]); } : undefined}/>
+        {setupVisible && <div className="map-setup-overlay"><MapSetup tasks={setupTasks} error={loadError} onRetry={reload}/></div>}
+        {showTime && <TimeSlider mode={mode} year={year} month={month} keyDate={key} playing={playing} onPlay={setPlaying} onMonth={setMonth} onYear={setYear} onDate={(y, m) => { setYear(y); setMonth(m); }}/>}
+      </div>
+      {rightPanel === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} sensor={mode === 'landsat' ? 'Landsat C2' : 'Sentinel-2'} onClose={() => setSelectedId(null)} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAnalyze={() => setAnalysis(selected)} onTechnical={() => navigate('technical')} onNext={direction => { const index = visibleParcels.findIndex(p => p.properties.id === selectedId); if (visibleParcels.length) chooseParcel(visibleParcels[(index + direction + visibleParcels.length) % visibleParcels.length].properties.id, true); }}/>}
+      {rightPanel === 'export' && <aside className="side-panel export-panel" aria-label="Exportar">
+        <header className="side-panel-head"><div className="side-panel-title"><h2>Exportar</h2></div><div className="side-panel-nav"><IconButton label="Cerrar exportación" size="sm" onClick={() => setSidePanel(null)}><X size={16}/></IconButton></div></header>
+        <div className="side-panel-body"><p className="side-panel-lede">{visibleParcels.length} {visibleParcels.length === 1 ? 'parcela visible' : 'parcelas visibles'} · {activeMode?.label} · {periodLabel}</p><ul className="export-list">
+          <li><button type="button" onClick={() => void exportMap()}><span className="export-icon"><ImageDown size={18}/></span><span><b>Imagen del mapa</b><small>PNG de la vista actual</small></span></button></li>
+          <li><button type="button" onClick={() => download('parcelas.geojson', JSON.stringify({ type: 'FeatureCollection', features: visibleParcels }), 'application/geo+json')}><span className="export-icon"><FileJson size={18}/></span><span><b>Parcelas · GeoJSON</b><small>Límites y atributos para SIG</small></span></button></li>
+          <li><button type="button" onClick={() => download('parcelas.csv', parcelCsv(visibleParcels, atlas, key), 'text/csv')}><span className="export-icon"><FileSpreadsheet size={18}/></span><span><b>Parcelas · CSV</b><small>Tabla para hojas de cálculo</small></span></button></li>
+        </ul></div>
+      </aside>}
+      {draftMode && <section className={`side-panel delineation-card ${compactDelineation ? 'compact' : ''}`} aria-label="Delimitación de parcela">
+        <header className="side-panel-head delineation-heading">
+          <div className="side-panel-title"><h2>{draftMode === 'segment' ? 'Delimita tu terreno' : draftMode === 'edit' ? 'Corrige los límites' : 'Dibuja tu parcela'}</h2></div>
+          <div className="side-panel-nav">
+            <IconButton className="delineation-collapse" size="sm" label={compactDelineation ? 'Expandir controles de delimitación' : 'Contraer controles de delimitación'} onClick={() => setCompactDelineation(!compactDelineation)}>{compactDelineation ? <ChevronDown size={15}/> : <ChevronUp size={15}/>}</IconButton>
+            <span className="ui-separator"/>
+            <IconButton label="Cancelar delimitación" size="sm" onClick={cancelDraft}><X size={16}/></IconButton>
+          </div>
+        </header>
+        <div className="side-panel-body delineation-body">
+          <p className="side-panel-lede">{draftMode === 'segment' ? 'Delimitación automática · SAM 2.1 sobre Sentinel-2 RGB' : draftMode === 'edit' ? 'Edición de límites' : 'Dibujo manual'}</p>
+          <p className="delineation-help">{draftMode === 'segment' ? 'Haz clic dentro del terreno. Añade puntos para incluir o excluir áreas y revisa la propuesta antes de guardarla.' : 'Ajusta los vértices. Al dibujar, un doble clic cierra el polígono.'}</p>
           {draftMode === 'segment' && <>
             <div className="prompt-buttons" role="group" aria-label="Tipo de punto"><button aria-pressed={promptLabel === 1 && !adjusting} onClick={() => { setAdjusting(false); map.current?.proposal(draft); setPromptLabel(1); }}><i className="prompt-dot include"/>+ Incluir</button><button aria-pressed={promptLabel === 0 && !adjusting} onClick={() => { setAdjusting(false); map.current?.proposal(draft); setPromptLabel(0); }}><i className="prompt-dot exclude"/>− Excluir</button></div>
-            <p className="delineation-meta">{MONTH_NAMES[month]} {year} · Sentinel-2 RGB · límites aproximados de 10 m · {prompts.length} {prompts.length === 1 ? 'punto' : 'puntos'}</p>
-            {segmenting && <div className="delineation-progress"><DotLoader name="lattice" size={26}/><LoadingState label="Buscando límites de la parcela…"/></div>}
+            <p className="delineation-meta">{MONTH_NAMES[month]} {year} · límites aproximados de 10 m · {prompts.length} {prompts.length === 1 ? 'punto' : 'puntos'}</p>
+            {segmenting && <div className="delineation-progress"><LoadingState label="Buscando límites de la parcela…"/></div>}
             {segmentError && <Alert severity="warning">{segmentError}</Alert>}
             {proposal?.warnings.map(w => <p className="proposal-warning" key={w}>{w}</p>)}
             <div className="delineation-secondary"><Button variant="outlined" disabled={segmenting || !prompts.length} onClick={() => void infer(prompts)}>Reintentar</Button><Button variant="outlined" disabled={!draft || segmenting} onClick={() => { setAdjusting(true); setCompactDelineation(true); map.current?.editDraft(draft!); }}>Ajustar vértices</Button><Button className="manual-fallback" onClick={startDraw} startIcon={<PencilRuler size={14}/>}>Dibujar manualmente</Button></div>
@@ -227,26 +273,25 @@ export default function App() {
           <div className="draft-area"><span>Superficie</span>{draft ? <b className="pixel">{fmt(polygonArea(draft))}<small>ha</small></b> : segmenting ? <LoadingValue label="Calculando superficie de la propuesta" unit="ha"/> : <b className="pixel muted">—<small>ha</small></b>}</div>
           {draftMode !== 'edit' && <TextField label="Nombre de la parcela" size="small" fullWidth value={fieldName} onChange={e => setFieldName(e.target.value)}/>}
         </div>
-        <div className="delineation-footer"><Button variant="outlined" onClick={cancelDraft}>Cancelar</Button>{proposal && <IconButton label="Exportar propuesta y correcciones" disabled={!draft} onClick={exportProposal}><Download size={16}/></IconButton>}<Button variant="contained" disabled={!draft || saving || segmenting} onClick={() => void saveDraft()}>{saving ? <><LoadingDots/>Guardando…</> : draftMode === 'edit' ? 'Guardar límites' : 'Guardar parcela'}</Button></div>
+        <footer className="side-panel-foot delineation-footer"><Button variant="outlined" onClick={cancelDraft}>Cancelar</Button>{proposal && <IconButton label="Exportar propuesta y correcciones" disabled={!draft} onClick={exportProposal}><Download size={16}/></IconButton>}<Button variant="contained" disabled={!draft || saving || segmenting} onClick={() => void saveDraft()}>{saving ? <><LoadingDots/>Guardando…</> : draftMode === 'edit' ? 'Guardar límites' : 'Guardar parcela'}</Button></footer>
       </section>}
-      {(temporal || (mode === 'alphaearth' && !draftMode)) && <div className="map-time-dock">
-        <Toolbar className="map-time-toolbar ui-group" aria-label="Evolución temporal">
-          {mode === 'alphaearth' ? <ToolbarGroup aria-label="Año AlphaEarth"><label className="annual-picker-wrap"><CalendarDays size={15}/><select className="annual-picker" aria-label="Año AlphaEarth" value={year} onChange={e => setYear(Number(e.target.value))}>{[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017].map(y => <option key={y} value={y}>{y}</option>)}</select></label></ToolbarGroup> : <>
-            <ToolbarGroup aria-label="Reproducción"><ToolbarButton className="map-control map-play" label={playing ? 'Pausar meses' : 'Reproducir meses'} onClick={() => setPlaying(!playing)}>{playing ? <Pause/> : <Play/>}</ToolbarButton></ToolbarGroup>
-            <ToolbarGroup className="month-dock-tools" aria-label="Meses de abril a octubre">{MONTHS.slice(3, 10).map((label, i) => <ToolbarItem key={label} className="map-month" isSelected={month === i + 3} label={`${MONTH_NAMES[i + 3]} ${year}`} tooltip={false} onChange={() => setMonth(i + 3)}><span>{label.toUpperCase()}</span></ToolbarItem>)}</ToolbarGroup>
-            <ToolbarGroup aria-label="Elegir mes"><label className="month-picker" title="Elegir mes de observación"><CalendarDays size={15}/><input aria-label="Mes de observación" type="month" min="2022-01" max="2025-12" value={key} onChange={e => { if (e.target.value) { const [y, m] = e.target.value.split('-').map(Number); setYear(y); setMonth(m - 1); } }}/></label></ToolbarGroup>
-          </>}
-        </Toolbar>
-        <span className="dock-year pixel" aria-live="polite">{periodLabel}</span>
-      </div>}
-    </main> : <main className="atlas-page"><div className="atlas-page-heading"><div><span className="section-kicker">AgroCebada · FIRA 2026</span><h1>{VIEWS[view]}</h1></div><div className="atlas-page-heading-actions">{view === 'parcels' && atlas && !setupVisible && <Button onClick={startDraw} variant="contained" startIcon={<Plus size={15}/>}>Nueva parcela</Button>}<Button variant="outlined" onClick={() => navigate('map')} startIcon={<MapIcon size={15}/>}>Volver al mapa</Button></div></div>
+      <div className="tool-rail" role="toolbar" aria-label="Herramientas del mapa" aria-orientation="vertical">
+        <RailTip label="Analizar mi terreno" side="left"><button type="button" className="rail-item" aria-label="Analizar mi terreno" aria-pressed={draftMode === 'segment'} onClick={startSegment}><WandSparkles size={20} strokeWidth={1.5}/></button></RailTip>
+        <RailTip label="Dibujar parcela" side="left"><button type="button" className="rail-item" aria-label="Dibujar parcela" aria-pressed={draftMode === 'draw'} onClick={startDraw}><PenLine size={20} strokeWidth={1.5}/></button></RailTip>
+        <span className="rail-separator rail-optional"/>
+        <RailTip label="Medir distancia" side="left"><button type="button" className="rail-item rail-optional" aria-label="Medir distancia" aria-pressed={measureKind === 'distance'} onClick={() => toggleMeasure('distance')}><Ruler size={20} strokeWidth={1.5}/></button></RailTip>
+        <RailTip label="Medir área" side="left"><button type="button" className="rail-item rail-optional" aria-label="Medir área" aria-pressed={measureKind === 'area'} onClick={() => toggleMeasure('area')}><SquareDashed size={20} strokeWidth={1.5}/></button></RailTip>
+        <span className="rail-separator"/>
+        <RailTip label="Exportar" side="left"><button type="button" className="rail-item" aria-label="Exportar" aria-pressed={sidePanel === 'export'} onClick={() => setSidePanel(p => p === 'export' ? null : 'export')}><Download size={20} strokeWidth={1.5}/></button></RailTip>
+        {technical && <RailTip label="Análisis Pro" side="left"><button type="button" className="rail-item" aria-label="Controles avanzados" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={20} strokeWidth={1.5}/></button></RailTip>}
+      </div>
+    </main> : <main className="atlas-page"><div className="atlas-page-heading"><div><h1>{VIEWS[view]}</h1><p>{PAGE_LEDES[view]}</p></div><div className="atlas-page-heading-actions">{view === 'technical' && selected && <Select size="small" value={year} onChange={e => setYear(Number(e.target.value))} inputProps={{ 'aria-label': 'Año del análisis' }}>{[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017].map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}</Select>}{view === 'parcels' && atlas && !setupVisible && <Button onClick={startDraw} variant="contained" startIcon={<Plus size={15}/>}>Nueva parcela</Button>}<Button variant="outlined" onClick={() => navigate('map')} startIcon={<MapIcon size={15}/>}>Volver al mapa</Button></div></div>
       {!atlas || setupVisible ? <PagePlaceholder view={view} error={loadError} onRetry={reload}/> : <>
-      {view === 'parcels' && <><ParcelsPage parcels={parcels} atlas={atlas} workspace={workspace} keyDate={key} onSelect={id => { navigate('map'); chooseParcel(id, true); }} onAnalyze={setAnalysis}/></>}
-      {view === 'technical' && <><div className="technical-context">{!selected && <Select size="small" value={selectedId || ''} displayEmpty onChange={e => setSelectedId(e.target.value)} inputProps={{ 'aria-label': 'Parcela del análisis' }}><MenuItem value="">Selecciona una parcela</MenuItem>{parcels.map(p => <MenuItem key={p.properties.id} value={p.properties.id}>{p.properties.name || p.properties.id}</MenuItem>)}</Select>}<Select size="small" value={year} onChange={e => setYear(Number(e.target.value))} inputProps={{ 'aria-label': 'Año del análisis' }}>{[2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017].map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}</Select></div>{selected ? <TechnicalPage atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} onSelect={setSelectedId} onMap={() => navigate('map')}/> : <><Alert severity="info">Selecciona una parcela para consultar su evolución.</Alert><PagePlaceholder view="technical" waitingForSelection/></>}</>}
+      {view === 'parcels' && <ParcelsPage parcels={parcels} atlas={atlas} workspace={workspace} keyDate={key} onSelect={id => { navigate('map'); chooseParcel(id, true); }} onAnalyze={setAnalysis}/>}
+      {view === 'technical' && <>{selected ? <TechnicalPage atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} onSelect={setSelectedId} onMap={() => navigate('map')}/> : <section className="empty-panel technical-empty" aria-labelledby="technical-empty-title"><ChartNoAxesCombined size={28} strokeWidth={1.4}/><h2 id="technical-empty-title">Selecciona una parcela</h2><p>Consulta su vegetación, clima, relieve y embeddings AlphaEarth a lo largo del año.</p><Select size="small" value="" displayEmpty onChange={e => setSelectedId(e.target.value)} inputProps={{ 'aria-label': 'Parcela del análisis' }}><MenuItem value="">Elige una parcela</MenuItem>{parcels.map(p => <MenuItem key={p.properties.id} value={p.properties.id}>{p.properties.name || p.properties.id}</MenuItem>)}</Select></section>}</>}
       {view === 'models' && <ModelsPage/>}{view === 'sources' && <SourcesPage atlas={atlas}/>}{view === 'admin' && user.role === 'admin' && <AdminPage currentUser={user} parcels={parcels} workspace={workspace} onChanged={reloadWorkspace}/>}
       </>}
     </main>}
-    </div>
     {atlas && <Drawer anchor="right" open={advanced && technical} onClose={() => setAdvanced(false)} slotProps={{ paper: { className: 'advanced-side-panel', role: 'dialog', 'aria-labelledby': 'advanced-title', 'aria-modal': true } }}><div className="advanced-dialog">
       <div className="dialog-heading"><div><span className="kicker">Presentación técnica</span><h2 id="advanced-title">Análisis Pro</h2></div><IconButton label="Cerrar controles avanzados" onClick={() => setAdvanced(false)}><X size={17}/></IconButton></div>
       <p className="advanced-lede">Umbrales, capas históricas y procedencia.</p>

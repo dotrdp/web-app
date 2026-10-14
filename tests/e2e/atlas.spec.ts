@@ -1,9 +1,9 @@
-import { navigateSidebar, openAccount } from './navigation';
+import { navigateSidebar, openAccount, choosePresentation } from './navigation';
 import { test, expect, type Page } from '@playwright/test';
 async function login(page:Page) {
   await page.goto('/');await page.getByRole('button',{name:'Usar cuenta de prueba'}).click();await page.getByRole('button',{name:'Entrar a AgroCebada'}).click();await expect(page.getByTestId('map')).toBeVisible();
 }
-async function advanced(page:Page) { if (await page.getByRole('button',{name:'Controles avanzados',exact:true}).count()) await page.getByRole('button',{name:'Controles avanzados',exact:true}).click();else await page.getByRole('button',{name:'Análisis Pro',exact:true}).click(); }
+async function advanced(page:Page) { if (await page.getByRole('button',{name:'Controles avanzados',exact:true}).count()) await page.getByRole('button',{name:'Controles avanzados',exact:true}).click();else await choosePresentation(page, 'Análisis Pro'); }
 const nav = navigateSidebar;
 
 test('Full tab, no selection, real Landsat thresholds, coordinate search and climate month selection',async({page})=>{
@@ -16,6 +16,8 @@ test('Full tab, no selection, real Landsat thresholds, coordinate search and cli
   const before=Number(await page.getByTestId('map').getAttribute('data-displayed-pixels'));await advanced(page);await page.getByRole('spinbutton',{name:'Valor del umbral NDVI'}).fill('0.8');await page.getByRole('checkbox',{name:'Filtrar también parcelas',exact:true}).check();await page.getByRole('button',{name:'Cerrar controles avanzados'}).click();
   await expect.poll(async()=>Number(await page.getByTestId('map').getAttribute('data-displayed-pixels'))).toBeLessThan(before);await expect.poll(async()=>Number(await page.getByTestId('map').getAttribute('data-parcel-count'))).toBeLessThan(197);
   await page.getByRole('button',{name:'Agosto 2025'}).click();await expect(page.getByTestId('map')).toHaveAttribute('data-period','2025-08');await advanced(page);await page.getByRole('checkbox',{name:'Filtrar también parcelas',exact:true}).uncheck();await page.getByRole('button',{name:'Cerrar controles avanzados'}).click();
+  await page.getByRole('button',{name:'Cerrar ficha de parcela'}).click();
+  await expect(page.getByRole('heading',{name:'Capas',level:2})).toBeVisible();
   await page.getByRole('button',{name:'Clima',exact:true}).click();await page.getByRole('button',{name:'Septiembre 2025'}).click();await expect(page.getByTestId('map')).toHaveAttribute('data-period','2025-09');await page.screenshot({path:'test-results/climate-desktop.png'});expect(errors).toEqual([]);
 });
 
@@ -37,7 +39,7 @@ test('Automatic delineation entry, manual fallback, saving and vertex editing pr
 });
 
 test('Mobile full map, scrollable pills, dates, bottom sheet and navigation without overflow',async({page})=>{
-  await page.setViewportSize({width:390,height:844});await login(page);await page.getByRole('button',{name:'Clima',exact:true}).click();await page.getByRole('button',{name:'Octubre 2025'}).click();await expect(page.getByTestId('map')).toHaveAttribute('data-period','2025-10');
+  await page.setViewportSize({width:390,height:844});await login(page);await page.getByRole('toolbar',{name:'Paneles del mapa'}).getByRole('button',{name:'Capas',exact:true}).click();await page.getByRole('button',{name:'Clima',exact:true}).click();await page.getByRole('button',{name:'Cerrar panel'}).click();await page.getByRole('button',{name:'Octubre 2025'}).click();await expect(page.getByTestId('map')).toHaveAttribute('data-period','2025-10');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth && document.documentElement.scrollHeight<=innerHeight)).toBe(true);
   const search=page.getByRole('textbox',{name:'Buscar municipio, ID o coordenadas'});await search.fill('AGC_001');await search.press('Enter');await expect(page.getByRole('button',{name:'Ver evolución'})).toBeVisible();await expect(page.getByRole('button',{name:'Analizar parcela',exact:true})).toBeVisible();await page.screenshot({path:'test-results/map-mobile.png'});await nav(page,'Datos y fuentes');await expect(page.getByRole('heading',{name:'Cada dato tiene una historia.'})).toBeVisible();
 });
