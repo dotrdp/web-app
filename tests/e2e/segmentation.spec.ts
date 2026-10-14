@@ -7,7 +7,7 @@ async function clickMap(page:Page,x=.48,y=.35){const canvas=page.getByRole('appl
 
 test('Automatic proposals remain drafts, accept corrections, export provenance and save explicitly',async({page})=>{
   await prepare(page);const requests:any[]=[];await page.route('**/api/segmentation/proposals',async r=>{const body=r.request().postDataJSON();requests.push(body);await r.fulfill({json:proposal(body)});});
-  await page.getByRole('button',{name:'Vegetación',exact:true}).click();await page.getByRole('button',{name:'Reproducir meses'}).click();await page.getByRole('button',{name:'Analizar mi terreno',exact:true}).click();await expect(page.getByRole('button',{name:'Reproducir meses'})).toBeDisabled();
+  await page.getByRole('button',{name:'Vegetación',exact:true}).click();await page.getByRole('button',{name:'Reproducir meses'}).click();await page.getByRole('button',{name:'Analizar mi terreno',exact:true}).click();await expect(page.getByRole('button',{name:'Reproducir meses'})).toHaveCount(0);await expect(page.getByRole('button',{name:'Pausar meses'})).toHaveCount(0);
   await clickMap(page);await expect(page.getByRole('button',{name:'Guardar parcela',exact:true})).toBeEnabled();await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count','197');expect(requests[0].month).toBe('2025-07');
   await page.getByRole('button',{name:'− Excluir',exact:true}).click();await clickMap(page,.55,.35);await expect.poll(()=>requests.length).toBe(2);expect(requests[1].prompts.map((p:any)=>p.label)).toEqual([1,0]);await expect(page.getByRole('button',{name:'Guardar parcela',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Ajustar vértices'}).click();await expect(page.getByRole('button',{name:'Guardar parcela',exact:true})).toBeEnabled();

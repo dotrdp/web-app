@@ -7,5 +7,5 @@ const serviceProxy: ProxyOptions = { target: 'http://127.0.0.1:8090', headers: {
 
 export default defineConfig({
   plugins: [react()], server: { strictPort: true, watch: { ignored: ['**/.data-cache/**','**/.venv/**','**/test-results/**','**/playwright-report/**'] }, proxy: { '/api/imagery': serviceProxy, '/api/segmentation': serviceProxy } },
-  build: { rollupOptions: { output: { manualChunks: { mapping: ['ol', 'proj4'], material: ['@mui/material', '@emotion/react', '@emotion/styled'], react: ['react', 'react-dom'] } } } },
+  build: { rollupOptions: { output: { manualChunks: { mapping: ['ol', 'proj4', 'ol-mapbox-style'], material: ['@mui/material', '@emotion/react', '@emotion/styled'], react: ['react', 'react-dom'] } } } },
 });

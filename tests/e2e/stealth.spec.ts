@@ -14,36 +14,31 @@ async function login(page: Page, imageryAvailable = false) {
   await expect(page.locator('.map-setup-overlay')).toHaveCount(0);
 }
 
-test('Square icon buttons retain accessible names, share tooltips, and compact to a single icon', async ({ page }) => {
+test('Data layer buttons pair icons with labels, share tooltips on icon-only controls and select with the keyboard', async ({ page }) => {
   await login(page);
   const layers = page.getByRole('toolbar', { name: 'Capas del territorio' });
   for (const name of ['Rendimiento', 'Vegetación', 'Agua', 'Clima', 'Terreno']) {
     const button = layers.getByRole('button', { name, exact: true });
-    const bounds = await button.boundingBox();
-    expect(bounds!.width).toBe(32); expect(bounds!.height).toBe(32);
-    await expect(button).toHaveText('');
+    const bounds = (await button.boundingBox())!;
+    expect(bounds.height).toBe(34); expect(bounds.width).toBeGreaterThan(60);
+    await expect(button).toHaveText(name);
     await expect(button.locator('svg')).toHaveCount(1);
   }
-  const vegetation = layers.getByRole('button', { name: 'Vegetación', exact: true });
-  await vegetation.hover();
-  await expect(page.getByRole('tooltip')).toHaveText('Vegetación');
-  await layers.getByRole('button', { name: 'Agua', exact: true }).hover();
-  await expect(page.getByRole('tooltip')).toHaveText('Agua');
+  const zoomIn = page.getByRole('button', { name: 'Acercar mapa', exact: true });
+  expect((await zoomIn.boundingBox())!.width).toBe(36);
+  await zoomIn.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Acercar mapa');
+  await page.getByRole('button', { name: 'Alejar mapa', exact: true }).hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Alejar mapa');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('tooltip')).toHaveCount(0);
-  await page.mouse.move(1000, 400);
-  await vegetation.focus();
+  await page.mouse.move(700, 400);
+  const vegetation = layers.getByRole('button', { name: 'Vegetación', exact: true });
+  await layers.getByRole('button', { name: 'Rendimiento', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tooltip')).toHaveText('Agua');
-  await page.keyboard.press('ArrowLeft');
-  await expect(page.getByRole('tooltip')).toHaveText('Vegetación');
+  await expect(vegetation).toBeFocused();
   await page.keyboard.press('Space');
   await expect(page.getByTestId('map')).toHaveAttribute('data-mode', 'ndvi');
-  await page.getByRole('button', { name: 'Contraer barra: Capas del territorio', exact: true }).click();
-  const expand = page.getByRole('button', { name: 'Expandir barra: Capas del territorio', exact: true });
-  await expect(expand).toBeFocused(); await expect(expand).toHaveText('');
-  expect((await expand.boundingBox())!.width).toBe(32);
-  await page.keyboard.press('Enter');
   await expect(vegetation).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -121,14 +116,14 @@ test('Water index slider updates the MNDWI legend and actual tile threshold, wit
   await expect(water).toHaveAttribute('aria-valuenow', finalValue!);
 });
 
-test('Vertical navbar pill follows the pointer and returns to the current route with the existing logo', async ({ page }) => {
+test('Vertical navbar pill follows the pointer and returns to the current route with the dot-matrix logo', async ({ page }) => {
   await login(page);
   const nav = page.getByRole('navigation', { name: 'Navegación principal' });
   const pill = page.locator('.stealth-navbar-pill'), mapLink = nav.getByRole('link', { name: 'Mapa', exact: true });
   const sources = nav.getByRole('link', { name: 'Datos y fuentes', exact: true });
   const aligned = (link: ReturnType<Page['locator']>) => expect.poll(async () => Math.abs((await pill.boundingBox())!.y - (await link.boundingBox())!.y)).toBeLessThan(1);
-  await expect(page.locator('.stealth-navbar-brand img')).toHaveAttribute('src', '/favicon.svg');
-  expect(await page.locator('.stealth-navbar-brand img').evaluate(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  await expect(page.locator('.stealth-navbar-brand .dot-mark circle')).toHaveCount(25);
+  await expect(page.locator('.stealth-navbar-brand')).toContainText('AgroCebada');
   await aligned(mapLink);
   await sources.hover(); await aligned(sources);
   await expect(mapLink).toHaveAttribute('aria-current', 'page');
@@ -154,6 +149,7 @@ test.describe('Touch controls with reduced motion', () => {
     for (const button of [zoomIn, zoomOut]) { const box = (await button.boundingBox())!; expect(box.width).toBe(44); expect(box.height).toBe(44); }
     await zoomIn.tap(); await expect.poll(async () => Number(await map.getAttribute('data-zoom'))).toBeCloseTo(initialZoom + 1, 1);
     await zoomOut.tap(); await expect.poll(async () => Number(await map.getAttribute('data-zoom'))).toBeCloseTo(initialZoom, 1);
+    await openSidebar(page);
     await page.getByRole('button', { name: 'Análisis Pro', exact: true }).tap();
     const panel = page.getByRole('dialog', { name: 'Análisis Pro' });
     const water = panel.getByRole('slider', { name: 'Umbral de agua MNDWI' });

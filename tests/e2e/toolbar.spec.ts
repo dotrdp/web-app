@@ -9,16 +9,15 @@ async function openMap(page: Page) {
   await expect(page.locator('.map-setup-overlay')).toHaveCount(0);
 }
 
-test('Stealth icon toolbars navigate groups with arrows, retain selection, and skip disabled months', async ({ page }) => {
+test('Data layer and month toolbars navigate with arrows, and the month dock appears only for layers that change over time', async ({ page }) => {
   await openMap(page);
   const layers = page.getByRole('toolbar', { name: 'Capas del territorio' });
   const time = page.getByRole('toolbar', { name: 'Evolución temporal' });
   const map = page.getByTestId('map');
-  await expect(page.getByRole('toolbar')).toHaveCount(5);
+  // Rendimiento is a single 2025 cycle: no month dock competes with the map.
+  await expect(page.getByRole('toolbar')).toHaveCount(2);
+  await expect(time).toHaveCount(0);
   await expect(layers.getByRole('button', { pressed: true })).toHaveAccessibleName('Rendimiento');
-  await expect(layers.getByRole('button', { pressed: true })).toHaveText('');
-  await expect(time.getByRole('button', { name: 'Reproducir meses' })).toBeDisabled();
-  await expect(time.getByRole('button', { name: 'Julio 2025' })).toBeDisabled();
   await layers.getByRole('button', { name: 'Rendimiento' }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(layers.getByRole('button', { name: 'Vegetación' })).toBeFocused();
@@ -46,51 +45,58 @@ test('Stealth icon toolbars navigate groups with arrows, retain selection, and s
   await page.getByLabel('Mes de observación').fill('2024-12');
   await expect(map).toHaveAttribute('data-period', '2024-12');
   await layers.getByRole('button', { name: 'Terreno' }).click();
-  await expect(time).toHaveAttribute('data-disabled', 'true');
-  await expect(time.getByRole('button', { name: 'Reproducir meses' })).toBeDisabled();
-  await expect(page.getByLabel('Mes de observación')).toBeDisabled();
+  await expect(time).toHaveCount(0);
   await expect(map).toHaveAttribute('data-period', '2024-12');
 });
 
-test('Navigation and basemap toolbars change the real map and keep tools available in fullscreen', async ({ page }) => {
+test('Zoom controls, layers popover and fullscreen change the real map and keep tools available', async ({ page }) => {
   await openMap(page);
   const map = page.getByTestId('map');
   const navigation = page.getByRole('toolbar', { name: 'Navegación del mapa' });
-  const basemap = page.getByRole('toolbar', { name: 'Mapa base', exact: true });
   const initialParcelCount = await map.getAttribute('data-parcel-count');
   await expect(navigation).toHaveAttribute('aria-orientation', 'vertical');
+  await expect(map).toHaveAttribute('data-base', 'light');
   const initialZoom = Number(await map.getAttribute('data-zoom'));
   await navigation.getByRole('button', { name: 'Acercar mapa' }).focus();
   await page.keyboard.press('Enter');
   await expect.poll(async () => Number(await map.getAttribute('data-zoom'))).toBeGreaterThan(initialZoom + .8);
   await page.keyboard.press('ArrowDown');
   await expect(navigation.getByRole('button', { name: 'Alejar mapa' })).toBeFocused();
-  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
   await expect(navigation.getByRole('button', { name: 'Ver todas las parcelas' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect.poll(async () => Number(await map.getAttribute('data-zoom'))).toBeLessThan(initialZoom + .2);
-  await basemap.getByRole('button', { name: 'Mapa oscuro' }).focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(basemap.getByRole('button', { name: 'Satélite' })).toBeFocused();
-  await page.keyboard.press('Space');
+
+  await page.getByRole('button', { name: 'Capas del mapa', exact: true }).click();
+  const basemap = page.getByRole('group', { name: 'Cartografía base' });
+  await expect(basemap.getByRole('button', { pressed: true })).toHaveAccessibleName(/Mapa claro/);
+  await basemap.getByRole('button', { name: /Satélite/ }).click();
   await expect(map).toHaveAttribute('data-base', 'satellite');
   await expect(basemap.getByRole('button', { pressed: true })).toHaveCount(1);
-  await basemap.getByRole('button', { name: 'Calles' }).click();
-  await expect(map).toHaveAttribute('data-base', 'streets');
+  await basemap.getByRole('button', { name: /Mapa oscuro/ }).click();
+  await expect(map).toHaveAttribute('data-base', 'dark');
+  const municipalities = page.getByRole('switch', { name: /Municipios/ });
+  await expect(municipalities).toHaveAttribute('aria-checked', 'false');
+  await municipalities.click();
+  await expect(municipalities).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+  await expect(basemap).toHaveCount(0);
   await expect(map).toHaveAttribute('data-period', '2025-07');
   await expect(map).toHaveAttribute('data-parcel-count', initialParcelCount!);
-  await navigation.getByRole('button', { name: 'Mapa en pantalla completa' }).click();
+
+  await page.getByRole('button', { name: 'Mapa en pantalla completa' }).click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === document.documentElement)).toBe(true);
-  await expect(page.getByRole('toolbar')).toHaveCount(5);
   await expect(page.getByRole('button', { name: 'Analizar mi terreno', exact: true })).toBeVisible();
+  await expect(navigation).toBeVisible();
   await page.getByRole('button', { name: 'Análisis Pro', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Análisis Pro' })).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar controles avanzados' }).click();
-  await navigation.getByRole('button', { name: 'Salir de pantalla completa' }).click();
+  await page.getByRole('button', { name: 'Salir de pantalla completa' }).click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBe(null);
 });
 
-test('Mobile icon toolbars expose every month and drawing pauses playback without overflow', async ({ page }) => {
+test('Mobile controls expose every month and drawing pauses playback without overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openMap(page);
   const layers = page.getByRole('toolbar', { name: 'Capas del territorio' });
@@ -104,8 +110,7 @@ test('Mobile icon toolbars expose every month and drawing pauses playback withou
   await expect(time.getByRole('button', { name: 'Pausar meses' })).toBeVisible();
   await page.getByRole('button', { name: 'Dibujar parcela', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Dibuja tu parcela' })).toBeVisible();
-  await expect(time.getByRole('button', { name: 'Reproducir meses' })).toBeDisabled();
-  await expect(page.getByLabel('Mes de observación')).toBeDisabled();
+  await expect(time).toHaveCount(0);
   await page.getByRole('button', { name: 'Cancelar delimitación' }).click();
   await expect(time.getByRole('button', { name: 'Reproducir meses' })).toBeEnabled();
   await expect(page.getByTestId('map')).toHaveAttribute('data-period', '2025-10');
@@ -116,5 +121,5 @@ test('Mobile icon toolbars expose every month and drawing pauses playback withou
     const r = element.getBoundingClientRect();
     return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };
   }));
-  for (const box of boxes) { expect(box.x).toBeGreaterThanOrEqual(0); expect(box.y).toBeGreaterThanOrEqual(60); expect(box.right).toBeLessThanOrEqual(390); expect(box.bottom).toBeLessThanOrEqual(844); }
+  for (const box of boxes) { expect(box.x).toBeGreaterThanOrEqual(0); expect(box.y).toBeGreaterThanOrEqual(56); expect(box.right).toBeLessThanOrEqual(390); expect(box.bottom).toBeLessThanOrEqual(844); }
 });

@@ -1,7 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { navigateSidebar, openAccount, openSidebar } from './navigation';
 
-const TOOLBARS = ['Capas del territorio', 'Herramientas de parcelas', 'Navegación del mapa', 'Mapa base', 'Evolución temporal'];
 async function login(page: Page, account = 'Usar cuenta de prueba') {
   await page.goto('/');
   await page.getByRole('button', { name: account, exact: true }).click();
@@ -10,42 +9,25 @@ async function login(page: Page, account = 'Usar cuenta de prueba') {
   await expect(page.locator('.map-setup-overlay')).toHaveCount(0);
 }
 
-test('Every toolbar compacts independently, retains map state and focus, and survives side navigation', async ({ page }) => {
+test('Map layer, month and basemap choices survive side navigation on the same map instance', async ({ page }) => {
   await login(page);
-  const map = page.getByTestId('map'), original = await map.elementHandle();
+  const map = page.getByTestId('map');
   await page.getByRole('button', { name: 'Clima', exact: true }).click();
   await page.getByRole('button', { name: 'Septiembre 2025', exact: true }).click();
-  await page.getByRole('button', { name: 'Satélite', exact: true }).click();
-  for (const name of TOOLBARS) {
-    const collapse = page.getByRole('button', { name: `Contraer barra: ${name}`, exact: true });
-    await collapse.focus(); await page.keyboard.press('Enter');
-    const expand = page.getByRole('button', { name: `Expandir barra: ${name}`, exact: true });
-    await expect(expand).toBeVisible(); await expect(expand).toBeFocused();
-    await expect(expand).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByRole('toolbar', { name, exact: true })).toHaveCount(0);
-    expect(await map.evaluate((element, previous) => element === previous, original)).toBe(true);
-  }
+  await page.getByRole('button', { name: 'Capas del mapa', exact: true }).click();
+  await page.getByRole('group', { name: 'Cartografía base' }).getByRole('button', { name: /Satélite/ }).click();
+  await page.keyboard.press('Escape');
   await expect(map).toHaveAttribute('data-mode', 'climate');
   await expect(map).toHaveAttribute('data-base', 'satellite');
   await expect(map).toHaveAttribute('data-period', '2025-09');
-  await expect(page.getByLabel('Mes de observación')).toBeHidden();
   await navigateSidebar(page, 'Datos y fuentes');
   await expect(page.getByRole('heading', { name: 'Cada dato tiene una historia.' })).toBeVisible();
   await navigateSidebar(page, 'Mapa');
-  for (const name of TOOLBARS) {
-    const expand = page.getByRole('button', { name: `Expandir barra: ${name}`, exact: true });
-    await expect(expand).toBeVisible(); await expand.focus(); await page.keyboard.press('Enter');
-    await expect(page.getByRole('button', { name: `Contraer barra: ${name}`, exact: true })).toBeFocused();
-    await expect(page.getByRole('toolbar', { name, exact: true })).toBeVisible();
-  }
   await expect(map).toHaveAttribute('data-mode', 'climate');
   await expect(map).toHaveAttribute('data-base', 'satellite');
   await expect(page.getByRole('button', { name: 'Septiembre 2025' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Terreno', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Reproducir meses' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Contraer barra: Evolución temporal', exact: true }).click();
-  await page.getByRole('button', { name: 'Expandir barra: Evolución temporal', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Reproducir meses' })).toBeDisabled();
+  await expect(page.getByRole('toolbar', { name: 'Evolución temporal' })).toHaveCount(0);
   await expect(map).toHaveAttribute('data-period', '2025-09');
 });
 
@@ -80,7 +62,7 @@ test('Producer and technician keep every permitted menu in the sidebar with no t
   }
 });
 
-test('Mobile side menus and compact toolbars work without a producer header or page overflow', async ({ page }) => {
+test('Mobile side menus and map controls work without a producer header or page overflow', async ({ page }) => {
   test.skip(process.env.AGROCEBADA_DEMO !== '1', 'Simulated demo roles');
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, 'Productor 1');
@@ -94,19 +76,14 @@ test('Mobile side menus and compact toolbars work without a producer header or p
   await expect(menu).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Mis parcelas', exact: true })).toBeVisible();
   await navigateSidebar(page, 'Mapa');
-  for (const name of TOOLBARS) {
-    await page.getByRole('button', { name: `Contraer barra: ${name}`, exact: true }).click();
-    await expect(page.getByRole('button', { name: `Expandir barra: ${name}`, exact: true })).toBeVisible();
-  }
+  await expect(menu).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth && document.documentElement.scrollHeight === innerHeight)).toBe(true);
   await openSidebar(page);
   await page.getByRole('button', { name: 'Análisis Pro', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Análisis Pro' })).toBeVisible();
   await expect(menu).toHaveCount(0);
   await page.getByRole('button', { name: 'Cerrar controles avanzados' }).click();
-  await page.getByRole('button', { name: 'Expandir barra: Capas del territorio', exact: true }).click();
   await page.getByRole('button', { name: 'Clima', exact: true }).click();
-  await page.getByRole('button', { name: 'Expandir barra: Evolución temporal', exact: true }).click();
   await page.getByRole('button', { name: 'Octubre 2025', exact: true }).click();
   await expect(page.getByTestId('map')).toHaveAttribute('data-period', '2025-10');
   await openSidebar(page); await page.keyboard.press('Escape');

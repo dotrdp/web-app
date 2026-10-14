@@ -1,20 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-test('Login selects actual GIFs or static reduced-motion posters with reserved desktop and mobile layouts',async({page})=>{
-  await page.setViewportSize({width:1440,height:900});await page.goto('/');
-  const artwork=page.locator('.login-artwork img');await expect(artwork).toBeVisible();
-  await expect.poll(()=>artwork.evaluate((image:HTMLImageElement)=>image.currentSrc)).toContain('login-desktop.gif');
-  const story=await page.locator('.login-story').boundingBox();expect(story?.width).toBeCloseTo(1440*.48,0);
+test('Login hero renders the dot-matrix headline, particles and the data globe on desktop and mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/');
+  const story = page.locator('.login-story');
+  await expect(story.getByRole('heading', { name: 'El campo tiene mucho que contarte.' })).toBeVisible();
+  expect(await story.locator('h1').evaluate(e => getComputedStyle(e).fontFamily)).toContain('Geist Pixel');
+  await expect(page.locator('.login-particles')).toBeVisible();
+  const globe = page.locator('.globe-canvas'); await expect(globe).toBeVisible();
+  await expect.poll(() => globe.evaluate(e => getComputedStyle(e).opacity), { timeout: 20_000 }).toBe('1');
   expect(await page.locator('video').count()).toBe(0);
-  const response=await page.request.get('/artwork/login-desktop.gif');expect(response.headers()['content-type']).toContain('image/gif');expect((await response.body()).subarray(0,6).toString()).toMatch(/^GIF8[79]a$/);
-  await page.emulateMedia({reducedMotion:'reduce'});await expect.poll(()=>artwork.evaluate((image:HTMLImageElement)=>image.currentSrc)).toContain('login-desktop-poster.webp');
-  await page.setViewportSize({width:390,height:844});await expect.poll(()=>artwork.evaluate((image:HTMLImageElement)=>image.currentSrc)).toContain('login-mobile-poster.webp');
-  const mobileStory=await page.locator('.login-story').boundingBox();const form=await page.locator('.login-main').boundingBox();expect(mobileStory?.height).toBe(200);expect(form!.y).toBeGreaterThanOrEqual(200);
-  await page.emulateMedia({reducedMotion:'no-preference'});await expect.poll(()=>artwork.evaluate((image:HTMLImageElement)=>image.currentSrc)).toContain('login-mobile.gif');
+  const storyBox = (await story.boundingBox())!, form = (await page.locator('.login-main').boundingBox())!;
+  expect(storyBox.width).toBeGreaterThan(form.width); expect(form.x).toBeGreaterThanOrEqual(storyBox.width - 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => (await story.boundingBox())!.height).toBe(330);
+  expect((await page.locator('.login-main').boundingBox())!.y).toBeGreaterThanOrEqual(330);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
-test('A loading login GIF does not block signing in',async({page})=>{
-  await page.route('**/artwork/*.gif',()=>new Promise(()=>{}));await page.goto('/',{waitUntil:'domcontentloaded'});
-  await page.getByRole('button',{name:'Usar cuenta de prueba'}).click();await page.getByRole('button',{name:'Entrar a AgroCebada'}).click();await expect(page.getByTestId('map')).toBeVisible();
-  await page.unrouteAll({behavior:'ignoreErrors'});
+test('A slow globe does not block signing in', async ({ page }) => {
+  await page.route('**/assets/Globe*', () => new Promise(() => {}));
+  await page.route('**/src/Globe.tsx*', () => new Promise(() => {}));
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Usar cuenta de prueba' }).click(); await page.getByRole('button', { name: 'Entrar a AgroCebada' }).click(); await expect(page.getByTestId('map')).toBeVisible();
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
