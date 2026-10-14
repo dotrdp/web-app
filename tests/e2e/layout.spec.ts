@@ -36,11 +36,12 @@ test('Producer and technician keep every permitted view in the navigation menu u
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page, 'Técnico');
   for (const [username, role] of [['tecnico', 'technician'], ['productor1', 'producer']]) {
-    if (role === 'producer') { await openAccount(page, 'tecnico'); await page.getByRole('button', { name: 'Demo: productor1 · Productor', exact: true }).click(); }
+    if (role === 'producer') { await openAccount(page, 'tecnico'); await page.getByRole('menuitem', { name: 'Demo: productor1 · Productor', exact: true }).click(); }
     await expect(page.locator('.atlas-shell')).toHaveAttribute('data-role', role);
     await expect(page.locator('.atlas-header')).toHaveCount(0);
     await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '99');
-    const bounds = await page.getByTestId('map').boundingBox(); expect(bounds!.y).toBe(56); expect(bounds!.y + bounds!.height).toBe(900);
+    // Inset shell: 8 px frame, 48 px header above the map, 8 px frame below it.
+    const bounds = await page.getByTestId('map').boundingBox(); expect(bounds!.y).toBe(56); expect(bounds!.y + bounds!.height).toBe(892);
     await openSidebar(page);
     await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Mis parcelas', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Administración', exact: true })).toHaveCount(0);
@@ -62,7 +63,9 @@ test('Producer and technician keep every permitted view in the navigation menu u
     await page.evaluate(() => { location.hash = '/admin'; });
     await expect(page).toHaveURL(/#\/map$/);
     await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '99');
+    await openSidebar(page);
     await expect(page.getByRole('button', { name: `Abrir menú de ${username}` })).toBeVisible();
+    await page.keyboard.press('Control+b');
   }
 });
 

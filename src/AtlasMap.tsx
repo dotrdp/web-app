@@ -31,7 +31,11 @@ import type { Atlas, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMo
 import { fmt } from './lib';
 import { coloredNdviUrl, ndviColor } from './ndvi';
 import { LoadingState } from './AgentProgress';
-import { ToolbarButton, ToolbarGroup, Toolbar } from './Toolbar';
+import { Toolbar } from 'react-aria-components/Toolbar';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { floating, ToolButton } from './MapToolbar';
 import './map.css';
 
 proj4.defs('EPSG:6372', '+proj=lcc +lat_0=12 +lon_0=-102 +lat_1=17.5 +lat_2=29.5 +x_0=2500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs');
@@ -39,6 +43,8 @@ proj4.defs('EPSG:32614', '+proj=utm +zone=14 +datum=WGS84 +units=m +no_defs');
 register(proj4);
 const format = new GeoJSON();
 const MIN_ZOOM = 5, MAX_ZOOM = 19;
+/** --brand (oklch 0.47 0.1 155) for canvas styles. */
+const BRAND = '#1f6b41';
 /** Below this zoom parcels read as cluster bubbles; above it as field outlines. */
 const DETAIL_ZOOM = 12.6;
 
@@ -64,7 +70,7 @@ interface Props {
   onReady?: () => void; onImageryBusy?: (busy: boolean) => void; onImageryFailure?: () => void; onMapClick?: (coords: number[]) => void; onCancel?: () => void;
   onMeasure?: (value: string | null) => void; onLocate?: () => void; locating?: boolean; onSelect: (id: string) => void; onDraft: (geometry: Geometry | null) => void;
 }
-type Runtime = { map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; images: ImageLayer<ImageStatic>[]; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; tileSources: globalThis.Map<string, XYZ>; embeddingLayers: globalThis.Map<string, ImageLayer<ImageStatic>>; municipalities: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; interaction: Draw | Modify | null; editingId: string | null };
+type Runtime = { map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; images: ImageLayer<ImageStatic>[]; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; tileSources: globalThis.Map<string, XYZ>; embeddingLayers: globalThis.Map<string, ImageLayer<ImageStatic>>; municipalities: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; measureEndedAt?: number; interaction: Draw | Modify | null; editingId: string | null };
 
 function createBase(kind: Base): BaseLayer {
   if (kind === 'topo') return new TileLayer({ zIndex: 0, preload: 1, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: ESRI_TOPO }) });
@@ -130,7 +136,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   }
   function stopMeasure() {
     const r = runtime.current; if (!r) return;
-    if (r.measure) r.map.removeInteraction(r.measure);
+    if (r.measure) { r.map.removeInteraction(r.measure); r.measureEndedAt = performance.now(); }
     r.measure = null; r.measureSource.clear(); r.measureTip.setPosition(undefined); latest.current.onMeasure?.(null);
   }
   function measure(kind: MeasureKind | null) {
@@ -203,6 +209,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     if (p.mode === 'alphaearth') { const e = p.atlas.details[id]?.embedding[String(p.year)]?.values; return e ? e.slice(0, 3).map(n => Math.round(Math.min(255, Math.max(0, (n + .25) * 510)))) : null; }
     return null;
   }
+  function onGreenRaster() { const p = latest.current; return ['ndvi', 'landsat', 'alphaearth'].includes(p.mode) || p.settings.base === 'satellite' || !!p.imageryVisible; }
   function onDarkBase() { const base = latest.current.settings.base; return base === 'dark' || base === 'satellite'; }
 
   useEffect(() => {
@@ -225,7 +232,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
         : [new Style({ stroke: new Stroke({ color: `rgba(${tone},${rgb ? .95 : .7})`, width: 1.5 }), fill: new Fill({ color: `rgba(${tone},${rgb ? .32 : .12})` }) })]) as Style[];
       if (resolution < 9) {
         const label = feature.get('name') || feature.get('id');
-        return [...styles, cached(`label:${label}`, () => new Style({ text: new Text({ text: label, font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: '#ffffff' }), stroke: new Stroke({ color: 'rgba(31,37,33,.9)', width: 3 }), overflow: true }) })) as Style];
+        return [...styles, cached(`label:${label}:${dark}`, () => new Style({ text: new Text({ text: label, font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: dark ? '#ffffff' : '#171717' }), stroke: new Stroke({ color: dark ? 'rgba(23,23,23,.9)' : 'rgba(255,255,255,.95)', width: 3 }), overflow: true }) })) as Style];
       }
       return styles;
     } });
@@ -234,15 +241,18 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       const members = f.get('features') as Feature[];
       const n = members.length, selectedId = latest.current.selected?.properties.id;
       const isSelected = members.some(x => x.get('id') === selectedId), dark = onDarkBase();
-      // One neutral marker system on every basemap and layer: data colour appears
+      // One brand-green marker system on every basemap and layer: data colour appears
       // on the field outlines once the map is close enough to read them.
-      if (n === 1) return cached(`dot:${isSelected}`, () => [
-        ...(isSelected ? [new Style({ image: new Circle({ radius: 11, fill: new Fill({ color: 'rgba(30,107,71,.22)' }), stroke: new Stroke({ color: '#1e6b47', width: 3 }) }) })] : []),
-        new Style({ image: new Circle({ radius: 5.5, fill: new Fill({ color: '#ffffff' }), stroke: new Stroke({ color: '#1f2521', width: 2 }) }) }),
+      // Over green rasters (vegetation, imagery) the brand fill disappears; switch to ink.
+      const fill = onGreenRaster() ? '#171717' : BRAND;
+      if (n === 1) return cached(`dot:${isSelected}:${fill}`, () => [
+        ...(isSelected ? [new Style({ image: new Circle({ radius: 11, fill: new Fill({ color: 'rgba(31,107,65,.2)' }), stroke: new Stroke({ color: BRAND, width: 2 }) }) })] : []),
+        new Style({ image: new Circle({ radius: 5, fill: new Fill({ color: fill }), stroke: new Stroke({ color: '#ffffff', width: 2 }) }) }),
       ]);
-      const radius = n < 10 ? 14 : n < 50 ? 17 : 20;
-      return cached(`cluster:${n}:${isSelected}`, () => [
-        new Style({ image: new Circle({ radius: radius + 1, fill: new Fill({ color: 'rgba(31,37,33,.92)' }), stroke: new Stroke({ color: isSelected ? '#1e6b47' : '#ffffff', width: isSelected ? 3 : 2 }) }), text: new Text({ text: String(n), font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: '#ffffff' }) }) }),
+      const radius = n < 10 ? 12 : n < 50 ? 14.5 : 17;
+      return cached(`cluster:${n}:${isSelected}:${fill}`, () => [
+        new Style({ image: new Circle({ radius: radius + 4, fill: new Fill({ color: fill === BRAND ? 'rgba(31,107,65,.18)' : 'rgba(255,255,255,.35)' }) }) }),
+        new Style({ image: new Circle({ radius, fill: new Fill({ color: fill }), stroke: new Stroke({ color: isSelected ? (fill === BRAND ? '#171717' : BRAND) : '#ffffff', width: isSelected ? 2.5 : 2 }) }), text: new Text({ text: String(n), font: '600 11.5px Geist, system-ui, sans-serif', fill: new Fill({ color: '#ffffff' }) }) }),
       ]);
     } });
     const measureSource = new VectorSource(), locationSource = new VectorSource();
@@ -257,7 +267,8 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const map = new Map({ target: host.current, layers: [bases[initialBase]!, imagery, municipalities, states, parcels, clusters, draftLayer, measureLayer, locationLayer], overlays: [measureTip], view: new View({ center: fromLonLat([-98.4, 19.755]), zoom: 10.85, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }), controls: defaultControls({ zoom: false, rotate: false, attribution: false }).extend([new Attribution({ collapsible: false, target: attribution.current ?? undefined }), new ScaleLine({ bar: false, minWidth: 56, maxWidth: 84, target: scale.current ?? undefined })]) });
     runtime.current = { map, source, parcels, clusters, bases, imagery, tileSources: new globalThis.Map(), embeddingLayers: new globalThis.Map(), municipalities, states, draftSource, draftLayer, measureSource, locationSource, measureTip, measure: null, images: [], interaction: null, editingId: null };
     map.on('singleclick', event => {
-      if (runtime.current?.interaction || runtime.current?.measure) return;
+      // OpenLayers reports a single click 250 ms late; ignore one that began while measuring.
+      if (runtime.current?.interaction || runtime.current?.measure || event.originalEvent.timeStamp < (runtime.current?.measureEndedAt ?? 0)) return;
       if (latest.current.onMapClick) { latest.current.onMapClick(toLonLat(event.coordinate)); return; }
       const clicked = map.forEachFeatureAtPixel(event.pixel, (f, layer) => layer === parcels || layer === clusters ? f : undefined, { hitTolerance: 8 });
       if (!clicked) return;
@@ -286,7 +297,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     r.map.once('postrender', ready); r.map.render();
     return () => r.map.un('postrender', ready);
   }, [props.atlas]);
-  useEffect(() => { const r = runtime.current; r?.parcels.changed(); r?.clusters.changed(); }, [props.selected, props.mode, props.year, props.keyDate, props.settings.base]);
+  useEffect(() => { const r = runtime.current; r?.parcels.changed(); r?.clusters.changed(); }, [props.selected, props.mode, props.year, props.keyDate, props.settings.base, props.imageryVisible]);
 
   // Basemaps are created on first use and kept, so switching back is instant.
   useEffect(() => {
@@ -385,26 +396,26 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       else await document.documentElement.requestFullscreen();
     } catch { setError('No pudimos abrir la pantalla completa en este navegador.'); }
   }
-  return <div className="map-canvas-wrap" data-testid="map" data-mode={props.mode} data-base={props.settings.base} data-zoom={viewZoom.toFixed(2)} data-parcel-count={props.parcels.length} data-period={props.keyDate} data-valid-pixels={rasterInfo.valid} data-displayed-pixels={rasterInfo.displayed} data-embedding-count={embeddingCount} data-detail={viewZoom >= DETAIL_ZOOM || undefined}>
-    <Toolbar className="map-zoom-controls" aria-label="Navegación del mapa" orientation="vertical">
-      <ToolbarGroup className="map-control-group" aria-label="Vista del mapa">
-        <ToolbarButton className="map-control" label="Ver todas las parcelas" tooltipSide="left" isDisabled={!props.parcels.length} onClick={() => fitAll()}><Home/></ToolbarButton>
-        <ToolbarButton className="map-control" label="Acercar mapa" tooltipSide="left" isDisabled={viewZoom >= MAX_ZOOM} onClick={() => zoomBy(1)}><Plus/></ToolbarButton>
-        <ToolbarButton className="map-control" label="Alejar mapa" tooltipSide="left" isDisabled={viewZoom <= MIN_ZOOM} onClick={() => zoomBy(-1)}><Minus/></ToolbarButton>
-        {props.onLocate && <ToolbarButton className="map-control" label="Mi ubicación" tooltipSide="left" aria-busy={props.locating || undefined} onClick={props.onLocate}><LocateFixed/></ToolbarButton>}
-        <ToolbarButton className="map-control" label={fullscreen ? 'Salir de pantalla completa' : 'Mapa en pantalla completa'} tooltipSide="left" aria-pressed={fullscreen} isDisabled={document.fullscreenEnabled === false} onClick={() => void toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ToolbarButton>
-      </ToolbarGroup>
+  return <div className="map-canvas-wrap absolute inset-0" data-testid="map" data-mode={props.mode} data-base={props.settings.base} data-zoom={viewZoom.toFixed(2)} data-parcel-count={props.parcels.length} data-period={props.keyDate} data-valid-pixels={rasterInfo.valid} data-displayed-pixels={rasterInfo.displayed} data-embedding-count={embeddingCount} data-detail={viewZoom >= DETAIL_ZOOM || undefined}>
+    <Toolbar aria-label="Navegación del mapa" orientation="vertical" className={cn(floating, 'map-zoom-controls absolute right-3 bottom-9 z-10 flex flex-col p-1 max-md:bottom-[4.25rem]')}>
+      <ToolButton label="Ver todas las parcelas" side="left" onClick={() => fitAll()}><Home/></ToolButton>
+      <Separator className="my-0.5"/>
+      <ToolButton label="Acercar mapa" side="left" disabled={viewZoom >= MAX_ZOOM} onClick={() => zoomBy(1)}><Plus/></ToolButton>
+      <ToolButton label="Alejar mapa" side="left" disabled={viewZoom <= MIN_ZOOM} onClick={() => zoomBy(-1)}><Minus/></ToolButton>
+      <Separator className="my-0.5"/>
+      {props.onLocate && <ToolButton label="Mi ubicación" side="left" busy={props.locating} onClick={props.onLocate}><LocateFixed/></ToolButton>}
+      <ToolButton label={fullscreen ? 'Salir de pantalla completa' : 'Mapa en pantalla completa'} side="left" pressed={fullscreen} disabled={document.fullscreenEnabled === false} onClick={() => void toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ToolButton>
     </Toolbar>
 
-    {(loading || error) && <div className={`map-status ${error ? 'error' : ''}`} role="status">{loading && !error ? <LoadingState label="Cargando Landsat…"/> : <>{error}{['ndvi', 'water'].includes(props.mode) || props.imageryVisible ? <button className="ui-btn ui-btn-outline ui-btn-sm" onClick={() => { const source = runtime.current?.imagery.getSource(); if (source) { tileFailures.current.get(source)?.clear(); source.refresh(); } setError(''); }}>Reintentar imágenes</button> : null}</>}</div>}
+    {(loading || error) && <div role="status" className={cn(floating, 'map-status absolute top-3 left-1/2 z-20 flex max-w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 px-3 py-2 text-sm', error && 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200')}>{loading && !error ? <LoadingState label="Cargando Landsat…"/> : <><span>{error}</span>{['ndvi', 'water'].includes(props.mode) || props.imageryVisible ? <Button size="sm" variant="outline" onClick={() => { const source = runtime.current?.imagery.getSource(); if (source) { tileFailures.current.get(source)?.clear(); source.refresh(); } setError(''); }}>Reintentar imágenes</Button> : null}</>}</div>}
 
-    <div className="map-statusbar">
-      <div className="map-attribution" ref={attribution}/>
-      <div className="map-statusbar-meta"><span className="map-coordinates" ref={coordinates}>19.7540° N  98.4050° O</span><span className="map-zoom-label">z {viewZoom.toFixed(1)}</span><div className="map-scale" ref={scale}/></div>
+    <div className="map-statusbar absolute inset-x-0 bottom-0 z-[9] flex h-6 items-center justify-between gap-4 border-t bg-background/85 px-3 text-[11px] text-muted-foreground backdrop-blur max-md:hidden">
+      <div className="map-attribution min-w-0 truncate" ref={attribution}/>
+      <div className="flex shrink-0 items-center gap-3 font-mono text-[10.5px] whitespace-pre"><span ref={coordinates}>19.7540° N  98.4050° O</span><span>z {viewZoom.toFixed(1)}</span><div className="map-scale" ref={scale}/></div>
     </div>
 
     {/* The canvas follows the controls in the DOM so Tab reaches the controls first. */}
-    <div ref={host} className="map-canvas" tabIndex={0} role="application" aria-label="Mapa interactivo de parcelas de Hidalgo, Puebla y Tlaxcala" onKeyDown={e => { if (e.key === 'Escape') { cancel(); measure(null); latest.current.onCancel?.(); } }}/>
+    <div ref={host} className="map-canvas absolute inset-0 bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset" tabIndex={0} role="application" aria-label="Mapa interactivo de parcelas de Hidalgo, Puebla y Tlaxcala" onKeyDown={e => { if (e.key === 'Escape') { cancel(); measure(null); latest.current.onCancel?.(); } }}/>
   </div>;
 });
 

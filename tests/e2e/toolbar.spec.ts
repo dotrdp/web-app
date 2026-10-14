@@ -86,7 +86,7 @@ test('Zoom controls, the basemap gallery and fullscreen change the real map and 
 
   await navigation.getByRole('button', { name: 'Mapa en pantalla completa' }).click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === document.documentElement)).toBe(true);
-  await expect(page.getByRole('button', { name: 'Analizar mi terreno', exact: true })).toBeVisible();
+  await expect(page.getByRole('toolbar',{name:'Herramientas del mapa'}).getByRole('button',{name:'Analizar mi terreno',exact:true})).toBeVisible();
   await choosePresentation(page, 'Análisis Pro');
   await expect(page.getByRole('dialog', { name: 'Análisis Pro' })).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar controles avanzados' }).click();
@@ -145,7 +145,7 @@ test('Mobile controls expose every month and drawing pauses playback without ove
   await expect(page.getByTestId('map')).toHaveAttribute('data-period', '2025-10');
   const size = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight, viewport: [innerWidth, innerHeight] }));
   expect([size.width, size.height]).toEqual(size.viewport);
-  await expect(page.getByRole('button', { name: 'Analizar mi terreno', exact: true })).toBeVisible();
+  await expect(page.getByRole('toolbar',{name:'Herramientas del mapa'}).getByRole('button',{name:'Analizar mi terreno',exact:true})).toBeVisible();
   const boxes = await page.getByRole('toolbar').evaluateAll(elements => elements.map(element => {
     const r = element.getBoundingClientRect();
     return { x: r.x, y: r.y, right: r.right, bottom: r.bottom };

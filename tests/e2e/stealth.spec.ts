@@ -22,14 +22,18 @@ test('Layer rows pair icons with labels, icon-only map controls share tooltips, 
     const bounds = (await button.boundingBox())!;
     expect(bounds.height).toBeGreaterThanOrEqual(44); expect(bounds.width).toBeGreaterThan(200);
     await expect(button).toContainText(name);
-    await expect(button.locator('svg')).toHaveCount(1);
+    await expect(button.locator('svg').first()).toBeVisible();
   }
   const zoomIn = page.getByRole('button', { name: 'Acercar mapa', exact: true });
   expect((await zoomIn.boundingBox())!.width).toBe(36);
   await zoomIn.hover();
   await expect(page.getByRole('tooltip')).toHaveText('Acercar mapa');
-  await page.getByRole('button', { name: 'Alejar mapa', exact: true }).hover();
-  await expect(page.getByRole('tooltip')).toHaveText('Alejar mapa');
+  // Glide to the next button as a mouse would: Radix keeps the previous tooltip
+  // hoverable for one move, so a single-jump hover() never opens the next one.
+  const next = (await page.getByRole('button', { name: 'Alejar mapa', exact: true }).boundingBox())!;
+  await page.mouse.move(next.x + next.width / 2, next.y + next.height / 2, { steps: 8 });
+  await expect(page.getByRole('tooltip').filter({ hasText: 'Alejar mapa' })).toBeVisible();
+  await expect(page.getByRole('tooltip').filter({ hasText: 'Acercar mapa' })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.mouse.move(700, 400);
@@ -87,7 +91,7 @@ test('Water index slider updates the MNDWI legend and actual tile threshold, wit
   await choosePresentation(page, 'Análisis Pro');
   const panel = page.getByRole('dialog', { name: 'Análisis Pro' });
   const water = panel.getByRole('slider', { name: 'Umbral de agua MNDWI' });
-  await expect(water).toHaveAttribute('min', '-1'); await expect(water).toHaveAttribute('max', '1');
+  await expect(water).toHaveAttribute('aria-valuemin', '-1'); await expect(water).toHaveAttribute('aria-valuemax', '1');
   await expect(water).toHaveAttribute('aria-valuenow', '0');
   await expect(panel.getByRole('spinbutton', { name: 'Umbral de agua MNDWI' })).toHaveCount(0);
   const synced = async () => {
@@ -101,7 +105,7 @@ test('Water index slider updates the MNDWI legend and actual tile threshold, wit
   await page.keyboard.press('ArrowLeft'); await expect(water).toHaveAttribute('aria-valuenow', '-1');
   await page.keyboard.press('PageUp'); await expect(water).toHaveAttribute('aria-valuenow', '-0.75');
   await page.keyboard.press('ArrowRight'); await expect(water).toHaveAttribute('aria-valuenow', '-0.7'); await synced();
-  const track = (await panel.locator('.water-index-control .stealth-slider-control').boundingBox())!;
+  const track = (await panel.locator('.water-index-control [data-slot=slider]').boundingBox())!;
   await page.mouse.move(track.x + track.width * .3, track.y + track.height / 2);
   await page.mouse.down();
   await page.mouse.move(track.x + track.width * .7, track.y + track.height / 2, { steps: 8 });
@@ -118,24 +122,27 @@ test('Water index slider updates the MNDWI legend and actual tile threshold, wit
 
 test('Navigation stays hidden behind the header menu and the map keeps only icon rails', async ({ page }) => {
   await login(page);
+  // On the map the off-canvas sidebar is collapsed and out of the accessibility tree.
   await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
-  await expect(page.locator('.app-header .logo-mark')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Atlas territorial', level: 1 })).toBeVisible();
   for (const name of ['Capas', 'Mapa base', 'Parcelas', 'Marcadores', 'Filtros']) expect(await page.getByRole('toolbar', { name: 'Paneles del mapa' }).getByRole('button', { name, exact: true }).innerText()).toBe('');
   for (const name of ['Analizar mi terreno', 'Dibujar parcela', 'Medir distancia', 'Medir área', 'Exportar']) await expect(page.getByRole('toolbar', { name: 'Herramientas del mapa' }).getByRole('button', { name, exact: true })).toHaveText('');
   await expect(page.getByRole('toolbar', { name: 'Navegación del mapa' }).getByRole('button', { name: 'Mi ubicación' })).toBeVisible();
   await page.getByRole('button', { name: 'Abrir navegación' }).click();
-  const drawer = page.getByRole('dialog', { name: 'Navegación y cuenta' });
-  const nav = drawer.getByRole('navigation', { name: 'Navegación principal' });
+  const nav = page.getByRole('navigation', { name: 'Navegación principal' });
   await expect(nav.getByRole('link', { name: 'Mapa', exact: true })).toHaveAttribute('aria-current', 'page');
+  // Content pages keep the sidebar open beside them.
   await nav.getByRole('link', { name: 'Datos y fuentes', exact: true }).click();
-  await expect(drawer).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Cada dato tiene una historia.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Abrir navegación' }).click();
   await expect(nav.getByRole('link', { name: 'Datos y fuentes', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await expect(drawer).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Abrir navegación' })).toBeFocused();
+  // Returning to the map collapses it again; Ctrl+B toggles it from the keyboard.
+  await nav.getByRole('link', { name: 'Mapa', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
+  await page.keyboard.press('Control+b');
+  await expect(nav).toBeVisible();
+  await page.keyboard.press('Control+b');
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' })).toHaveCount(0);
 });
 
 test.describe('Touch controls with reduced motion', () => {
@@ -152,7 +159,11 @@ test.describe('Touch controls with reduced motion', () => {
     await page.getByRole('button', { name: 'Análisis Pro', exact: true }).tap();
     const panel = page.getByRole('dialog', { name: 'Análisis Pro' });
     const water = panel.getByRole('slider', { name: 'Umbral de agua MNDWI' });
-    const track = (await panel.locator('.water-index-control .stealth-slider-control').boundingBox())!;
+    // Measure once the sheets have settled (the navigation sheet closes as this one opens).
+    const slider = panel.locator('.water-index-control [data-slot=slider]');
+    let last = '';
+    await expect.poll(async () => { const box = JSON.stringify(await slider.boundingBox()); const stable = box === last; last = box; return stable; }, { intervals: [100] }).toBe(true);
+    const track = (await slider.boundingBox())!;
     expect(track.height).toBeGreaterThanOrEqual(44);
     await page.touchscreen.tap(track.x + track.width * .8, track.y + track.height / 2);
     await expect.poll(async () => Number(await water.getAttribute('aria-valuenow'))).toBeGreaterThan(.5);
@@ -166,7 +177,7 @@ test.describe('Touch controls with reduced motion', () => {
     await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await session.detach();
     await expect.poll(async () => Number(await water.getAttribute('aria-valuenow'))).toBeLessThan(0);
-    expect(await page.locator('.stealth-slider-knob').evaluate(e => getComputedStyle(e).scale)).toBe('1');
+    expect(['1', 'none']).toContain(await page.locator('.water-index-control [data-slot=slider-thumb]').evaluate(e => getComputedStyle(e).scale));
     // Let Chromium finish the touch gesture before the next tap; it suppresses
     // compatibility clicks immediately after a synthetic drag.
     await page.waitForTimeout(350);

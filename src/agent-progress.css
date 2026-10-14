@@ -1,61 +1,28 @@
 /* Spectrum UI loading-state and agent-steps, adapted for AgroCebada.
-   Apache-2.0; attribution and license in /licenses/spectrum-ui.txt. */
+   Apache-2.0; attribution and license in /licenses/spectrum-ui.txt.
+   Step layout lives in Tailwind classes (AgentProgress.tsx); this file keeps the
+   nine dots, the label shimmer and the reduced-motion rules. */
 .loading-state { display: flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%; color: var(--foreground); font-size: 13px; font-weight: 500; line-height: 1.5; }
 .loading-dots { display: grid; grid-template-columns: repeat(3, 4px); gap: 1.5px; width: 15px; height: 15px; flex: 0 0 15px; color: inherit; }
 .loading-dots > span { width: 4px; height: 4px; background: currentColor; border-radius: 50%; opacity: .15; animation: ag-dot-pulse 650ms ease-in-out var(--dot-delay) infinite; }
-.loading-state-label { color: var(--foreground); background: linear-gradient(90deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--muted-foreground) 65%); background-size: 200% 100%; background-clip: text; -webkit-text-fill-color: transparent; animation: ag-label-shimmer 1.4s linear infinite; }
-.loading-elapsed, .agent-step-time { font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--subtle-foreground); white-space: nowrap; }
-.loading-elapsed { min-width: 38px; }
+.loading-state-label { color: var(--foreground); background: linear-gradient(90deg, var(--muted-foreground) 35%, var(--foreground) 50%, var(--muted-foreground) 65%); background-size: 200% 100%; background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: ag-label-shimmer 1.4s linear infinite; }
+.loading-elapsed { min-width: 38px; font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted-foreground); white-space: nowrap; }
+.loading-value { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.loading-value.stopped .loading-dots > span { animation: none; opacity: .35; }
 .progress-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 @keyframes ag-dot-pulse { 0%, 100% { opacity: .15; } 40% { opacity: 1; } }
 @keyframes ag-label-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @keyframes ag-step-appear { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
 
-.agent-steps { padding: 0; margin: 0; list-style: none; width: 100%; text-align: left; }
-.agent-step { display: flex; gap: 12px; position: relative; }
-.agent-step:not(:last-child)::before { content: ''; position: absolute; left: 9.5px; top: 22px; bottom: 3px; width: 1px; background: var(--border); }
-.agent-step-marker { display: grid; place-items: center; width: 20px; height: 22px; flex: 0 0 20px; color: var(--subtle-foreground); }
-.agent-step-marker.success > svg, .agent-step-marker.error > svg { box-sizing: content-box; padding: 3px; border-radius: 50%; animation: ag-step-appear 180ms ease-out both; }
-.agent-step-marker.success > svg { color: var(--leaf-ink); background: var(--leaf-soft); }
-.agent-step-marker.error > svg { color: #a35742; background: #f8e8df; }
-.agent-step-marker.running { color: var(--foreground); }
-.agent-step-body { flex: 1; min-width: 0; padding-bottom: 19px; }
-.agent-step:last-child .agent-step-body { padding-bottom: 0; }
-.agent-step-heading { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 22px; text-align: left; background: none; border: none; padding: 0; color: var(--foreground); font: inherit; }
-button.agent-step-heading { cursor: pointer; min-height: 32px; margin-top: -5px; border-radius: 4px; }
-button.agent-step-heading:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
-.agent-step-name { font-size: 12px; font-weight: 600; line-height: 1.5; }
-.agent-step-status { font-size: 9px; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
-.agent-step-status.running { color: var(--foreground); }
-.agent-step-status.success { color: var(--leaf-ink); }
-.agent-step-status.error { color: #aa5e46; }
-.agent-step-time { margin-left: auto; }
-.agent-step-heading > svg { flex: 0 0 13px; color: var(--subtle-foreground); transition: transform 180ms; }
-.agent-step-heading > svg.expanded { transform: rotate(180deg); }
-.agent-step-detail { margin: 3px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted-foreground); }
-.agent-step-result { margin: 8px 0 0; padding: 9px 11px; border-radius: 8px; background: var(--muted); color: var(--muted-foreground); font-size: 11px; line-height: 1.6; }
-.agent-parallel-steps { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.agent-parallel-steps > li { padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; }
-.agent-parallel-steps > li > div { display: flex; align-items: center; gap: 5px; color: var(--muted-foreground); font-size: 10px; }
-.agent-parallel-steps small { margin-left: auto; font-size: 9px; color: var(--muted-foreground); }
-.agent-parallel-steps p { margin: 4px 0 0 25px; color: var(--muted-foreground); font-size: 10px; line-height: 1.5; }
-.agent-steps.compact .agent-step-body { padding-bottom: 10px; }
+.agent-step-marker > svg { animation: ag-step-appear 180ms ease-out both; }
 
+/* Contexts elsewhere in the app. */
 .imagery-caption .loading-state { color: var(--muted-foreground); font-size: inherit; gap: 8px; }
-.imagery-caption .loading-state-label { color: var(--muted-foreground); background-image: linear-gradient(90deg, var(--subtle-foreground) 35%, var(--muted) 50%, var(--subtle-foreground) 65%); }
-.imagery-caption .loading-elapsed { color: var(--subtle-foreground); }
+.imagery-caption .loading-state-label { color: var(--muted-foreground); background-image: linear-gradient(90deg, var(--muted-foreground) 35%, var(--muted) 50%, var(--muted-foreground) 65%); }
 .map-status .loading-state { font-size: inherit; }
-@media (max-width: 700px) {
-  .agent-step { gap: 9px; }
-  .agent-step-heading { gap: 6px; }
-  .agent-step-status { font-size: 9px; }
-  .agent-step-name { font-size: 12px; }
-  .agent-step-time { font-size: 9px; }
-  button.agent-step-heading { min-height: 40px; margin-block: -9px -4px; }
-}
+
 @media (prefers-reduced-motion: reduce) {
   .loading-dots > span, .loading-state-label, .agent-step-marker > svg { animation: none; }
   .loading-dots > span { opacity: .65; }
   .loading-state-label { background: none; -webkit-text-fill-color: currentColor; }
-  .agent-step-heading > svg { transition: none; }
 }

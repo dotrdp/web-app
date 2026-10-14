@@ -29,13 +29,13 @@ test('AlphaEarth annual imagery and original technical charts, exports and label
 });
 
 test('Automatic delineation entry, manual fallback, saving and vertex editing preserve page-memory behavior',async({page})=>{
-  await login(page);await page.getByRole('button',{name:'Analizar mi terreno',exact:true}).click();await page.getByRole('button',{name:'Dibujar manualmente'}).click();await expect(page.getByRole('heading',{name:'Dibuja tu parcela'})).toBeVisible();await expect(page.getByRole('button',{name:'Reproducir meses'})).toHaveCount(0);
+  await login(page);await page.getByRole('toolbar',{name:'Herramientas del mapa'}).getByRole('button',{name:'Analizar mi terreno',exact:true}).click();await page.getByRole('button',{name:'Dibujar manualmente'}).click();await expect(page.getByRole('heading',{name:'Dibuja tu parcela'})).toBeVisible();await expect(page.getByRole('button',{name:'Reproducir meses'})).toHaveCount(0);
   const canvas=page.getByRole('application',{name:'Mapa interactivo',exact:false});const bounds=await canvas.boundingBox();if(!bounds)throw new Error('Map missing');const point=(x:number,y:number)=>({x:bounds.width*x,y:bounds.height*y});
   await canvas.click({position:point(.4,.42)});await canvas.click({position:point(.57,.42)});await canvas.click({position:point(.57,.62)});await canvas.dblclick({position:point(.4,.62)});
   await expect(page.getByRole('button',{name:'Guardar parcela',exact:true})).toBeEnabled();await page.getByRole('textbox',{name:'Nombre de la parcela'}).fill('Parcela e2e');await page.getByRole('button',{name:'Guardar parcela',exact:true}).click();await expect(page.getByRole('heading',{name:'Parcela e2e'})).toBeVisible();
   await page.getByRole('button',{name:'Corregir límites'}).click();await expect(page.getByRole('button',{name:'Guardar límites',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Guardar límites',exact:true}).click();await expect(page.getByText('Límites ajustados',{exact:false})).toBeVisible();await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count','198');await page.reload();
   if(process.env.AGROCEBADA_DEMO==='1'){await expect(page.getByRole('button',{name:'Entrar a AgroCebada'})).toBeVisible();await login(page);await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count','197');}else await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count','198');
-  await nav(page,'Administración');await expect(page.getByRole('heading',{name:'Usuarios del espacio'})).toBeVisible();await openAccount(page,'testuser');await page.getByRole('button',{name:'Cerrar sesión',exact:true}).click();await expect(page.getByRole('button',{name:'Entrar a AgroCebada'})).toBeVisible();
+  await nav(page,'Administración');await expect(page.getByRole('heading',{name:'Usuarios del espacio'})).toBeVisible();await openAccount(page,'testuser');await page.getByRole('menuitem',{name:'Cerrar sesión',exact:true}).click();await expect(page.getByRole('button',{name:'Entrar a AgroCebada'})).toBeVisible();
 });
 
 test('Mobile full map, scrollable pills, dates, bottom sheet and navigation without overflow',async({page})=>{

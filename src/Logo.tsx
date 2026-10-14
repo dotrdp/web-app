@@ -13,5 +13,5 @@ export function LogoMark({ size = 28, tone = 'brand' }: { size?: number; tone?: 
 }
 
 export function Logo({ size = 28, subtitle = true, tone = 'brand' }: { size?: number; subtitle?: boolean; tone?: 'brand' | 'light' }) {
-  return <span className="logo" data-tone={tone}><LogoMark size={size} tone={tone}/><span className="logo-word">AgroCebada{subtitle && <small>Atlas FIRA 2026</small>}</span></span>;
+  return <span className="inline-flex items-center gap-2.5" data-tone={tone}><LogoMark size={size} tone={tone}/><span className={`grid leading-tight ${tone === 'light' ? 'text-white' : 'text-foreground'}`}><span className="text-[15px] font-semibold tracking-tight">AgroCebada</span>{subtitle && <span className={`text-xs ${tone === 'light' ? 'text-white/70' : 'text-muted-foreground'}`}>Atlas FIRA 2026</span>}</span></span>;
 }

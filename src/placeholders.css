@@ -1,137 +1,34 @@
-/* Page placeholders and pending values (LoadingValue).
-   The nine loading dots and their animation come from agent-progress.css;
-   this file only positions them. Layout mirrors the real pages (pages.css). */
+/* Pending values (LoadingValue) and the page placeholder's frozen states.
+   The nine loading dots and their pulse come from agent-progress.css;
+   layout is Tailwind + shadcn Skeleton in Placeholders.tsx. */
 
-/* ---------- Pending value: "—" + unit + loading dots ---------- */
+/* Pending value: "—" + unit + loading dots. */
 .loading-value {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  min-width: 64px;
-  min-height: 24px;
+  gap: 0.5rem;
+  min-height: 1.5rem;
   color: var(--muted-foreground);
   vertical-align: middle;
   white-space: nowrap;
 }
 .loading-value-number { font: inherit; font-variant-numeric: tabular-nums; }
-.loading-value > small { display: inline; margin: 0; color: var(--muted-foreground); font-size: .6em; font-weight: 400; }
+.loading-value > small { margin: 0; color: var(--muted-foreground); font-size: 0.6em; font-weight: 400; }
 .loading-value .loading-dots { font-size: 0; }
+.placeholder-table-row .loading-value { min-width: 5.5rem; font-size: 0.875rem; }
+.placeholder-table-row .loading-value > small { font-size: 0.7rem; }
 
-/* Waiting and error phases freeze every dot. */
+/* Waiting and error phases freeze every dot and skeleton. */
 .loading-value.stopped .loading-dots > span,
-.page-placeholder.stopped .loading-dots > span { animation: none; opacity: .35; }
+.page-placeholder.stopped .loading-dots > span { animation: none; opacity: 0.35; }
+.page-placeholder.stopped [data-slot="skeleton"] { animation: none; }
 
-/* ---------- Page placeholder ---------- */
-.page-placeholder { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
-
-.page-placeholder > .loading-state,
-.placeholder-waiting {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0;
-  padding: 8px 14px 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  font-size: 12.5px;
-}
-.placeholder-waiting { color: var(--muted-foreground); }
-
-.page-placeholder-content { min-width: 0; }
-
-/* Skeleton lines with a slow pulse (frozen when stopped). */
-.placeholder-line {
-  display: block;
-  width: 88%;
-  max-width: 290px;
-  height: 8px;
-  margin: 8px 0;
-  border-radius: 4px;
-  background: var(--muted-strong);
-  animation: pg-skeleton 1.6s ease-in-out infinite alternate;
-}
-.placeholder-line.short { width: 55%; }
-.placeholder-line.tag { width: 72px; height: 20px; margin: 0; border-radius: 999px; }
-.card-heading .placeholder-line { margin: 6px 0 0; }
-.page-placeholder.stopped .placeholder-line { animation: none; }
-@keyframes pg-skeleton { from { opacity: 1; } to { opacity: .45; } }
-
-/* Toolbar skeleton: input-sized blocks. */
-.placeholder-field { display: block; flex: 1 1 240px; max-width: 340px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
-.placeholder-field.narrow { flex: 0 1 180px; }
-.placeholder-toolbar .loading-value { margin-left: auto; min-width: 0; font-size: 12.5px; }
-
-.placeholder-metrics-strip .stat-value { margin: 4px 0 0; }
-.placeholder-metrics-strip .placeholder-line { margin: 4px 0 0; }
-
-.placeholder-intro .model-intro-copy .placeholder-line { max-width: 420px; }
-.placeholder-intro .loading-value { font-size: 30px; font-weight: 400; }
-.page-intro.placeholder-intro .placeholder-line { max-width: 360px; margin-top: 6px; }
-
-.placeholder-table-row td { height: 48px; }
-.placeholder-table-row .loading-value { min-width: 90px; }
-.placeholder-table-row .loading-value > small { font-size: 10px; }
-
-/* Chart skeleton: hairline gridlines and a pending value. */
-.placeholder-chart {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 224px;
-  padding: 14px 12px 26px 40px;
-}
-.placeholder-chart-axis { display: block; width: 100%; border-top: 1px solid var(--border); }
-.placeholder-chart-axis:last-of-type { border-top-style: solid; border-color: var(--border-strong); }
-.placeholder-chart-center {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-.placeholder-chart-center .loading-value {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  font-family: var(--font-sans);
-  font-size: 18px;
-  font-weight: 400;
-  color: var(--subtle-foreground);
-}
-
-.placeholder-matrix { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; padding: 4px 0 4px 8px; }
-.placeholder-matrix i { aspect-ratio: 1.15; border-radius: var(--radius-sm); background: var(--muted); }
-
-.placeholder-list-item { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 20px; border-top: 1px solid var(--border); }
-.placeholder-analysis-list .data-card-header + .placeholder-list-item { border-top: 0; }
-.placeholder-list-item .loading-value { font-size: 16px; font-weight: 400; }
-.placeholder-list-item .placeholder-line { max-width: 50%; }
-
-.placeholder-source { min-height: 230px; }
-.placeholder-source .source-card-top { margin-bottom: 4px; }
-.placeholder-source .source-card-footer { margin-top: auto; }
-.placeholder-source .loading-value { font-size: 14px; }
-
-/* ---------- Loading dots inside other controls ---------- */
+/* Loading dots inside buttons follow the button's text color. */
 .login-submit .loading-dots,
-.delineation-footer .MuiButton-root .loading-dots { color: currentColor; }
-.admin-row-busy { display: inline-flex; gap: 8px; align-items: center; }
-.admin-row-busy .loading-value { font-size: 14px; }
-.admin-page .MuiAlert-root .MuiButton-root { white-space: nowrap; }
+.delineation-footer .loading-dots,
+[data-slot="button"] .loading-dots { color: currentColor; }
+.admin-row-busy { display: inline-flex; gap: 0.5rem; align-items: center; }
+.admin-row-busy .loading-value { font-size: 0.875rem; }
 
-@media (max-width: 700px) {
-  .placeholder-field, .placeholder-field.narrow { flex-basis: 100%; max-width: none; }
-  .placeholder-toolbar .loading-value { margin-left: 0; }
-  .placeholder-chart { padding-left: 32px; }
-  .placeholder-matrix { grid-template-columns: repeat(8, minmax(0, 1fr)); padding-left: 8px; }
-  .placeholder-source { min-height: 200px; }
-  .placeholder-list-item { padding-inline: 16px; }
-}
+/* Skeletons sit on gradient cards: tint them from the foreground so they read. */
+.page-placeholder [data-slot="skeleton"] { background-color: color-mix(in oklch, var(--foreground) 7%, transparent); }
