@@ -1,0 +1,69 @@
+/* The shell after Caelestia / Noctalia (Quickshell): one continuous frame around
+   the map. Popouts are extrusions of that frame: same colour, square where they
+   touch an edge, rounded where free, and joined to the edge by concave fillets. */
+
+@layer components {
+.shell { --bar: 56px; --gap: 10px; --view-r: 22px; background: var(--frame); color: var(--foreground); }
+.shell-viewport { border-radius: var(--view-r); }
+
+.popout { --r: 20px; position: absolute; display: flex; flex-direction: column; background: var(--frame); color: var(--foreground); z-index: 30; }
+.popout > .fillet { position: absolute; width: var(--r); height: var(--r); pointer-events: none; }
+/* Flex child with min-height 0: the body shrinks to the popout's max-height and scrolls inside. */
+.popout-body { position: relative; flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; border-radius: inherit; }
+
+/* Reveal from the attached edge; the negative insets keep the fillets visible. */
+@keyframes reveal-top { from { clip-path: inset(0 -40px 100% -40px); } to { clip-path: inset(0 -40px -40px -40px); } }
+@keyframes reveal-bottom { from { clip-path: inset(100% -40px 0 -40px); } to { clip-path: inset(-40px -40px 0 -40px); } }
+@keyframes reveal-left { from { clip-path: inset(-40px 100% -40px 0); } to { clip-path: inset(-40px -40px -40px 0); } }
+@keyframes reveal-right { from { clip-path: inset(-40px 0 -40px 100%); } to { clip-path: inset(-40px 0 -40px -40px); } }
+@keyframes popout-fade { from { opacity: 0; } to { opacity: 1; } }
+.popout[data-edge="top"] { animation: reveal-top .34s cubic-bezier(.2, .9, .25, 1) both; }
+.popout[data-edge="bottom"] { animation: reveal-bottom .34s cubic-bezier(.2, .9, .25, 1) both; }
+.popout[data-edge="left"] { animation: reveal-left .34s cubic-bezier(.2, .9, .25, 1) both; }
+.popout[data-edge="right"] { animation: reveal-right .34s cubic-bezier(.2, .9, .25, 1) both; }
+.popout[data-animate="false"] { animation: none; }
+.popout-body > * { animation: popout-fade .3s ease-out .06s both; }
+
+/* Vertical text, as in the bar's active-window title. */
+.bar-vertical { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+
+/* Tonal tiles inside popouts. */
+.tile { background: var(--tile); border-radius: 16px; }
+
+/* Arc gauge (Performance tab). */
+.gauge-track { stroke: var(--primary-container); }
+.gauge-value { stroke: var(--primary); transition: stroke-dashoffset .8s cubic-bezier(.2, .9, .25, 1); }
+
+/* Workspaces-style phase pills with a sliding indicator. */
+.phase-indicator { transition: transform .35s cubic-bezier(.2, .9, .25, 1), height .35s cubic-bezier(.2, .9, .25, 1); }
+
+/* The launcher's basemap / scheme carousel: the centred item grows. */
+.carousel-item { transition: transform .3s cubic-bezier(.2, .9, .25, 1), opacity .3s; }
+
+/* Sonner toasts become frame-coloured notification cards. */
+[data-sonner-toaster] [data-sonner-toast] { background: var(--frame) !important; color: var(--foreground) !important; border: 0 !important; border-radius: 18px !important; box-shadow: 0 10px 30px -12px oklch(0 0 0 / .35) !important; font-family: var(--font-sans); }
+
+/* Dark theme: light basemaps are inverted so the wallpaper matches the frame;
+   data layers (NDVI, parcels, rasters) render in their own canvases and keep their colours. */
+.dark .basemap-invertible { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.86) saturate(.55); }
+.dark .recharts-cartesian-axis-tick text, .dark .recharts-cartesian-axis-tick-value { fill: var(--muted-foreground); }
+
+/* OpenLayers swipe divider and hover card. */
+.swipe-handle { position: absolute; top: 0; bottom: 0; width: 0; z-index: 25; cursor: ew-resize; touch-action: none; }
+.swipe-handle::before { content: ''; position: absolute; inset: 0 -1.5px; background: var(--frame); box-shadow: 0 0 0 1px oklch(0 0 0 / .12); }
+.swipe-handle > button { position: absolute; top: 50%; left: 0; translate: -50% -50%; }
+.identify-card { pointer-events: none; }
+
+@media (max-width: 767px) {
+  .shell { --bar: 0px; --gap: 6px; --view-r: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popout, .popout-body > * { animation: none !important; }
+}
+
+/* The mark grows grain by grain while the atlas loads. */
+@keyframes grain-in { 0%, 15% { opacity: .15; transform: scale(.6); } 45%, 100% { opacity: 1; transform: none; } }
+.logo-grow ellipse { transform-box: fill-box; transform-origin: center; animation: grain-in 1.6s cubic-bezier(.2, .9, .25, 1) calc(var(--i) * 110ms) infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .logo-grow ellipse { animation: none; } }
+
+}

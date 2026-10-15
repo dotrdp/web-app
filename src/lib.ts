@@ -4,7 +4,6 @@ import { getArea } from 'ol/sphere';
 
 export const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 export const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-export const EXAMPLE_YIELD = 4.2;
 export const IS_DEMO = import.meta.env?.VITE_DEMO === 'true';
 export const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 export const fmt = (n: number | null | undefined, digits = 2) => n == null || !Number.isFinite(n) ? '—' : new Intl.NumberFormat('es-MX', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
@@ -27,6 +26,7 @@ export function filterParcels(parcels: Parcel[], filters: MapFilters, atlas: Atl
     const f = p.properties;
     if (filters.state !== 'all' && f.state !== filters.state) return false;
     if (filters.group !== 'all' && f.group !== filters.group) return false;
+    if (filters.yieldBand && (f.predictedYield == null || f.predictedYield < filters.yieldBand[0] || f.predictedYield > filters.yieldBand[1])) return false;
     if (query && !coordinates && !normalize(`${f.id} ${f.municipality} ${f.state} ${f.name || ''}`).includes(query)) return false;
     if (filters.ndviEnabled && filters.onlyNdvi) {
       const ndvi = atlas.landsat[key]?.parcels[f.id]?.mean;
@@ -37,7 +37,9 @@ export function filterParcels(parcels: Parcel[], filters: MapFilters, atlas: Atl
 }
 
 export function mergedParcels(atlas: Atlas, workspace: Workspace): Parcel[] {
-  const original = atlas.parcels.features.map(f => {
+  const original = atlas.parcels.features.map(source => {
+    const prediction = atlas.predictions.parcels[source.properties.id];
+    const f: Parcel = { ...source, properties: { ...source.properties, predictedYield: prediction?.predicted ?? null, predictionSource: prediction ? 'model' : 'none', fold: prediction?.fold ?? null } };
     const override = workspace.overrides[f.properties.id];
     if (!override) return f;
     const bounds = geometryBounds(override.geometry);
@@ -47,9 +49,10 @@ export function mergedParcels(atlas: Atlas, workspace: Workspace): Parcel[] {
     const override = workspace.overrides[field.id];
     const geometry = override?.geometry || field.geometry;
     const bounds = geometryBounds(geometry);
-    original.push({ type: 'Feature', geometry, properties: { id: field.id, name: field.name, municipality: 'Terreno personalizado', state: 'Mi parcela', crop: 'Cebada', area: override?.area || field.area, group: 'custom', observedYield: null, predictedYield: EXAMPLE_YIELD, predictionSource: 'placeholder', centroid: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2], bounds, elevation: null, slope: null, edited: !!override } });
+    // Drawn fields have no model inputs (weekly imagery, climate, AlphaEarth history), so no estimate.
+    original.push({ type: 'Feature', geometry, properties: { id: field.id, name: field.name, municipality: 'Terreno personalizado', state: 'Mi parcela', crop: 'Cebada', area: override?.area || field.area, group: 'custom', observedYield: null, predictedYield: null, predictionSource: 'none', centroid: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2], bounds, elevation: null, slope: null, edited: !!override } });
   }
-  return workspace.accessibleParcelIds ? original.filter(p => workspace.accessibleParcelIds!.includes(p.properties.id)) : original;
+  return original;
 }
 
 export const geometryBounds = (geometry: Geometry) => {
@@ -75,6 +78,10 @@ export function download(name: string, contents: string, mime = 'text/plain') {
 }
 
 export function parcelCsv(parcels: Parcel[], atlas: Atlas, key: string) {
-  const rows = [['ID', 'Municipio', 'Estado', 'Superficie_ha', 'Rendimiento_observado_t_ha', 'Rendimiento_EJEMPLO_t_ha', 'Estado_modelo', 'NDVI_Landsat_C2', 'Periodo_NDVI'], ...parcels.map(p => [p.properties.id, p.properties.municipality, p.properties.state, p.properties.area, p.properties.observedYield ?? '', EXAMPLE_YIELD, 'PLACEHOLDER_SIN_INFERENCIA', atlas.landsat[key]?.parcels[p.properties.id]?.mean ?? '', key])];
+  const q = atlas.predictions.absErrorQuantiles['0.8'];
+  const rows = [['ID_POLIGONO', 'Municipio', 'Estado', 'AREA_HA', 'Conjunto', 'Rendimiento_registrado_t_ha', 'Rendimiento_estimado_t_ha', 'Intervalo_80_inf', 'Intervalo_80_sup', 'Produccion_estimada_t', 'Tipo_estimacion', 'NDVI_Landsat_C2', 'Periodo_NDVI'], ...parcels.map(p => {
+    const f = p.properties, est = f.predictedYield;
+    return [f.id, f.municipality, f.state, f.area, f.group === 'training' ? 'ENTRENAMIENTO' : f.group === 'prediction' ? 'PREDICCION' : 'PROPIA', f.observedYield ?? '', est == null ? '' : est.toFixed(4), est == null ? '' : Math.max(0, est - q).toFixed(4), est == null ? '' : (est + q).toFixed(4), est == null ? '' : (est * f.area).toFixed(2), est == null ? 'SIN_ESTIMACION' : f.group === 'training' ? 'VALIDACION_CRUZADA_5' : 'PREDICCION_ENSAMBLE', atlas.landsat[key]?.parcels[f.id]?.mean ?? '', key];
+  })];
   return '\uFEFF' + rows.map(row => row.map(x => '"' + String(x).replaceAll('"', '""') + '"').join(',')).join('\r\n');
 }

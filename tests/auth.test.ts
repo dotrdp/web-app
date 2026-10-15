@@ -7,7 +7,7 @@ import fs from 'node:fs';
 // @ts-expect-error The executable backend is a native JavaScript ES module.
 import { createApp, validateGeometry } from '../server/index.mjs';
 
-test('Authenticated admin, protected writes, geometry validation and durable placeholder analyses', async () => {
+test('Authenticated single account, protected writes, geometry validation and durable fields', async () => {
   const stateDir = await mkdtemp(path.join(tmpdir(), 'agrocebada-api-'));
   const app = await createApp({ stateDir, password: 'UnitTest2026!' });
   const server = app.listen(0, '127.0.0.1');
@@ -15,19 +15,18 @@ test('Authenticated admin, protected writes, geometry validation and durable pla
   const root = 'http://127.0.0.1:' + server.address().port;
   const post = (url: string, body: unknown, cookie = '') => fetch(root + url, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: JSON.stringify(body) });
   try {
-    assert.equal((await fetch(root + '/api/admin/users')).status, 401);
+    assert.equal((await fetch(root + '/api/workspace')).status, 401);
     assert.equal((await post('/api/fields', {})).status, 401);
     assert.equal((await post('/api/auth/login', { username: 'testuser', password: 'wrong' })).status, 401);
     const response = await post('/api/auth/login', { username: 'testuser', password: 'UnitTest2026!' });
-    assert.equal(response.status, 200); const user = (await response.json()).user; assert.equal(user.role, 'admin'); assert.equal(user.username, 'testuser'); assert.equal(user.hash, undefined);
+    assert.equal(response.status, 200); const user = (await response.json()).user; assert.equal(user.role, undefined); assert.equal(user.username, 'testuser'); assert.equal(user.hash, undefined);
     const setCookie = response.headers.get('set-cookie')!; assert.match(setCookie, /HttpOnly/); assert.match(setCookie, /SameSite=Lax/); const cookie = setCookie.split(';')[0];
-    assert.equal((await fetch(root + '/api/admin/users', { headers: { Cookie: cookie } })).status, 200);
+    assert.equal((await fetch(root + '/api/admin/users', { headers: { Cookie: cookie } })).status, 404);
     const geometry = { type: 'Polygon', coordinates: [[[-98.56, 19.54], [-98.559, 19.54], [-98.559, 19.541], [-98.56, 19.541], [-98.56, 19.54]]] };
     const saved = await post('/api/fields', { geometry, name: 'Parcela prueba' }, cookie); assert.equal(saved.status, 201);
     const field = await saved.json(); assert.ok(field.area > 1);
-    const analysisResponse = await post('/api/analyses', { geometry, parcelId: field.id, name: field.name }, cookie); assert.equal(analysisResponse.status, 201);
-    const result = await analysisResponse.json(); assert.equal(result.yield, 4.2); assert.equal(result.status, 'placeholder'); assert.equal(result.production, Math.round(result.area * 4.2 * 100) / 100);
-    const durable = JSON.parse(fs.readFileSync(path.join(stateDir, 'workspace.json'), 'utf8')); assert.equal(durable.analyses.length, 1); assert.equal(durable.fields.length, 1); assert.notEqual(durable.user.hash, 'UnitTest2026!');
+    assert.equal((await post('/api/analyses', { geometry, parcelId: field.id }, cookie)).status, 404);
+    const durable = JSON.parse(fs.readFileSync(path.join(stateDir, 'workspace.json'), 'utf8')); assert.equal(durable.fields.length, 1); assert.notEqual(durable.user.hash, 'UnitTest2026!');
     const crossing = { type: 'Polygon', coordinates: [[[-98.56,19.54],[-98.559,19.541],[-98.559,19.54],[-98.56,19.541],[-98.56,19.54]]] };
     assert.equal((await post('/api/fields', { geometry: crossing }, cookie)).status, 400);
     const original = JSON.parse(fs.readFileSync(new URL('../public/data/parcels.geojson', import.meta.url), 'utf8'));

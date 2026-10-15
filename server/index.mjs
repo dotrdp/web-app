@@ -8,7 +8,7 @@ import { validateGeometry } from './geometry.mjs';
 export { validateGeometry } from './geometry.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const publicUser = u => ({ id: u.id, username: u.username, name: u.name, role: u.role });
+const publicUser = u => ({ id: u.id, username: u.username, name: u.name });
 const sha = value => createHash('sha256').update(value).digest('hex');
 const cookieName = 'agrocebada_session';
 
@@ -19,7 +19,7 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
   try { state = JSON.parse(await readFile(statePath, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   if (!state) {
     const salt = randomBytes(16).toString('hex');
-    state = { user: { id: 'test-admin', username: 'testuser', name: 'Administrador de prueba', role: 'admin', salt, hash: scryptSync(password, salt, 64).toString('hex') }, analyses: [], overrides: {}, fields: [] };
+    state = { user: { id: 'test-admin', username: 'testuser', name: 'Cuenta de prueba', salt, hash: scryptSync(password, salt, 64).toString('hex') }, analyses: [], overrides: {}, fields: [] };
   }
   let writes = Promise.resolve();
   const persist = () => {
@@ -51,7 +51,7 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
     else if (token) sessions.delete(sha(token));
     next();
   });
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: 'placeholder', port: Number(process.env.PORT || 8080) }));
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: 'ensemble-predictions', port: Number(process.env.PORT || 8080) }));
   app.use(['/api/imagery', '/api/segmentation'], async (req, res) => {
     try {
       const token = process.env.AGROCEBADA_SERVICE_TOKEN || await readFile(path.join(root,'.data-cache/deployment/service-token'),'utf8').then(s=>s.trim()).catch(()=> '');
@@ -86,8 +86,7 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
     res.json({ ok: true });
   });
   app.use('/api', (req, res, next) => req.user ? next() : res.status(401).json({ error: 'Inicia sesión para continuar.' }));
-  app.get('/api/admin/users', (req, res) => req.user.role === 'admin' ? res.json({ users: [publicUser(state.user)] }) : res.status(403).json({ error: 'Se requiere acceso de administrador.' }));
-  app.get('/api/workspace', (_req, res) => res.json({ analyses: state.analyses, overrides: state.overrides, fields: state.fields }));
+  app.get('/api/workspace', (_req, res) => res.json({ overrides: state.overrides, fields: state.fields }));
   app.post('/api/fields', async (req, res, next) => {
     try {
       const { geometry, name } = req.body || {};
@@ -104,17 +103,6 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
       const area = validateGeometry(req.body?.geometry);
       const override = { geometry: req.body.geometry, area, updatedAt: new Date().toISOString() };
       state.overrides[id] = override; await persist(); res.json(override);
-    } catch (e) { if (e.code) return next(e); res.status(400).json({ error: e.message }); }
-  });
-  app.post('/api/analyses', async (req, res, next) => {
-    try {
-      const { geometry, parcelId, name } = req.body || {};
-      const area = validateGeometry(geometry);
-      // Deliberate fixed placeholder, as requested. No model is loaded or run.
-      const exampleYield = 4.2;
-      const result = { id: randomUUID(), parcelId: typeof parcelId === 'string' ? parcelId.slice(0, 100) : null, name: typeof name === 'string' ? name.slice(0, 80) : 'Parcela', area, geometry, yield: exampleYield, production: Math.round(area * exampleYield * 100) / 100, status: 'placeholder', createdAt: new Date().toISOString() };
-      state.analyses.unshift(result); state.analyses = state.analyses.slice(0, 500);
-      await persist(); res.status(201).json(result);
     } catch (e) { if (e.code) return next(e); res.status(400).json({ error: e.message }); }
   });
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Este recurso no existe.' }));

@@ -18,6 +18,7 @@
     "test:e2e:demo": "npm run build:demo && AGROCEBADA_DEMO=1 playwright test"
   },
   "dependencies": {
+    "@fontsource-variable/rubik": "5.3.0",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/react-table": "8.21.3",
     "class-variance-authority": "0.7.1",

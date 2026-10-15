@@ -11,37 +11,25 @@ npm run build:demo
 npm run deploy
 ```
 
-The demo development server runs at `http://127.0.0.1:8082`, proxying scientific requests to port 8090. `build:demo` uses `.env.demo`. Accounts, assignments, parcels, corrections and analyses exist only in page memory; reload/logout resets them. The public demo creates no session cookie, localStorage, sessionStorage or account database. Scientific caches on rig persist independently.
+The demo development server runs at `http://127.0.0.1:8082`, proxying scientific requests to port 8090. `build:demo` uses `.env.demo`. Drawn parcels and corrections exist only in page memory; reload/logout resets them. The public demo creates no session cookie, localStorage, sessionStorage or account database. Scientific caches on rig persist independently.
 
-| Account | Role | Initial access |
-| --- | --- | --- |
-| `testuser` | Administrador | All 197 parcels; accounts, roles, status and assignments |
-| `tecnico` | Técnico | Productor 1's 99 assigned parcels |
-| `productor1` | Productor | 99 assigned parcels |
-| `productor2` | Productor | 98 assigned parcels |
+There is one account, `testuser` / `Fira2026!`, with access to all 197 parcels. The former Productor / Técnico / Administrador roles, assignments and the presentation switch were removed; technical tools now live in the **Indicadores avanzados** phase (see [PLAN.md](PLAN.md)).
 
-All seeded passwords are `Fira2026!`. The account menu demonstrates assignment boundaries while retaining page memory. Productor / Análisis Pro changes presentation; the dispatcher separately checks permissions for every workspace read/write. Original geometries remain immutable; corrections are separate overrides.
+`npm run dev` and `npm run build && npm start` preserve the original local server at port 8080, with scrypt authentication, session cookies and a persistent local workspace. Use **demo** commands for the public deployment.
 
-`npm run dev` and `npm run build && npm start` preserve the original local server at port 8080, with scrypt authentication, session cookies and a persistent local workspace. Use **demo** commands for the public deployment and simulated roles.
+## Interface
 
-## Login and map
+The shell follows Noctalia / Caelestia (Quickshell): the map is the wallpaper inside one continuous frame, and every panel is a popout attached to an edge with concave fillets (`src/shell/Popout.tsx`, `shell.css`). Components are shadcn/ui (Tailwind v4, Radix) styled with tonal tokens; palettes are seeded from the barley mark (`src/index.css`: Cebada, Trigo, Tierra, Noche, Laguna; light and dark). Font: Rubik Variable (OFL, `@fontsource-variable/rubik`).
 
-- **Design system.** shadcn/ui (`radix-nova` style, neutral base) on Tailwind CSS v4, composed after the official shadcn demos: dashboard-01, sidebar-07/09 and login-02/04. Components live in `src/components/ui/` (`components.json`); tokens and the light/dark palettes, including the barley-green `--brand` and `--chart-1…5`, are in `src/index.css`. Geist and Geist Mono are vendored in `src/fonts/` (SIL OFL, `public/licenses/geist-OFL.txt`). The mark (`src/Logo.tsx`, `/favicon.svg`) is an ear of barley.
-- **Login.** login-02 layout: the form (with a demo-account card) beside a dark panel with the dotted COBE globe and floating particles (`src/Globe.tsx`, `src/Particles.tsx`; MIT, `public/licenses/cobe-MIT.txt`, `magicui-MIT.txt`). Mobile shows the panel as a 180 px banner.
-- **Shell.** shadcn `SidebarProvider` with an inset, off-canvas `Sidebar` (`src/components/app-sidebar.tsx`): Analizar mi terreno, the views, the Productor / Análisis Pro switch and the account menu (theme, demo accounts, sign-out). It is collapsed on the map and open beside content pages; the header trigger or Ctrl/⌘ B toggles it, and on mobile it is a sheet. The `SiteHeader` shows the view title, its context and page actions. No sidebar cookie is written.
-- **Map workspace:**
-  - Top left, the icon rail opens one floating panel at a time: **Capas** (data layers, symbology and transparency), **Mapa base** (Topográfico by default, Claro, Oscuro, Satélite and boundary overlays), **Parcelas** (sortable list), **Marcadores** (zoom to each state) and **Filtros** (state and set; a dot shows when active). Search (Ctrl/⌘ K) sits beside it.
-  - Top right, the tool rail: **Analizar mi terreno** (SAM delineation), **Dibujar parcela**, **Medir distancia**, **Medir área**, **Exportar** (PNG of the map, GeoJSON, CSV) and, in Análisis Pro, the advanced controls (a shadcn Sheet). Parcel details, delineation and export open as a floating card beside it.
-  - Bottom right, the navigation stack (todas las parcelas, zoom, mi ubicación, pantalla completa); bottom centre, the month timeline, shown only for layers that change by month (AlphaEarth gets a year picker); a status bar with attribution, coordinates, zoom and scale.
-  - Parcels use one neutral marker system on every basemap: dark cluster discs with white counts, white points ringed in black, and field outlines coloured by the active layer from zoom 12.6.
-  - Below 768 px, the panel rail becomes a bottom tab bar and panels open as bottom sheets. Touch targets grow to 44 px on coarse pointers.
-- **Content pages.** Mis parcelas follows dashboard-01 (section cards plus a TanStack data table with set tabs, search, column visibility, sorting, pagination and CSV export); Análisis técnico uses shadcn charts (Recharts) for NDVI, rain, temperature and the AlphaEarth embedding; Administración, Modelo de ejemplo and Datos y fuentes are Card/Table layouts. Notifications use Sonner.
-- **Loading.** Spectrum UI's nine loading dots mark every pending value and step; the map preparation card adds a progress bar. Reduced motion stops them and every other animation.
-- Compact +/− zoom buttons control the actual OpenLayers view from levels 5–19 and disable at its limits. The water MNDWI threshold in Análisis Pro is a slider from −1 to 1 in 0.05 steps (Page Up/Down move 0.25) with a default of 0. React Aria provides arrow-key navigation inside the map toolbars. Reduced motion disables particles, globe sway and loader animation.
-- Every page retains its cards, table columns and units during loading, with `—` values and the shared dotted indicator. Pending administration writes, example analyses and delineation areas use the same placeholders. Errors stop their animation and offer retry; pages with cached data show their values immediately. Unconnected model metrics remain explicitly labeled as pending.
-- July 2025 is the opening month. April–October are directly available; the date picker covers 2022–2025. Playback waits for imagery, stops on service errors and pauses during editing or segmentation. Yield, terrain and annual AlphaEarth disable monthly playback.
-- Selection opens the parcel details panel (previous / next / close, key figures, NDVI curve); mobile uses a bottom sheet. Análisis Pro contains thresholds, water opacity, climate/terrain controls, historical Landsat, annual AlphaEarth and provenance exports. Selection/map movement preserve raster sources, with bounded browser caches.
-- Rendimiento colors recorded 2025 yields only; missing values remain neutral. Yield estimates remain the explicit **4.2 t/ha example**, labeled `PLACEHOLDER_SIN_INFERENCIA`. No yield prediction model runs.
+- **Bar** (`src/shell/Bar.tsx`): the mark opens the launcher; three phase pills (Alt 1–3) — **Explorar**, **Estimar**, **Indicadores avanzados**; map panels (capas y simbología, mapa base, tabla de atributos, filtros, marcadores, complementos); active layer; imagery-service status; clock; sources, scheme, theme, logout. Below 768 px it becomes a bottom dock.
+- **Dashboard** (top, Alt D): Resumen (monthly climate, atlas, calendar, production by state, parcel "player" with tour), Modelo (MAE / R² / RMSE gauges), Ciclo (data availability and the 31 October cutoff).
+- **Launcher** (bottom, Ctrl/⌘ K): parcels, municipalities, coordinates; `>` commands; `>base` and `>esquema` carousels.
+- **Estimar** (`src/panels/EstimationPanel.tsx`): metrics, productive reading in tonnes and pesos (editable price, 50/80/90 % empirical intervals), estimates per ID_POLIGONO linked to the map, group-by municipality, and the 59-row submission CSV.
+- **Indicadores avanzados** (`src/panels/AdvancedPanel.tsx`): parcel series and AlphaEarth, model diagnostics (scatter, residuals, folds, largest errors, error map), and the scientific layers and thresholds (MNDWI, Landsat, AlphaEarth, climate, terrain, provenance). These controls appear nowhere else.
+- **Complementos** (`src/plugins.tsx`): SAM delineation, drawing, measuring, hover identify, swipe, box selection with statistics, heat map, labels, attribute table, export and location — each can be switched off; enabled tools populate the tool strip and launcher.
+- Loading keeps Spectrum UI's nine dots and the growing barley mark; the login keeps the COBE globe and particles. Reduced motion stops all animation.
+
+Yield estimates come from `public/data/predictions.json`, exported without refitting by `python3 -I scripts/export_predictions.py` from `../final-model` (fixed 90/10 attention ensemble; 5-fold CV over 138 parcels: MAE 0.322, RMSE 0.487 t/ha, R² 0.670). Training parcels show out-of-fold estimates; the 59 reserved parcels use the mean of the fold models. Intervals are empirical quantiles of the out-of-fold absolute errors. Drawn parcels have no estimate.
 
 ## Rig service
 

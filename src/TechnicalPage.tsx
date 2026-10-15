@@ -2,9 +2,9 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Download, ExternalLink, Info, Map as MapIcon, MapPin, Minus, Satellite, TrendingDown, TrendingUp } from 'lucide-react';
 import type { Atlas, Parcel } from './types';
-import { dateKey, download, EXAMPLE_YIELD, fmt, MONTH_NAMES } from './lib';
+import { dateKey, download, fmt, MONTH_NAMES } from './lib';
+import { interval } from './model';
 import { CHART_COLORS, EmbeddingChart, LineChart, RainChart } from './Charts';
-import { LoadingValue } from './AgentProgress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,8 @@ export default function TechnicalPage({ atlas, parcels, selected, year, month, o
   const rainTotal = rain.reduce<number>((sum, v) => sum + (v ?? 0), 0);
   const rainShare = weather?.precipitation != null && rainTotal > 0 ? weather.precipitation / rainTotal * 100 : null;
   const observedMonths = vegetation.filter(v => v != null).length;
+  const estimate = p.predictedYield, range = estimate == null ? null : interval(atlas.predictions, estimate);
+  const error = estimate != null && p.observedYield != null ? estimate - p.observedYield : null;
 
   return <div className="@container/main flex w-full min-w-0 flex-col gap-4 md:gap-6">
     <section className="flex flex-col gap-3 @3xl/main:flex-row @3xl/main:items-end @3xl/main:justify-between" aria-label="Parcela seleccionada">
@@ -164,19 +166,19 @@ export default function TechnicalPage({ atlas, parcels, selected, year, month, o
       <Card className="@container/card">
         <CardHeader>
           <Heading>Resultado del modelo</Heading>
-          <CardDescription>Espacio reservado para la predicción</CardDescription>
-          <CardAction><Badge variant="outline" className="border-chart-5/50 bg-chart-5/10 text-foreground">Ejemplo</Badge></CardAction>
+          <CardDescription>{p.group === 'training' ? `Validación cruzada · partición ${p.fold ?? '—'}` : p.group === 'prediction' ? 'Predicción del ensamble · conjunto reservado' : 'Sin estimación para terrenos propios'}</CardDescription>
+          {estimate && <CardAction><Badge variant="outline" className="border-primary/40 bg-primary-container text-on-primary-container">Ensamble</Badge></CardAction>}
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-5">
-          <div className="flex flex-col gap-1 rounded-lg border border-dashed bg-muted/40 p-4">
-            <span className="text-xs text-muted-foreground">Rendimiento de ejemplo</span>
-            <span className="flex items-baseline gap-1.5"><span className="text-4xl font-semibold tracking-tight tabular-nums">{fmt(EXAMPLE_YIELD)}</span><span className="text-sm text-muted-foreground">t/ha</span></span>
-            <p className="text-sm text-muted-foreground">Valor fijo de ejemplo, sin inferencia.</p>
+          <div className="flex flex-col gap-1 rounded-2xl bg-background/60 p-4">
+            <span className="text-xs text-muted-foreground">Rendimiento estimado</span>
+            <span className="flex items-baseline gap-1.5"><span className="text-4xl font-semibold tracking-tight tabular-nums">{fmt(estimate)}</span><span className="text-sm text-muted-foreground">t/ha</span></span>
+            <p className="text-sm text-muted-foreground">{estimate == null ? 'El modelo necesita la serie semanal, el clima y el historial AlphaEarth de la parcela.' : `Intervalo 80 %: ${fmt(range![0])}–${fmt(range![1])} t/ha`}</p>
           </div>
-          <dl className="grid grid-cols-3 divide-x rounded-lg border">
-            {['RMSE', 'MAE', 'R²'].map(label => <div key={label} className="flex flex-col gap-1 px-3 py-2.5">
-              <dt className="text-xs text-muted-foreground">{label}{label !== 'R²' && <span className="hidden @[300px]/card:inline"> · t/ha</span>}</dt>
-              <dd className="text-lg"><LoadingValue active={false} label={`${label} pendiente del modelo`} className="min-w-0"/></dd>
+          <dl className="grid grid-cols-3 divide-x rounded-2xl bg-background/60">
+            {([['Registrado', fmt(p.observedYield)], ['Error', error == null ? '—' : `${error > 0 ? '+' : ''}${fmt(error)}`], ['Producción', estimate == null ? '—' : `${fmt(estimate * p.area, 1)} t`]] as const).map(([label, value]) => <div key={label} className="flex flex-col gap-1 px-3 py-2.5">
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="text-lg tabular-nums">{value}</dd>
             </div>)}
           </dl>
           <div className="flex flex-col gap-2">
@@ -194,7 +196,7 @@ export default function TechnicalPage({ atlas, parcels, selected, year, month, o
             </ul>
           </div>
         </CardContent>
-        <CardFooter className="text-xs text-muted-foreground">Las métricas y explicaciones se mostrarán al conectar el modelo.</CardFooter>
+        <CardFooter className="text-xs text-muted-foreground">Error = estimado − registrado; positivo sobreestima. Intervalo empírico de los errores fuera de partición.</CardFooter>
       </Card>
     </div>
 

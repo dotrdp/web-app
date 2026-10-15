@@ -9,7 +9,7 @@ test('Login pairs the form with the globe and particles on desktop and a compact
   await expect(story.locator('canvas').first()).toBeAttached();
   await expect.poll(() => story.locator('canvas').count()).toBeGreaterThanOrEqual(2);
   const form = (await page.locator('.login-main').boundingBox())!, storyBox = (await story.boundingBox())!;
-  expect(form.x).toBe(0); expect(storyBox.x).toBeGreaterThanOrEqual(form.width - 1); expect(storyBox.width).toBeGreaterThan(form.width);
+  expect(form.x).toBeLessThan(16); expect(storyBox.x).toBeGreaterThanOrEqual(form.width - 1); expect(storyBox.width).toBeGreaterThan(form.width);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(async () => (await story.boundingBox())!.height).toBe(180);
   expect((await page.locator('.login-main').boundingBox())!.y).toBeGreaterThanOrEqual(180);

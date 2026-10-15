@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -19,6 +20,9 @@ import { fromLonLat, toLonLat, transformExtent } from 'ol/proj';
 import { extend, createEmpty, intersects } from 'ol/extent';
 import { Attribution, defaults as defaultControls, ScaleLine } from 'ol/control';
 import Draw from 'ol/interaction/Draw';
+import DragBox from 'ol/interaction/DragBox';
+import HeatmapLayer from 'ol/layer/Heatmap';
+import type RenderEvent from 'ol/render/Event';
 import Modify from 'ol/interaction/Modify';
 import proj4 from 'proj4';
 import { register } from 'ol/proj/proj4';
@@ -26,16 +30,13 @@ import { MapboxVectorLayer } from 'ol-mapbox-style';
 import Overlay from 'ol/Overlay';
 import LineString from 'ol/geom/LineString';
 import { getArea, getLength } from 'ol/sphere';
-import { Home, LocateFixed, Maximize, Minimize, Minus, Plus } from 'lucide-react';
 import type { Atlas, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Parcel, Raster } from './types';
+import { equalBreaks, quantileBreaks } from './model';
 import { fmt } from './lib';
 import { coloredNdviUrl, ndviColor } from './ndvi';
 import { LoadingState } from './AgentProgress';
-import { Toolbar } from 'react-aria-components/Toolbar';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { floating, ToolButton } from './MapToolbar';
 import './map.css';
 
 proj4.defs('EPSG:6372', '+proj=lcc +lat_0=12 +lon_0=-102 +lat_1=17.5 +lat_2=29.5 +x_0=2500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs');
@@ -63,19 +64,34 @@ function ramp(t: number) {
   return YIELD_RAMP.at(-1)![1];
 }
 
+/** Diverging error ramp: slate underestimates, amber overestimates (±1 t/ha). */
+function errorColor(e: number) {
+  const t = Math.max(-1, Math.min(1, e));
+  const mid = [236, 236, 228], neg = [58, 110, 165], pos = [214, 120, 36];
+  const end = t < 0 ? neg : pos, k = Math.abs(t);
+  return mid.map((v, i) => Math.round(v + (end[i] - v) * k));
+}
+export const YIELD_DOMAIN: [number, number] = [2, 6];
+export const yieldRgb = (t: number) => ramp(t);
+export { errorColor };
+
 export type MeasureKind = 'distance' | 'area';
-export interface MapHandle { fitBounds: (bounds: number[]) => void; measure: (kind: MeasureKind | null) => void; showLocation: (coords: number[]) => void; exportPng: () => Promise<Blob | null>; fitAll: () => void; fitParcel: (parcel: Parcel) => void; fitGeometry: (geometry: object) => void; locate: (coords: number[]) => void; draw: () => void; edit: (parcel: Parcel) => void; proposal: (geometry: Geometry | null) => void; editDraft: (geometry: Geometry) => void; cancel: () => void; finish: () => void; undo: () => void; geometry: () => Geometry | null }
+export interface MapHandle { zoomBy: (delta: number) => void; toggleFullscreen: () => Promise<void>; fitBounds: (bounds: number[]) => void; measure: (kind: MeasureKind | null) => void; showLocation: (coords: number[]) => void; exportPng: () => Promise<Blob | null>; fitAll: () => void; fitParcel: (parcel: Parcel) => void; fitGeometry: (geometry: object) => void; locate: (coords: number[]) => void; draw: () => void; edit: (parcel: Parcel) => void; proposal: (geometry: Geometry | null) => void; editDraft: (geometry: Geometry) => void; cancel: () => void; finish: () => void; undo: () => void; geometry: () => Geometry | null }
 interface Props {
   atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; mode: MapMode; year: number; keyDate: string; filters: MapFilters; settings: LayerSettings; manifest?: ImageryManifest | null; imageryVisible?: boolean;
   onReady?: () => void; onImageryBusy?: (busy: boolean) => void; onImageryFailure?: () => void; onMapClick?: (coords: number[]) => void; onCancel?: () => void;
-  onMeasure?: (value: string | null) => void; onLocate?: () => void; locating?: boolean; onSelect: (id: string) => void; onDraft: (geometry: Geometry | null) => void;
+  onMeasure?: (value: string | null) => void; onSelect: (id: string) => void; onDraft: (geometry: Geometry | null) => void;
+  /** Left / right space taken by popouts, so fits keep parcels visible. */
+  padding?: { left: number; right: number };
+  highlightId?: string | null; swipe?: number | null; statusTarget?: HTMLElement | null; selectArea?: boolean; labels?: boolean;
+  onHover?: (id: string | null, pixel: [number, number] | null) => void; onAreaSelect?: (ids: string[]) => void; onZoom?: (zoom: number) => void; onFullscreen?: (on: boolean) => void;
 }
-type Runtime = { map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; images: ImageLayer<ImageStatic>[]; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; tileSources: globalThis.Map<string, XYZ>; embeddingLayers: globalThis.Map<string, ImageLayer<ImageStatic>>; municipalities: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; measureEndedAt?: number; interaction: Draw | Modify | null; editingId: string | null };
+type Runtime = { heatmap: HeatmapLayer; dragBox: DragBox; clipped: Set<BaseLayer>; map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; images: ImageLayer<ImageStatic>[]; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; tileSources: globalThis.Map<string, XYZ>; embeddingLayers: globalThis.Map<string, ImageLayer<ImageStatic>>; municipalities: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; measureEndedAt?: number; interaction: Draw | Modify | null; editingId: string | null };
 
 function createBase(kind: Base): BaseLayer {
-  if (kind === 'topo') return new TileLayer({ zIndex: 0, preload: 1, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: ESRI_TOPO }) });
+  if (kind === 'topo') return new TileLayer({ className: 'basemap-invertible', zIndex: 0, preload: 1, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: ESRI_TOPO }) });
   if (kind === 'satellite') return new TileLayer({ zIndex: 0, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: 'Imagery © Esri, Maxar, Earthstar Geographics' }) });
-  const layer = new MapboxVectorLayer({ styleUrl: VECTOR_STYLES[kind]!, source: 'openmaptiles', declutter: true, zIndex: 0, preload: 1 });
+  const layer = new MapboxVectorLayer({ styleUrl: VECTOR_STYLES[kind]!, source: 'openmaptiles', declutter: true, zIndex: 0, preload: 1, className: kind === 'light' ? 'basemap-invertible' : 'ol-layer' });
   layer.getSource()?.setAttributions(OPENFREEMAP);
   return layer;
 }
@@ -83,8 +99,7 @@ function createBase(kind: Base): BaseLayer {
 export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   const host = useRef<HTMLDivElement>(null);
   const coordinates = useRef<HTMLSpanElement>(null);
-  const scale = useRef<HTMLDivElement>(null);
-  const attribution = useRef<HTMLDivElement>(null);
+  const controls = useRef<{ scale?: ScaleLine; attribution?: Attribution }>({});
   const latest = useRef(props); latest.current = props;
   const runtime = useRef<Runtime | null>(null);
   const [loading, setLoading] = useState(false);
@@ -93,26 +108,28 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   const [embeddingCount, setEmbeddingCount] = useState(0);
   const [zoom, setZoom] = useState(11);
   const [viewZoom, setViewZoom] = useState(11);
-  const [fullscreen, setFullscreen] = useState(false);
   const [viewportRevision, setViewportRevision] = useState(0);
   const initialFit = useRef(false);
   const tileFailures = useRef(new globalThis.Map<XYZ, Set<string>>());
   const pendingTiles = useRef(new globalThis.Map<XYZ, Set<string>>());
   const styleCache = useRef(new globalThis.Map<string, Style | Style[]>());
+  const classBreaks = useRef<number[]>([]);
+  const swipeRatio = useRef<number | null>(null);
 
   useEffect(() => {
-    const changed = () => setFullscreen(document.fullscreenElement === document.documentElement);
+    const changed = () => { latest.current.onFullscreen?.(document.fullscreenElement === document.documentElement); };
     document.addEventListener('fullscreenchange', changed);
     return () => document.removeEventListener('fullscreenchange', changed);
   }, []);
 
+  const pad = (top: number, side: number, bottom: number) => { const p = latest.current.padding; return [top, side + (p?.right ?? 0), bottom, side + (p?.left ?? 0)]; };
   function fitParcel(parcel: Parcel) {
     const r = runtime.current; if (!r) return;
-    r.map.getView().fit(transformExtent(parcel.properties.bounds, 'EPSG:4326', 'EPSG:3857'), { padding: [80, 80, 120, 80], maxZoom: 16, duration: 600 });
+    r.map.getView().fit(transformExtent(parcel.properties.bounds, 'EPSG:4326', 'EPSG:3857'), { padding: pad(80, 64, 110), maxZoom: 16, duration: 600 });
   }
   function fitAll(duration = 450) {
     const r = runtime.current; const extent = r?.source.getExtent();
-    if (r && extent && !r.source.isEmpty()) r.map.getView().fit(extent, { padding: [80, 72, 150, 72], maxZoom: 12.4, duration });
+    if (r && extent && !r.source.isEmpty()) r.map.getView().fit(extent, { padding: pad(70, 56, 110), maxZoom: 12.4, duration });
   }
   function cancel() {
     const r = runtime.current; if (!r) return;
@@ -154,7 +171,8 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     r.measure = draw; r.map.addInteraction(draw);
   }
   useImperativeHandle(ref, () => ({
-    fitBounds(bounds) { runtime.current?.map.getView().fit(transformExtent(bounds, 'EPSG:4326', 'EPSG:3857'), { padding: [80, 80, 80, 80], maxZoom: 13, duration: 600 }); },
+    zoomBy, toggleFullscreen,
+    fitBounds(bounds) { runtime.current?.map.getView().fit(transformExtent(bounds, 'EPSG:4326', 'EPSG:3857'), { padding: pad(80, 64, 100), maxZoom: 13, duration: 600 }); },
     measure,
     showLocation(coords) {
       const r = runtime.current; if (!r) return;
@@ -179,7 +197,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     },
     fitAll: () => fitAll(550),
     fitParcel,
-    fitGeometry(geometry) { const r = runtime.current; if (r) r.map.getView().fit(format.readGeometry(geometry).transform('EPSG:4326', 'EPSG:3857').getExtent(), { padding: [140, 80, 120, 80], duration: 500, maxZoom: 14 }); },
+    fitGeometry(geometry) { const r = runtime.current; if (r) r.map.getView().fit(format.readGeometry(geometry).transform('EPSG:4326', 'EPSG:3857').getExtent(), { padding: pad(100, 64, 110), duration: 500, maxZoom: 14 }); },
     proposal, editDraft,
     locate(coords) { runtime.current?.map.getView().animate({ center: fromLonLat(coords), zoom: 16, duration: 600 }); },
     draw() {
@@ -204,7 +222,15 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   /** Data colour of a parcel in the active mode, or null when it has no value. */
   function parcelColor(feature: FeatureLike): number[] | null {
     const p = latest.current, id = feature.get('id');
-    if (p.mode === 'parcels') { const value = feature.get('observedYield'); return value == null ? null : ramp(value / 8); }
+    if (p.mode === 'parcels') {
+      const value = feature.get(p.settings.yieldField === 'observed' ? 'observedYield' : 'predictedYield') as number | null;
+      if (value == null) return null;
+      const breaks = classBreaks.current;
+      if (!breaks.length) return ramp((value - YIELD_DOMAIN[0]) / (YIELD_DOMAIN[1] - YIELD_DOMAIN[0]));
+      const k = breaks.filter(b => value >= b).length;
+      return ramp(k / breaks.length);
+    }
+    if (p.mode === 'error') { const o = feature.get('observedYield'), e = feature.get('predictedYield'); return o == null || e == null ? null : errorColor(e - o); }
     if (p.mode === 'landsat') { const v = p.atlas.landsat[p.keyDate]?.parcels[id]?.mean; return v == null ? null : ndviColor(v); }
     if (p.mode === 'alphaearth') { const e = p.atlas.details[id]?.embedding[String(p.year)]?.values; return e ? e.slice(0, 3).map(n => Math.round(Math.min(255, Math.max(0, (n + .25) * 510)))) : null; }
     return null;
@@ -223,7 +249,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const parcels = new VectorLayer({ source, zIndex: 40, minZoom: DETAIL_ZOOM - .01, style(feature, resolution) {
       const p = latest.current;
       if (feature.get('id') === runtime.current?.editingId) return undefined;
-      const selected = feature.get('id') === p.selected?.properties.id;
+      const selected = feature.get('id') === p.selected?.properties.id || feature.get('id') === p.highlightId;
       const rgb = parcelColor(feature), dark = onDarkBase();
       const tone = rgb ? rgb.join(',') : dark ? '235,238,233' : '75,82,77';
       const styles = cached(`poly:${tone}:${selected}:${dark}`, () => selected
@@ -231,7 +257,8 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
         ? [new Style({ stroke: new Stroke({ color: 'rgba(31,37,33,.85)', width: 4.5 }) }), new Style({ stroke: new Stroke({ color: '#ffffff', width: 2.5 }), fill: new Fill({ color: 'rgba(0,0,0,0)' }) })]
         : [new Style({ stroke: new Stroke({ color: `rgba(${tone},${rgb ? .95 : .7})`, width: 1.5 }), fill: new Fill({ color: `rgba(${tone},${rgb ? .32 : .12})` }) })]) as Style[];
       if (resolution < 9) {
-        const label = feature.get('name') || feature.get('id');
+        const estimate = feature.get(p.settings.yieldField === 'observed' ? 'observedYield' : 'predictedYield') as number | null;
+        const label = (feature.get('name') || feature.get('id')) + (p.labels && estimate != null ? `\n${fmt(estimate)} t/ha` : '');
         return [...styles, cached(`label:${label}:${dark}`, () => new Style({ text: new Text({ text: label, font: '600 12px Geist, system-ui, sans-serif', fill: new Fill({ color: dark ? '#ffffff' : '#171717' }), stroke: new Stroke({ color: dark ? 'rgba(23,23,23,.9)' : 'rgba(255,255,255,.95)', width: 3 }), overflow: true }) })) as Style];
       }
       return styles;
@@ -255,6 +282,15 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
         new Style({ image: new Circle({ radius, fill: new Fill({ color: fill }), stroke: new Stroke({ color: isSelected ? (fill === BRAND ? '#171717' : BRAND) : '#ffffff', width: isSelected ? 2.5 : 2 }) }), text: new Text({ text: String(n), font: '600 11.5px Geist, system-ui, sans-serif', fill: new Fill({ color: '#ffffff' }) }) }),
       ]);
     } });
+    // Production heat map (ArcGIS smart mapping "heat map"): weight = estimated tonnes.
+    const heatmap = new HeatmapLayer({ source: new VectorSource(), zIndex: 30, visible: false, blur: 22, radius: 14, weight: f => Math.min(1, (f.get('production') as number) / 60), gradient: ['rgba(255,247,188,0)', '#fee391', '#fec44f', '#fe9929', '#d95f0e', '#993404'] });
+    const dragBox = new DragBox({ className: 'ol-dragbox select-box' });
+    dragBox.setActive(false);
+    dragBox.on('boxend', () => {
+      const extent = dragBox.getGeometry().getExtent(), ids: string[] = [];
+      source.forEachFeatureIntersectingExtent(extent, f => { ids.push(f.get('id')); });
+      latest.current.onAreaSelect?.(ids);
+    });
     const measureSource = new VectorSource(), locationSource = new VectorSource();
     const measureLayer = new VectorLayer({ source: measureSource, zIndex: 110, style: measureStyles(false) });
     const locationLayer = new VectorLayer({ source: locationSource, zIndex: 120, style: [new Style({ image: new Circle({ radius: 16, fill: new Fill({ color: 'rgba(37,99,235,.16)' }) }) }), new Style({ image: new Circle({ radius: 7, fill: new Fill({ color: '#2563eb' }), stroke: new Stroke({ color: '#fff', width: 2.5 }) }) })] });
@@ -264,8 +300,9 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const draftLayer = new VectorLayer({ source: draftSource, zIndex: 100, style: draftStyles(false) });
     const initialBase = latest.current.settings.base;
     const bases: Runtime['bases'] = { [initialBase]: createBase(initialBase) };
-    const map = new Map({ target: host.current, layers: [bases[initialBase]!, imagery, municipalities, states, parcels, clusters, draftLayer, measureLayer, locationLayer], overlays: [measureTip], view: new View({ center: fromLonLat([-98.4, 19.755]), zoom: 10.85, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }), controls: defaultControls({ zoom: false, rotate: false, attribution: false }).extend([new Attribution({ collapsible: false, target: attribution.current ?? undefined }), new ScaleLine({ bar: false, minWidth: 56, maxWidth: 84, target: scale.current ?? undefined })]) });
-    runtime.current = { map, source, parcels, clusters, bases, imagery, tileSources: new globalThis.Map(), embeddingLayers: new globalThis.Map(), municipalities, states, draftSource, draftLayer, measureSource, locationSource, measureTip, measure: null, images: [], interaction: null, editingId: null };
+    const map = new Map({ target: host.current, layers: [bases[initialBase]!, imagery, municipalities, states, heatmap, parcels, clusters, draftLayer, measureLayer, locationLayer], overlays: [measureTip], view: new View({ center: fromLonLat([-98.4, 19.755]), zoom: 10.85, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }), controls: defaultControls({ zoom: false, rotate: false, attribution: false }) });
+    map.addInteraction(dragBox); setMapReadyFlag(true);
+    runtime.current = { heatmap, dragBox, clipped: new Set(), map, source, parcels, clusters, bases, imagery, tileSources: new globalThis.Map(), embeddingLayers: new globalThis.Map(), municipalities, states, draftSource, draftLayer, measureSource, locationSource, measureTip, measure: null, images: [], interaction: null, editingId: null };
     map.on('singleclick', event => {
       // OpenLayers reports a single click 250 ms late; ignore one that began while measuring.
       if (runtime.current?.interaction || runtime.current?.measure || event.originalEvent.timeStamp < (runtime.current?.measureEndedAt ?? 0)) return;
@@ -277,27 +314,47 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       else latest.current.onSelect(members ? members[0].get('id') : clicked.get('id'));
     });
     // The readout updates its own text node: no React render per pointer move.
+    map.getViewport().addEventListener('pointerleave', () => latest.current.onHover?.(null, null));
     map.on('pointermove', event => {
       if (event.dragging) return;
       const c = toLonLat(event.coordinate);
       if (coordinates.current) coordinates.current.textContent = `${fmt(Math.abs(c[1]), 4)}° ${c[1] < 0 ? 'S' : 'N'}  ${fmt(Math.abs(c[0]), 4)}° ${c[0] < 0 ? 'O' : 'E'}`;
-      host.current!.style.cursor = runtime.current?.interaction ? 'crosshair' : map.hasFeatureAtPixel(event.pixel, { layerFilter: l => l === parcels || l === clusters }) ? 'pointer' : '';
+      const hovered = runtime.current?.interaction || runtime.current?.measure ? undefined : map.forEachFeatureAtPixel(event.pixel, (f, layer) => layer === parcels ? f : layer === clusters && (f.get('features') as Feature[]).length === 1 ? (f.get('features') as Feature[])[0] : undefined, { hitTolerance: 4 });
+      host.current!.style.cursor = runtime.current?.interaction || runtime.current?.dragBox.getActive() ? 'crosshair' : hovered || map.hasFeatureAtPixel(event.pixel, { layerFilter: l => l === clusters }) ? 'pointer' : '';
+      latest.current.onHover?.(hovered ? hovered.get('id') : null, hovered ? [event.pixel[0], event.pixel[1]] : null);
     });
-    map.on('moveend', () => { setZoom(map.getView().getZoom() || 11); setViewportRevision(v => v + 1); });
+    map.on('moveend', () => { setZoom(map.getView().getZoom() || 11); setViewportRevision(v => v + 1); latest.current.onZoom?.(map.getView().getZoom() || 11); });
+    for (const layer of [imagery, heatmap, parcels]) clip(layer);
     const syncZoom = () => setViewZoom(map.getView().getZoom() ?? 11);
     map.getView().on('change:resolution', syncZoom); syncZoom();
     const resize = new ResizeObserver(() => map.updateSize()); resize.observe(host.current);
     return () => { resize.disconnect(); map.getView().un('change:resolution', syncZoom); for (const s of runtime.current?.tileSources.values() || []) s.dispose(); tileFailures.current.clear(); pendingTiles.current.clear(); cache.clear(); map.dispose(); runtime.current = null; initialFit.current = false; };
   }, []);
 
-  useEffect(() => { const r = runtime.current; if (!r) return; r.source.clear(); r.source.addFeatures(format.readFeatures({ type: 'FeatureCollection', features: props.parcels }, { dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' })); if (!initialFit.current && !r.source.isEmpty()) { initialFit.current = true; fitAll(0); } }, [props.parcels]);
+  useEffect(() => {
+    const r = runtime.current; if (!r) return;
+    r.source.clear(); r.source.addFeatures(format.readFeatures({ type: 'FeatureCollection', features: props.parcels }, { dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' }));
+    const heat = r.heatmap.getSource()!; heat.clear();
+    heat.addFeatures(props.parcels.filter(p => p.properties.predictedYield != null).map(p => new Feature({ geometry: new Point(fromLonLat(p.properties.centroid)), production: p.properties.predictedYield! * p.properties.area })));
+    if (!initialFit.current && !r.source.isEmpty()) { initialFit.current = true; fitAll(0); }
+  }, [props.parcels]);
+  // Smart-mapping classes for the Rendimiento layer: continuous ramp, quantiles or equal intervals.
+  useEffect(() => {
+    const field = props.settings.yieldField === 'observed' ? 'observedYield' : 'predictedYield';
+    const values = props.parcels.map(p => p.properties[field]).filter((v): v is number => v != null);
+    classBreaks.current = props.settings.classification === 'quantile' ? quantileBreaks(values) : props.settings.classification === 'equal' && values.length ? equalBreaks(Math.min(...values), Math.max(...values)) : [];
+    styleCache.current.clear(); runtime.current?.parcels.changed();
+  }, [props.parcels, props.settings.yieldField, props.settings.classification]);
+  useEffect(() => { runtime.current?.heatmap.setVisible(!!props.settings.heatmap); }, [props.settings.heatmap]);
+  useEffect(() => { runtime.current?.dragBox.setActive(!!props.selectArea); }, [props.selectArea]);
+  useEffect(() => { swipeRatio.current = props.swipe ?? null; runtime.current?.map.render(); }, [props.swipe]);
   useEffect(() => {
     const r = runtime.current; if (!r) return;
     const ready = () => latest.current.onReady?.();
     r.map.once('postrender', ready); r.map.render();
     return () => r.map.un('postrender', ready);
   }, [props.atlas]);
-  useEffect(() => { const r = runtime.current; r?.parcels.changed(); r?.clusters.changed(); }, [props.selected, props.mode, props.year, props.keyDate, props.settings.base, props.imageryVisible]);
+  useEffect(() => { const r = runtime.current; r?.parcels.changed(); r?.clusters.changed(); }, [props.selected, props.highlightId, props.labels, props.mode, props.year, props.keyDate, props.settings.base, props.settings.yieldField, props.imageryVisible]);
 
   // Basemaps are created on first use and kept, so switching back is instant.
   useEffect(() => {
@@ -319,7 +376,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const add = (raster: Raster, zIndex: number, url = raster.url) => {
       const layer = new ImageLayer({ zIndex, opacity: props.settings.opacity, source: new ImageStatic({ url, imageExtent: raster.extent, projection: raster.projection, crossOrigin: 'anonymous' }) });
       layer.getSource()!.on('imageloaderror', () => { if (!cancelled) setError('No se pudo cargar esta capa. Vuelve a seleccionar el mes.'); });
-      r.images.push(layer); r.map.addLayer(layer);
+      clip(layer); r.images.push(layer); r.map.addLayer(layer);
     };
     for (const key of ['elevation', 'slope', 'precipitation', 'tmin', 'tmax'] as const) if (props.settings[key]) {
       const raster = props.atlas.rasters[['precipitation', 'tmin', 'tmax'].includes(key) ? `${key}/${props.keyDate}` : key];
@@ -375,7 +432,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
         const raster = props.atlas.details[parcel.properties.id]?.embedding[String(props.year)];
         if (raster && (zoom >= 13 || parcel.properties.id === props.selected?.properties.id) && intersects(extent, transformExtent(parcel.properties.bounds, 'EPSG:4326', 'EPSG:3857'))) {
           wanted.add(raster.url); count++;
-          if (!r.embeddingLayers.has(raster.url)) { const layer = new ImageLayer({ zIndex: 15, opacity: props.settings.opacity, source: new ImageStatic({ url: raster.url, imageExtent: raster.extent, projection: raster.projection }) }); r.embeddingLayers.set(raster.url, layer); r.map.addLayer(layer); }
+          if (!r.embeddingLayers.has(raster.url)) { const layer = new ImageLayer({ zIndex: 15, opacity: props.settings.opacity, source: new ImageStatic({ url: raster.url, imageExtent: raster.extent, projection: raster.projection }) }); clip(layer); r.embeddingLayers.set(raster.url, layer); r.map.addLayer(layer); }
         }
       }
       setEmbeddingCount(count);
@@ -383,13 +440,39 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     for (const [url, layer] of r.embeddingLayers) if (!wanted.has(url)) { r.map.removeLayer(layer); r.embeddingLayers.delete(url); }
   }, [props.mode, props.year, props.atlas, props.parcels, props.selected, zoom, viewportRevision, props.settings.opacity]);
 
-  const zoomBy = (delta: number) => {
+  // The status row may live in another popout (portal); controls follow their element.
+  const attach = useCallback((kind: 'scale' | 'attribution') => (el: HTMLDivElement | null) => {
+    const r = runtime.current, current = controls.current[kind];
+    if (current) { r?.map.removeControl(current); controls.current[kind] = undefined; }
+    if (!el || !r) return;
+    const control = kind === 'scale' ? new ScaleLine({ bar: false, minWidth: 48, maxWidth: 72, target: el }) : new Attribution({ collapsible: false, target: el });
+    controls.current[kind] = control as never; r.map.addControl(control);
+  }, []);
+  const attachScale = useCallback((el: HTMLDivElement | null) => attach('scale')(el), [attach]);
+  const attachAttribution = useCallback((el: HTMLDivElement | null) => attach('attribution')(el), [attach]);
+  const [mapReadyFlag, setMapReadyFlag] = useState(false);
+
+  /** Swipe (ArcGIS "Swipe"): data layers draw only left of the divider; the basemap stays whole. */
+  function clip(layer: BaseLayer) {
+    const r = runtime.current;
+    if (r?.clipped.has(layer)) return; r?.clipped.add(layer);
+    layer.on('prerender' as never, ((event: RenderEvent) => {
+      const ratio = swipeRatio.current, ctx = event.context as CanvasRenderingContext2D | undefined;
+      if (ratio == null || !ctx || !('save' in ctx)) return;
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, ctx.canvas.width * ratio, ctx.canvas.height); ctx.clip();
+    }) as never);
+    layer.on('postrender' as never, ((event: RenderEvent) => {
+      const ctx = event.context as CanvasRenderingContext2D | undefined;
+      if (swipeRatio.current != null && ctx && 'restore' in ctx) ctx.restore();
+    }) as never);
+  }
+  function zoomBy(delta: number) {
     const view = runtime.current?.map.getView();
     if (!view) return;
     const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, (view.getZoom() ?? MIN_ZOOM) + delta));
     view.cancelAnimations();
     view.animate({ zoom: next, duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 200 });
-  };
+  }
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -397,22 +480,15 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     } catch { setError('No pudimos abrir la pantalla completa en este navegador.'); }
   }
   return <div className="map-canvas-wrap absolute inset-0" data-testid="map" data-mode={props.mode} data-base={props.settings.base} data-zoom={viewZoom.toFixed(2)} data-parcel-count={props.parcels.length} data-period={props.keyDate} data-valid-pixels={rasterInfo.valid} data-displayed-pixels={rasterInfo.displayed} data-embedding-count={embeddingCount} data-detail={viewZoom >= DETAIL_ZOOM || undefined}>
-    <Toolbar aria-label="Navegación del mapa" orientation="vertical" className={cn(floating, 'map-zoom-controls absolute right-3 bottom-9 z-10 flex flex-col p-1 max-md:bottom-[4.25rem]')}>
-      <ToolButton label="Ver todas las parcelas" side="left" onClick={() => fitAll()}><Home/></ToolButton>
-      <Separator className="my-0.5"/>
-      <ToolButton label="Acercar mapa" side="left" disabled={viewZoom >= MAX_ZOOM} onClick={() => zoomBy(1)}><Plus/></ToolButton>
-      <ToolButton label="Alejar mapa" side="left" disabled={viewZoom <= MIN_ZOOM} onClick={() => zoomBy(-1)}><Minus/></ToolButton>
-      <Separator className="my-0.5"/>
-      {props.onLocate && <ToolButton label="Mi ubicación" side="left" busy={props.locating} onClick={props.onLocate}><LocateFixed/></ToolButton>}
-      <ToolButton label={fullscreen ? 'Salir de pantalla completa' : 'Mapa en pantalla completa'} side="left" pressed={fullscreen} disabled={document.fullscreenEnabled === false} onClick={() => void toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ToolButton>
-    </Toolbar>
+    {(loading || error) && <div role="status" className={cn('rounded-full bg-frame shadow-md', 'map-status absolute top-12 left-1/2 z-20 flex max-w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 px-3 py-2 text-sm', error && 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200')}>{loading && !error ? <LoadingState label="Cargando Landsat…"/> : <><span>{error}</span>{['ndvi', 'water'].includes(props.mode) || props.imageryVisible ? <Button size="sm" variant="outline" onClick={() => { const source = runtime.current?.imagery.getSource(); if (source) { tileFailures.current.get(source)?.clear(); source.refresh(); } setError(''); }}>Reintentar imágenes</Button> : null}</>}</div>}
 
-    {(loading || error) && <div role="status" className={cn(floating, 'map-status absolute top-3 left-1/2 z-20 flex max-w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 px-3 py-2 text-sm', error && 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200')}>{loading && !error ? <LoadingState label="Cargando Landsat…"/> : <><span>{error}</span>{['ndvi', 'water'].includes(props.mode) || props.imageryVisible ? <Button size="sm" variant="outline" onClick={() => { const source = runtime.current?.imagery.getSource(); if (source) { tileFailures.current.get(source)?.clear(); source.refresh(); } setError(''); }}>Reintentar imágenes</Button> : null}</>}</div>}
-
-    <div className="map-statusbar absolute inset-x-0 bottom-0 z-[9] flex h-6 items-center justify-between gap-4 border-t bg-background/85 px-3 text-[11px] text-muted-foreground backdrop-blur max-md:hidden">
-      <div className="map-attribution min-w-0 truncate" ref={attribution}/>
-      <div className="flex shrink-0 items-center gap-3 font-mono text-[10.5px] whitespace-pre"><span ref={coordinates}>19.7540° N  98.4050° O</span><span>z {viewZoom.toFixed(1)}</span><div className="map-scale" ref={scale}/></div>
-    </div>
+    {mapReadyFlag && (() => {
+      const row = <div className={cn('map-statusbar flex min-w-0 items-center gap-3 text-[11px] text-muted-foreground', !props.statusTarget && 'pointer-events-auto absolute top-2.5 right-3 z-[9] max-w-[24rem] rounded-full bg-frame/80 px-3 py-1 backdrop-blur max-md:hidden')}>
+        <div className="flex shrink-0 items-center gap-2.5 text-[11px] whitespace-pre tabular-nums"><span ref={coordinates}>19.7540° N  98.4050° O</span><span>z {viewZoom.toFixed(1)}</span><div className="map-scale" ref={attachScale}/></div>
+        <div className="map-attribution min-w-0 flex-1 truncate" ref={attachAttribution}/>
+      </div>;
+      return props.statusTarget ? createPortal(row, props.statusTarget) : row;
+    })()}
 
     {/* The canvas follows the controls in the DOM so Tab reaches the controls first. */}
     <div ref={host} className="map-canvas absolute inset-0 bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset" tabIndex={0} role="application" aria-label="Mapa interactivo de parcelas de Hidalgo, Puebla y Tlaxcala" onKeyDown={e => { if (e.key === 'Escape') { cancel(); measure(null); latest.current.onCancel?.(); } }}/>

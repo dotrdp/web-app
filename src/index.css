@@ -2,14 +2,15 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* AgroCebada on shadcn/ui (radix-nova, neutral). Geist fonts: SIL OFL, /licenses/geist-OFL.txt. */
+/* AgroCebada on shadcn/ui (radix-nova). Rubik: SIL OFL via @fontsource-variable/rubik. Geist fonts: SIL OFL, /licenses/geist-OFL.txt. */
+@import "@fontsource-variable/rubik";
 @font-face { font-family: 'Geist'; src: url('./fonts/Geist-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: 'Geist Mono'; src: url('./fonts/GeistMono-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Rubik Variable', 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -35,6 +36,11 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
   --color-brand: var(--brand);
+  --color-frame: var(--frame);
+  --color-tile: var(--tile);
+  --color-tile-strong: var(--tile-strong);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
   --color-brand-foreground: var(--brand-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -51,77 +57,78 @@
   --radius-2xl: calc(var(--radius) + 8px);
 }
 
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  /* Barley greens for data; the brand mark uses --brand. */
+/* Noctalia / Caelestia-style tonal schemes seeded from the barley mark. Every
+   surface derives from one hue (--h): the frame and its popouts share --frame so
+   they read as one continuous shell around the map; tiles sit one tone deeper. */
+:root, [data-scheme="cebada"] { --h: 128; --hc: 1; }
+[data-scheme="trigo"] { --h: 78; --hc: 1.15; }
+[data-scheme="tierra"] { --h: 28; --hc: 1.05; }
+[data-scheme="noche"] { --h: 292; --hc: 1.2; }
+[data-scheme="laguna"] { --h: 215; --hc: 1.05; }
+
+:root, [data-scheme] {
+  --radius: 0.875rem;
+  --frame: oklch(0.962 calc(0.016 * var(--hc)) var(--h));
+  --tile: oklch(0.928 calc(0.026 * var(--hc)) var(--h));
+  --tile-strong: oklch(0.895 calc(0.036 * var(--hc)) var(--h));
+  --primary: oklch(0.47 calc(0.11 * var(--hc)) var(--h));
+  --primary-foreground: oklch(0.985 0.01 var(--h));
+  --primary-container: oklch(0.88 calc(0.06 * var(--hc)) var(--h));
+  --on-primary-container: oklch(0.29 calc(0.08 * var(--hc)) var(--h));
+  --background: var(--frame);
+  --foreground: oklch(0.22 calc(0.02 * var(--hc)) var(--h));
+  --card: var(--tile);
+  --card-foreground: var(--foreground);
+  /* Previews set data-scheme on a subtree, so the tokens are declared on it too. */
+  --popover: oklch(0.975 calc(0.012 * var(--hc)) var(--h));
+  --popover-foreground: var(--foreground);
+  --secondary: var(--tile);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--tile);
+  --muted-foreground: oklch(0.47 calc(0.025 * var(--hc)) var(--h));
+  --accent: var(--primary-container);
+  --accent-foreground: var(--on-primary-container);
+  --destructive: oklch(0.56 0.2 27);
+  --border: oklch(0.86 calc(0.025 * var(--hc)) var(--h));
+  --input: oklch(0.84 calc(0.025 * var(--hc)) var(--h));
+  --ring: var(--primary);
+  /* Data colours stay fixed across schemes: green vegetation, slate rain, amber heat. */
   --chart-1: oklch(0.52 0.12 152);
   --chart-2: oklch(0.65 0.14 145);
   --chart-3: oklch(0.76 0.13 128);
   --chart-4: oklch(0.58 0.08 230);
   --chart-5: oklch(0.72 0.12 75);
-  --brand: oklch(0.47 0.1 155);
-  --brand-foreground: oklch(0.985 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --brand: var(--primary);
+  --brand-foreground: var(--primary-foreground);
+  --sidebar: var(--frame);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--primary-container);
+  --sidebar-accent-foreground: var(--on-primary-container);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+.dark, .dark [data-scheme] {
+  --frame: oklch(0.205 calc(0.014 * var(--hc)) var(--h));
+  --tile: oklch(0.255 calc(0.018 * var(--hc)) var(--h));
+  --tile-strong: oklch(0.3 calc(0.024 * var(--hc)) var(--h));
+  --primary: oklch(0.82 calc(0.1 * var(--hc)) var(--h));
+  --primary-foreground: oklch(0.22 calc(0.06 * var(--hc)) var(--h));
+  --primary-container: oklch(0.36 calc(0.07 * var(--hc)) var(--h));
+  --on-primary-container: oklch(0.92 calc(0.05 * var(--hc)) var(--h));
+  --foreground: oklch(0.94 calc(0.01 * var(--hc)) var(--h));
+  --popover: oklch(0.235 calc(0.016 * var(--hc)) var(--h));
+  --muted-foreground: oklch(0.72 calc(0.02 * var(--hc)) var(--h));
+  --destructive: oklch(0.7 0.18 22);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
   --chart-1: oklch(0.7 0.13 152);
   --chart-2: oklch(0.6 0.12 145);
   --chart-3: oklch(0.8 0.13 128);
   --chart-4: oklch(0.68 0.08 230);
   --chart-5: oklch(0.78 0.12 75);
-  --brand: oklch(0.62 0.12 155);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.62 0.12 155);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
