@@ -3,7 +3,7 @@
 // the map panels fade with the map and the dashboard icon morphs into a map.
 import type { LucideIcon } from 'lucide-react';
 import { motion } from 'motion/react';
-import { ChartSpline, Filter, FlaskConical, Layers3, LayoutDashboard, LogOut, Map as MapIcon, Settings, Table2, Telescope } from 'lucide-react';
+import { ChartSpline, Filter, Layers3, LayoutDashboard, LogOut, Map as MapIcon, Settings, Table2, Telescope } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { LogoMark } from '../Logo';
@@ -14,7 +14,6 @@ export type LeftPanel = 'layers' | 'basemap' | 'tabla' | 'filters' | 'settings';
 export const PHASES: { key: Phase; label: string; detail: string; icon: LucideIcon }[] = [
   { key: 'explorar', label: 'Explorar', detail: 'Mapa, parcelas y vegetación', icon: Telescope },
   { key: 'estimar', label: 'Estimar', detail: 'Rendimiento, error y entrega', icon: ChartSpline },
-  { key: 'avanzado', label: 'Indicadores avanzados', detail: 'Series, capas técnicas y diagnóstico del modelo', icon: FlaskConical },
 ];
 export const PANEL_ITEMS: { key: LeftPanel; label: string; icon: LucideIcon }[] = [
   { key: 'layers', label: 'Capas y simbología', icon: Layers3 },

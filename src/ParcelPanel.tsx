@@ -1,7 +1,6 @@
 // Parcel card (right popout): the estimate first, as a figure with its interval,
 // then what it means in tonnes, a few plain facts and the vegetation curve.
-// Elevation, slope and climate only appear in the advanced phase.
-import { ChevronDown, ChevronUp, Crosshair, FlaskConical, MapPin, PencilRuler, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Crosshair, MapPin, PencilRuler, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Atlas, Parcel } from './types';
@@ -12,8 +11,8 @@ import ShellButton from './shell/ShellButton';
 
 const SET_LABEL = { training: 'Con rendimiento registrado', prediction: 'Parcela reservada · predicción', custom: 'Terreno propio' } as const;
 
-export default function ParcelPanel({ parcel, atlas, year, month, advanced, ranking, onClose, onLocate, onEdit, onAdvanced, onNext, onSimilar }: { parcel: Parcel; atlas: Atlas; year: number; month: number; advanced: boolean; ranking: { percentile: number; of: number } | null; onClose: () => void; onLocate: () => void; onEdit: () => void; onAdvanced?: () => void; onNext: (direction: number) => void; onSimilar: () => void }) {
-  const p = parcel.properties, details = atlas.details[p.id], weather = details?.climate[dateKey(year, month)];
+export default function ParcelPanel({ parcel, atlas, year, month, ranking, onClose, onLocate, onEdit, onNext, onSimilar }: { parcel: Parcel; atlas: Atlas; year: number; month: number; ranking: { percentile: number; of: number } | null; onClose: () => void; onLocate: () => void; onEdit: () => void; onNext: (direction: number) => void; onSimilar: () => void }) {
+  const p = parcel.properties, details = atlas.details[p.id];
   const values = Array.from({ length: 12 }, (_, m) => details?.ndvi['Sentinel-2']?.[dateKey(year, m)]?.mean ?? null);
   const estimate = p.predictedYield, range = estimate == null ? null : interval(atlas.predictions, estimate);
   const error = estimate != null && p.observedYield != null ? estimate - p.observedYield : null;
@@ -21,7 +20,6 @@ export default function ParcelPanel({ parcel, atlas, year, month, advanced, rank
   const facts: [string, string][] = [
     ['Superficie del polígono', `${fmt(p.area)} ha`],
     [`Vegetación · ${MONTH_NAMES[month].toLowerCase()}`, values[month] == null ? 'Sin observación' : `NDVI ${fmt(values[month])}`],
-    ...(advanced ? [['Precipitación del mes', `${fmt(weather?.precipitation, 0)} mm`], ['Elevación', p.elevation == null ? '—' : `${fmt(p.elevation, 0)} m`], ['Pendiente', p.slope == null ? '—' : `${fmt(p.slope, 1)}°`]] as [string, string][] : []),
   ];
   return <aside aria-label="Ficha de parcela" className="flex h-full min-h-0 flex-col">
     <header className="flex items-center gap-1 pt-3 pr-3 pl-5">
@@ -66,7 +64,6 @@ export default function ParcelPanel({ parcel, atlas, year, month, advanced, rank
       </div>
     </div>
     <footer className="grid gap-2 px-4 pb-4">
-      {onAdvanced && <Button onClick={onAdvanced} className="w-full rounded-full" size="lg"><FlaskConical/>Indicadores avanzados</Button>}
       <div className="flex justify-center gap-1">
         <Button variant="ghost" size="sm" className="rounded-full" onClick={onLocate}><Crosshair/>Acercar</Button>
         <Button variant="ghost" size="sm" className="rounded-full" onClick={onEdit}><PencilRuler/>Corregir límites</Button>

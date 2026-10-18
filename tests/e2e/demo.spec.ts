@@ -5,7 +5,7 @@ test('The public demo keeps drawn parcels in page memory only, with no app cooki
   const login = async () => { await page.getByRole('button', { name: 'Usar cuenta de prueba' }).click(); await page.getByRole('button', { name: 'Entrar a AgroCebada' }).click(); await expect(page.getByTestId('map')).toHaveAttribute('data-parcel-count', '197'); };
   await page.goto('/'); await login();
   await page.keyboard.press('Alt+2');
-  await expect(page.getByRole('tabpanel', { name: 'Estimar' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Panel de control' })).toBeVisible();
   await page.goto('/'); await page.reload(); await login(); expect(requests).toEqual([]);
   // Cloudflare may set its hosting clearance cookie independently of the app.
   const publicHost = new URL(page.url()).hostname === 'agrocebada.datascience-mexico.com';

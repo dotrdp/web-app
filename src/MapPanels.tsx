@@ -2,7 +2,7 @@
 // symbology, basemap gallery, parcel list, filters and bookmarks.
 import { useMemo, useState } from 'react';
 import { Toolbar } from 'react-aria-components/Toolbar';
-import { ChartNoAxesCombined, Check, Droplets, Leaf, ListFilter, MapPinned, Mountain, Satellite, Sigma, Sparkles, ThermometerSun } from 'lucide-react';
+import { ChartNoAxesCombined, Check, Leaf, ListFilter, MapPinned } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,15 +19,9 @@ import { equalBreaks, quantileBreaks } from './model';
 import { errorColor, YIELD_DOMAIN, yieldRgb } from './AtlasMap';
 import type { Atlas, Classification, LayerSettings, MapMode, Parcel } from './types';
 
-export const MODES: { key: MapMode; label: string; detail: string; icon: LucideIcon; pro?: boolean }[] = [
+export const MODES: { key: MapMode; label: string; detail: string; icon: LucideIcon }[] = [
   { key: 'parcels', label: 'Rendimiento', detail: 'Estimado o registrado · ciclo 2025', icon: ChartNoAxesCombined },
   { key: 'ndvi', label: 'Vegetación', detail: 'NDVI Sentinel-2 · 10 m mensual', icon: Leaf },
-  { key: 'error', label: 'Error del modelo', detail: 'Estimado − registrado · 138 parcelas', icon: Sigma, pro: true },
-  { key: 'water', label: 'Agua', detail: 'Candidatos MNDWI · 20 m mensual', icon: Droplets, pro: true },
-  { key: 'climate', label: 'Clima', detail: 'Precipitación CHIRPS · mensual', icon: ThermometerSun, pro: true },
-  { key: 'terrain', label: 'Terreno', detail: 'Elevación INEGI CEM · estática', icon: Mountain, pro: true },
-  { key: 'landsat', label: 'NDVI · Landsat C2', detail: 'Serie histórica · 30 m', icon: Satellite, pro: true },
-  { key: 'alphaearth', label: 'AlphaEarth', detail: 'Embeddings anuales · 10 m', icon: Sparkles, pro: true },
 ];
 
 type Base = LayerSettings['base'];
@@ -41,15 +35,14 @@ export const BASEMAPS: { key: Base; label: string; hint: string }[] = [
 export const SectionTitle = ({ children }: { children: string }) => <h3 className="px-1 text-xs font-medium text-muted-foreground">{children}</h3>;
 
 const CLASSES: [Classification, string][] = [['continuous', 'Continua'], ['quantile', 'Cuantiles (5)'], ['equal', 'Intervalos iguales (5)']];
-export function LayersPanel({ mode, advanced, settings, year, parcels, onMode, onOpacity, onSettings }: { mode: MapMode; advanced: boolean; settings: LayerSettings; year: number; parcels: Parcel[]; onMode: (mode: MapMode) => void; onOpacity: (opacity: number) => void; onSettings: (next: Partial<LayerSettings>) => void }) {
-  const modes = MODES.filter(m => !m.pro || advanced || m.key === mode);
+export function LayersPanel({ mode, settings, year, parcels, onMode, onOpacity, onSettings }: { mode: MapMode; settings: LayerSettings; year: number; parcels: Parcel[]; onMode: (mode: MapMode) => void; onOpacity: (opacity: number) => void; onSettings: (next: Partial<LayerSettings>) => void }) {
   const raster = ['ndvi', 'climate', 'terrain', 'landsat', 'alphaearth'].includes(mode);
   const transparency = Math.round((1 - settings.opacity) * 100);
   return <div className="grid gap-4">
     <section className="grid gap-2">
       <SectionTitle>Datos del territorio</SectionTitle>
       <Toolbar aria-label="Capas del territorio" orientation="vertical" className="grid gap-1">
-        {modes.map(m => <Item key={m.key} asChild size="sm" variant={mode === m.key ? 'outline' : 'default'} className={cn('cursor-pointer rounded-2xl text-left hover:bg-tile', mode === m.key && 'border-transparent bg-primary-container text-on-primary-container')}>
+        {MODES.map(m => <Item key={m.key} asChild size="sm" variant={mode === m.key ? 'outline' : 'default'} className={cn('cursor-pointer rounded-2xl text-left hover:bg-tile', mode === m.key && 'border-transparent bg-primary-container text-on-primary-container')}>
           <button type="button" aria-label={m.label} aria-pressed={mode === m.key} onClick={() => onMode(m.key)}>
             <ItemMedia variant="icon" className={cn('size-8 rounded-full border-0 bg-tile', mode === m.key && 'bg-primary text-primary-foreground')}><m.icon/></ItemMedia>
             <ItemContent className="min-w-0 gap-0.5"><ItemTitle>{m.label}</ItemTitle><ItemDescription className="truncate text-xs">{m.detail}</ItemDescription></ItemContent>

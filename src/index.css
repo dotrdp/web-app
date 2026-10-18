@@ -13,6 +13,9 @@
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Search-match highlight for the data table (shadcn-react-table), tied to the crop scheme. */
+  --color-highlight: var(--highlight, var(--primary-container));
+  --color-highlight-foreground: var(--highlight-foreground, var(--on-primary-container));
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);

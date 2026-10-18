@@ -1,6 +1,5 @@
 // Attribute table (ArcGIS / QGIS): every visible parcel with its attributes,
-// sortable and filterable, selection and hover linked to the map. Climate and
-// terrain columns appear only in the advanced phase.
+// sortable and filterable, selection and hover linked to the map.
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronsUpDown, FileSpreadsheet, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,23 +7,18 @@ import { cn } from '@/lib/utils';
 import { download, fmt, normalize, parcelCsv } from '../lib';
 import type { Atlas, Parcel } from '../types';
 
-type Column = { key: string; label: string; value: (p: Parcel) => number | string | null; digits?: number; advanced?: boolean; className?: string };
+type Column = { key: string; label: string; value: (p: Parcel) => number | string | null; digits?: number; className?: string };
 
-export default function AttributeTable({ atlas, parcels, selectedId, keyDate, advanced, onSelect, onHover, onClose }: { atlas: Atlas; parcels: Parcel[]; selectedId: string | null; keyDate: string; advanced: boolean; onSelect: (id: string) => void; onHover: (id: string | null) => void; onClose: () => void }) {
+export default function AttributeTable({ atlas, parcels, selectedId, keyDate, onSelect, onHover, onClose }: { atlas: Atlas; parcels: Parcel[]; selectedId: string | null; keyDate: string; onSelect: (id: string) => void; onHover: (id: string | null) => void; onClose: () => void }) {
   const columns = useMemo<Column[]>(() => ([
     { key: 'id', label: 'ID_POLIGONO', value: p => p.properties.name || p.properties.id, className: 'font-mono text-xs' },
     { key: 'municipality', label: 'Municipio', value: p => p.properties.municipality, className: 'max-w-32 truncate' },
-    { key: 'state', label: 'Estado', value: p => p.properties.state, advanced: true },
     { key: 'area', label: 'AREA_HA', value: p => p.properties.area, digits: 2 },
     { key: 'group', label: 'Conjunto', value: p => ({ training: 'Entrenamiento', prediction: 'Reservada', custom: 'Propia' })[p.properties.group] },
     { key: 'observed', label: 'Registrado', value: p => p.properties.observedYield, digits: 2 },
     { key: 'predicted', label: 'Estimado', value: p => p.properties.predictedYield, digits: 2 },
     { key: 'ndvi', label: 'NDVI mes', value: p => atlas.details[p.properties.id]?.ndvi['Sentinel-2']?.[keyDate]?.mean ?? null, digits: 2 },
-    { key: 'rain', label: 'Lluvia mm', value: p => atlas.details[p.properties.id]?.climate[keyDate]?.precipitation ?? null, digits: 0, advanced: true },
-    { key: 'tmax', label: 'T máx °C', value: p => atlas.details[p.properties.id]?.climate[keyDate]?.tmax ?? null, digits: 1, advanced: true },
-    { key: 'elevation', label: 'Elevación m', value: p => p.properties.elevation, digits: 0, advanced: true },
-    { key: 'slope', label: 'Pendiente °', value: p => p.properties.slope, digits: 1, advanced: true },
-  ] as Column[]).filter(c => !c.advanced || advanced), [atlas, keyDate, advanced]);
+  ] as Column[]), [atlas, keyDate]);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: 'id', desc: false });
   const rows = useMemo(() => {

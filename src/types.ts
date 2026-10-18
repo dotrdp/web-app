@@ -1,5 +1,5 @@
-/** Phases of the workspace: explore the map, read the estimate, open the advanced indicators. */
-export type Phase = 'explorar' | 'estimar' | 'avanzado';
+/** Phases of the workspace: explore the map, read the estimate on the dashboard page. */
+export type Phase = 'explorar' | 'estimar';
 export type MapMode = 'parcels' | 'ndvi' | 'water' | 'landsat' | 'alphaearth' | 'climate' | 'terrain' | 'error';
 /** What the Rendimiento layer colours: the model estimate or the recorded 2025 yield. */
 export type YieldField = 'predicted' | 'observed';
@@ -19,7 +19,7 @@ export interface ParcelData { climate: Record<string, Climate>; ndvi: Record<str
 export interface LandsatStats { mean: number | null; min: number | null; max: number | null; validPixels: number; totalPixels: number; coverage: number }
 export interface LandsatMonth extends Raster { date: string; parcels: Record<string, LandsatStats>; scenes: { id: string; date: string; cloudCover: number; stacUrl: string }[]; nativeResolution: number; validAreaFraction: number }
 export interface Atlas { predictions: import('./model').Predictions; parcels: FeatureCollection; details: Record<string, ParcelData>; rasters: Record<string, Raster>; landsat: Record<string, LandsatMonth>; provenance: { parcelCount: number; trainingCount: number; predictionCount: number; totalArea: number; satelliteRetained: Record<string, number>; modelStatus: string } }
-/** One kind of account: everyone sees the same atlas; advanced indicators are a phase, not a role. */
+/** One kind of account: everyone sees the same atlas; the estimate is a phase, not a role. */
 export interface User { id: string; username: string; name: string; role?: string }
 export interface ImageryScene { id: string; date: string; tile: string; cloudCover: number; baseline: string; calibration: { scale: number; offset: number }; stacUrl: string }
 export interface ImageryManifest { version: string; nativeVersion?: string; renderVersion?: number; tileRendering?: string; month: string; source: string; resolution: { rgb: number; ndvi: number; mndwi: number }; states: string[]; tiles: string[]; scenes: ImageryScene[]; mosaic: string; missingData: string; tileTemplate: string }

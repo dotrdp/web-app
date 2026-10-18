@@ -1,10 +1,8 @@
 // AgroCebada shell. The map is the wallpaper; everything else is an extrusion of
 // one frame (Caelestia / Noctalia): the bar on the left, the dashboard dropping
 // from the top, the launcher rising from the bottom, panels and cards attached
-// to the edges. Three phases replace the old Productor / Técnico roles:
-// Explorar (the map) → Estimar → Indicadores avanzados (the only place technical
-// tools live); the last two are tabs of the dashboard page, which the map and its
-// controls fade away for. the Agente de IA Milli lives in the top island.
+// to the edges. Two phases replace the old Productor / Técnico roles: Explorar (the
+// map) and Estimar, the dashboard page that the map and its controls fade away for. the Agente de IA Milli lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
@@ -38,8 +36,7 @@ import type { PluginId } from './plugins';
 import Popout from './shell/Popout';
 import Bar, { MobileDock, PANEL_ITEMS, PHASES } from './shell/Bar';
 import type { LeftPanel } from './shell/Bar';
-import Dashboard, { Summary } from './shell/Dashboard';
-import type { DashboardTab } from './shell/Dashboard';
+import { Summary } from './shell/Summary';
 import Launcher from './shell/Launcher';
 import { MILLI, MilliAvatar, MilliName } from './shell/Milli';
 import type { Command } from './shell/Launcher';
@@ -47,8 +44,6 @@ import ShellButton from './shell/ShellButton';
 import { CropMark } from './CropMarks';
 import type { Crop } from './CropMarks';
 import EstimationPanel, { Stat } from './panels/EstimationPanel';
-import AdvancedPanel from './panels/AdvancedPanel';
-import type { AdvancedTab } from './panels/AdvancedPanel';
 import AttributeTable from './panels/AttributeTable';
 import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Override, Parcel, Phase, SegmentationPrompt, SegmentationProposal, User, Workspace } from './types';
 import './map.css';
@@ -63,8 +58,7 @@ const SHEETS: Sheet[] = ['fuentes', 'tabla'];
 const EMPTY_WORKSPACE: Workspace = { overrides: {}, fields: [] };
 const EMPTY_FILTERS: MapFilters = { query: '', state: 'all', group: 'all', ndviEnabled: true, ndviThreshold: -1, onlyNdvi: false };
 const DEFAULT_LAYERS: LayerSettings = { yieldField: 'predicted', classification: 'continuous', heatmap: false, precipitation: false, tmin: false, tmax: false, elevation: false, slope: false, municipalities: false, states: true, opacity: .8, base: 'topo', waterThreshold: 0, waterOpacity: .75 };
-const ADVANCED_MODES: MapMode[] = ['water', 'landsat', 'alphaearth', 'climate', 'terrain', 'error'];
-const LEGACY_ROUTES: Record<string, Phase> = { map: 'explorar', parcels: 'estimar', models: 'estimar', technical: 'avanzado', sources: 'explorar' };
+const LEGACY_ROUTES: Record<string, Phase> = { map: 'explorar', parcels: 'estimar', models: 'estimar', technical: 'explorar', avanzado: 'explorar', sources: 'explorar' };
 const routePhase = (): Phase => { const r = window.location.hash.replace('#/', ''); return (PHASES.some(p => p.key === r) ? r : LEGACY_ROUTES[r] ?? 'explorar') as Phase; };
 const shortcutKey = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
@@ -109,9 +103,8 @@ export default function App() {
 
   const [phase, setPhase] = useState<Phase>(routePhase);
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
-  const [advancedTab, setAdvancedTab] = useState<AdvancedTab>('parcela');
   const [assistant, setAssistant] = useState(false);
-  const [dashboard, setDashboard] = useState(() => routePhase() !== 'explorar'), [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const p = routePhase(); return p === 'explorar' ? 'resumen' : p; });
+  const [dashboard, setDashboard] = useState(() => routePhase() === 'estimar');
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
   const [selectedId, setSelectedId] = useState<string | null>(null), [hoverId, setHoverId] = useState<string | null>(null);
@@ -138,7 +131,6 @@ export default function App() {
   const [statusEl, setStatusEl] = useState<HTMLDivElement | null>(null);
   const temporal = !['parcels', 'terrain', 'alphaearth', 'error'].includes(mode) && !draftMode;
   const liveImagery = ['ndvi', 'water'].includes(mode) || draftMode === 'segment';
-  const advanced = phase === 'avanzado';
 
   useEffect(() => { void api<{ user: User | null }>('/api/auth/session').then(d => setUser(current => current === undefined ? d.user : current)).catch(() => setUser(current => current === undefined ? null : current)); }, []);
   const reloadWorkspace = useCallback(async () => { const w = await api<Workspace>('/api/workspace'); setWorkspace(w); return w; }, []);
@@ -187,13 +179,13 @@ export default function App() {
     step(); const timer = window.setInterval(step, 4200); return () => clearInterval(timer);
   }, [touring, visibleParcels]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, 1–9 the map tools in strip
+  // Keyboard: Ctrl/⌘ K launcher, Alt 1–2 phases, Alt D dashboard, 1–9 the map tools in strip
   // order (refreshed every render, so disabled plugins close the gap), C cancels the active map tool,
   // Escape closes the top layer.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setLauncher(l => l === null ? '' : null); return; }
-      if (event.altKey && ['1', '2', '3'].includes(event.key)) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key); return; }
+      if (event.altKey && PHASES[Number(event.key) - 1]) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key); return; }
       if (event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); setDashboard(d => !d); return; }
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || (event.target as HTMLElement | null)?.isContentEditable;
       if (/^[1-9]$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing && launcher === null && !dashboard) { const run = toolKeys.current[Number(event.key) - 1]; if (run) { event.preventDefault(); run(); } return; }
@@ -203,17 +195,15 @@ export default function App() {
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
 
-  /** Estimar and Avanzado are dashboard tabs; routes, shortcuts and the launcher open them there. Explorar is the map. */
+  /** Explorar is the map; Estimar is the dashboard page. Routes, shortcuts and the launcher use this. */
   function goPhase(next: Phase) {
     if (window.location.hash !== '#/' + next) window.history.replaceState(null, '', '#/' + next);
     setPhase(next); setPlaying(false); setTouring(false);
-    if (next === 'explorar') { setDashboard(false); if (ADVANCED_MODES.includes(mode)) switchMode('parcels'); }
-    if (next === 'estimar') { setDashboard(true); setDashboardTab('estimar'); switchMode('parcels'); setLayers(l => ({ ...l, yieldField: 'predicted' })); }
-    if (next === 'avanzado') { setDashboard(true); setDashboardTab('avanzado'); }
+    if (next === 'explorar') setDashboard(false);
+    if (next === 'estimar') { setDashboard(true); switchMode('parcels'); setLayers(l => ({ ...l, yieldField: 'predicted' })); }
   }
   function openLeft(next: Left) { setLeft(current => current === next ? null : next); }
   function switchMode(next: MapMode) {
-    if (ADVANCED_MODES.includes(next) && phase !== 'avanzado') { setPhase('avanzado'); window.history.replaceState(null, '', '#/avanzado'); }
     setMode(next); if (next !== 'alphaearth' && year < 2022) setYear(2025);
     setLayers(l => ({ ...l, precipitation: next === 'climate', tmin: false, tmax: false, elevation: next === 'terrain', slope: false }));
   }
@@ -299,11 +289,11 @@ export default function App() {
   const enabledTool = (id: PluginId) => plugins[id];
   const commands: Command[] = [
     ...PHASES.map((p, i) => ({ id: `fase${i + 1}`, title: `Fase ${i + 1} · ${p.label}`, subtitle: p.detail, icon: <p.icon/>, keywords: p.key, run: () => goPhase(p.key) })),
-    { id: 'tablero', title: 'Panel de control', subtitle: 'Resumen, gauges del modelo y ciclo (Alt D)', icon: <ChartSpline/>, keywords: 'dashboard modelo', run: () => setDashboard(true) },
+    { id: 'tablero', title: 'Panel de control', subtitle: 'Estimado vs registrado, error en toneladas y pesos, tabla por ID_POLIGONO (Alt D)', icon: <ChartSpline/>, keywords: 'dashboard estimar tabla', run: () => setDashboard(true) },
     { id: 'base', title: 'Mapa base', subtitle: 'Topográfico, claro, oscuro o satélite', icon: <Layers3/>, keywords: 'basemap fondo', carousel: 'base' },
     { id: 'esquema', title: 'Esquema de color', subtitle: 'Una paleta por cultivo: maíz, sorgo, trigo, arroz, cebada y mijo', icon: <Palette/>, keywords: 'tema color scheme cultivo', carousel: 'scheme' },
     { id: dark ? 'claro' : 'oscuro', title: dark ? 'Tema claro' : 'Tema oscuro', subtitle: 'Cambia la luminosidad del marco', icon: dark ? <Sun/> : <Moon/>, run: () => setDark(d => !d) },
-    ...MODES.filter(m => !m.pro || advanced).map(m => ({ id: 'capa ' + m.label.toLowerCase(), title: `Capa · ${m.label}`, subtitle: m.detail, icon: <m.icon/>, keywords: m.key, run: () => switchMode(m.key) })),
+    ...MODES.map(m => ({ id: 'capa ' + m.label.toLowerCase(), title: `Capa · ${m.label}`, subtitle: m.detail, icon: <m.icon/>, keywords: m.key, run: () => switchMode(m.key) })),
     ...(enabledTool('sam') ? [{ id: 'delimitar', title: 'Delimitar con IA', subtitle: 'SAM 2.1 sobre Sentinel-2', icon: <WandSparkles/>, run: startSegment }] : []),
     ...(enabledTool('draw') ? [{ id: 'dibujar', title: 'Dibujar parcela', subtitle: 'Polígono manual', icon: <PenLine/>, run: startDraw }] : []),
     ...(enabledTool('measure') ? [{ id: 'medir', title: 'Medir distancia', subtitle: 'Distancia geodésica', icon: <Ruler/>, run: () => toggleMeasure('distance') }] : []),
@@ -375,7 +365,7 @@ export default function App() {
           {/* Right edge: parcel card, selection summary, export, delineation. */}
           <AnimatePresence mode="wait">
           {right && <Popout key={right} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth }}>
-            {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} advanced={advanced} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAdvanced={advanced && dashboard && dashboardTab === 'avanzado' ? undefined : () => { setAdvancedTab('parcela'); goPhase('avanzado'); }} onNext={nextParcel}
+            {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onNext={nextParcel}
               ranking={parcelRank(selected)} onSimilar={() => { const y = selected.properties.predictedYield; if (y == null) return; setFilters(f => ({ ...f, yieldBand: [y - .25, y + .25] })); setLeft('filters'); setTimeout(() => map.current?.fitAll(), 60); }}/>}
             {right === 'selection' && <SelectionSummary parcels={selectionParcels} atlas={atlas} keyDate={key} onClose={() => { setRightPanel(null); setSelection([]); }} onPick={id => chooseParcel(id, true)}/>}
             {right === 'export' && <div className="flex min-h-0 flex-col">
@@ -444,12 +434,15 @@ export default function App() {
         <AnimatePresence>
         {dashboard && <motion.section key="dashboard" aria-label="Panel de control" className="dashboard-canvas absolute inset-0 z-20 overflow-hidden rounded-(--view-r)"
           initial={{ opacity: 0, scale: 1.015 }} animate={{ opacity: 1, scale: 1, transition: { duration: .36, delay: .12, ease: [.2, 0, 0, 1] } }} exit={{ opacity: 0, scale: 1.015, transition: { duration: .22 } }}>
-          <Dashboard atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} tab={dashboardTab} onTab={t => t === 'estimar' || t === 'avanzado' ? goPhase(t) : setDashboardTab(t)} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}
-            panels={{
-                  estimar: <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => { chooseParcel(id, true); setDashboard(false); }} onHover={setHoverId} onClose={() => setDashboard(false)}/>,
-                  avanzado: <AdvancedPanel atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} keyDate={key} mode={mode} filters={filters} layers={layers} manifest={manifest} tab={advancedTab} onTab={setAdvancedTab}
-                    onSelect={id => chooseParcel(id, true)} onLocate={() => { if (!selected) return; setDashboard(false); setTimeout(() => map.current?.fitParcel(selected), 40); }} onMode={next => { switchMode(next); setDashboard(false); }} setFilters={setFilters} setLayers={setLayers} onClose={() => setDashboard(false)}/>,
-                }}/>
+          <div className="h-full overflow-y-auto"><div className="mx-auto w-full max-w-[1180px] px-4 pt-14 pb-6">
+            <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => chooseParcel(id)}
+              onLocate={id => { setDashboard(false); chooseParcel(id, true); }}
+              onShowSelection={ids => {
+                const chosen = parcels.filter(p => ids.includes(p.properties.id)); if (!chosen.length) return;
+                const bounds = chosen.reduce((b, p) => [Math.min(b[0], p.properties.bounds[0]), Math.min(b[1], p.properties.bounds[1]), Math.max(b[2], p.properties.bounds[2]), Math.max(b[3], p.properties.bounds[3])], [Infinity, Infinity, -Infinity, -Infinity]);
+                setDashboard(false); setSelection(ids); setRightPanel('selection'); setTimeout(() => map.current?.fitBounds(bounds), 60);
+              }}/>
+          </div></div>
         </motion.section>}
         </AnimatePresence>
 
@@ -459,11 +452,11 @@ export default function App() {
           animate={mapPanelHidden ? { opacity: 0, filter: 'blur(6px)' } : { opacity: 1, filter: 'blur(0px)' }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }}>
           <AnimatePresence mode="wait">
           {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
-            {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} advanced={advanced} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
+            {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
             {left !== 'tabla' && <>
               <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
-                {left === 'layers' && <LayersPanel mode={mode} advanced={advanced} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
+                {left === 'layers' && <LayersPanel mode={mode} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
                 {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
                 {left === 'filters' && <div className="grid gap-6">
                   <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>

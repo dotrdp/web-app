@@ -1,26 +1,13 @@
-// Dashboard page after Caelestia's: tabs with icon-over-label and an underline,
-// tonal tiles. Resumen mirrors weather / system / calendar / media; Modelo mirrors
-// the Performance gauges; Ciclo shows what data exists up to the prediction cutoff;
-// Estimar and Avanzado host the phase 2 and 3 panels, passed in by the shell.
-// The map fades out behind it; the Agente de IA Milli's island reuses the Resumen tiles.
-import { useMemo, useState } from 'react';
+// Resumen tiles after Caelestia's dashboard: weather / system / calendar / media, read
+// as climate, atlas totals, the map's month and the selected parcel. The Agente de IA
+// Milli opens on them.
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { CalendarRange, ChartSpline, ChevronLeft, ChevronRight, CloudRain, CloudSun, FlaskConical, Gauge as GaugeIcon, LayoutDashboard, MapPin, Pause, Play, Sun } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CloudRain, CloudSun, Pause, Play, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Gauge from './Gauge';
 import { LogoMark } from '../Logo';
 import { dateKey, fmt, MONTHS, MONTH_NAMES } from '../lib';
 import type { Atlas, Parcel } from '../types';
-
-export type DashboardTab = 'resumen' | 'modelo' | 'ciclo' | 'estimar' | 'avanzado';
-const TABS: { key: DashboardTab; label: string; icon: LucideIcon }[] = [
-  { key: 'resumen', label: 'Resumen', icon: LayoutDashboard },
-  { key: 'modelo', label: 'Modelo', icon: GaugeIcon },
-  { key: 'ciclo', label: 'Ciclo', icon: CalendarRange },
-  { key: 'estimar', label: 'Estimar', icon: ChartSpline },
-  { key: 'avanzado', label: 'Avanzado', icon: FlaskConical },
-];
 
 /** Parcel outline as a disc, standing in for album art. */
 export function ParcelArt({ parcel, size = 112, spinning = false }: { parcel: Parcel | null; size?: number; spinning?: boolean }) {
@@ -106,58 +93,5 @@ export function Summary({ atlas, parcels, selected, year, month, touring, onMont
         </div>)}
       </div>
     </Tile>
-  </div>;
-}
-
-export default function Dashboard({ tab, panels, onTab, ...summary }: SummaryProps & { tab: DashboardTab; panels: Record<'estimar' | 'avanzado', ReactNode>; onTab: (tab: DashboardTab) => void }) {
-  const { atlas, month, onMonth } = summary;
-  const m = atlas.predictions.metrics;
-  return <div className="mx-auto flex h-full w-full max-w-[1120px] min-h-0 flex-col px-4 pt-12 pb-4 max-md:pt-14">
-    <div role="tablist" aria-label="Panel de control" className="grid shrink-0 grid-cols-5 border-b">
-      {TABS.map(t => <button key={t.key} role="tab" type="button" aria-selected={tab === t.key} onClick={() => onTab(t.key)}
-        className="relative grid justify-items-center gap-0.5 pt-2.5 pb-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground aria-selected:text-primary [&_svg]:size-[18px]">
-        <t.icon/>{t.label}
-        {tab === t.key && <span className="absolute -bottom-px h-[3px] w-14 rounded-t-full bg-primary"/>}
-      </button>)}
-    </div>
-
-    <div className="min-h-0 flex-1 overflow-y-auto">
-    {tab === 'resumen' && <div role="tabpanel" aria-label="Resumen" className="pt-3"><Summary {...summary}/></div>}
-    {tab === 'modelo' && <div role="tabpanel" aria-label="Modelo" className="grid gap-3 pt-4">
-      <div className="flex flex-wrap items-end justify-around gap-2">
-        <Gauge size={124} value={m.mae_t_ha / 1} figure={fmt(m.mae_t_ha)} unit="t/ha" label="MAE" note={`${Math.round(m.mae_t_ha / atlas.predictions.observedMean * 100)} %`} noteLabel="del promedio"/>
-        <Gauge size={156} value={m.r2} figure={fmt(m.r2)} label="R² · varianza" note={`n ${m.n}`} noteLabel="parcelas"/>
-        <Gauge size={124} value={m.rmse_t_ha / 1} figure={fmt(m.rmse_t_ha)} unit="t/ha" label="RMSE" note={`${m.bias_t_ha >= 0 ? '+' : ''}${fmt(m.bias_t_ha)}`} noteLabel="sesgo t/ha"/>
-      </div>
-      <p className="px-2 text-center text-[11px] text-muted-foreground" title={atlas.predictions.model.evaluation}>Validación cruzada · 5 particiones · arcos de 0 a 1 t/ha</p>
-    </div>}
-
-    {tab === 'ciclo' && <CycleTab month={month} onMonth={onMonth} cutoff={atlas.predictions.model.cutoff}/>}
-    {(tab === 'estimar' || tab === 'avanzado') && <div role="tabpanel" aria-label={tab === 'estimar' ? 'Estimar' : 'Indicadores avanzados'} className="-mx-4 h-full pt-1">{panels[tab]}</div>}
-    </div>
-  </div>;
-}
-
-const ROWS: { label: string; from: number; to: number; detail: string; tone?: string }[] = [
-  { label: 'Sentinel-2 · índices', from: 3, to: 9, detail: 'NDVI, EVI, SAVI, NDWI y MSI semanales' },
-  { label: 'Clima CHIRPS · CHIRTS', from: 3, to: 9, detail: 'Precipitación y temperatura mensuales' },
-  { label: 'AlphaEarth', from: 0, to: 11, detail: 'Embeddings de años previos', tone: 'opacity-50' },
-  { label: 'Cosecha y pesaje', from: 9, to: 11, detail: 'Rendimiento en báscula; llega después del corte', tone: 'bg-chart-5' },
-];
-function CycleTab({ month, onMonth, cutoff }: { month: number; onMonth: (month: number) => void; cutoff: string }) {
-  return <div role="tabpanel" aria-label="Ciclo" className="grid gap-3 pt-4">
-    <div className="grid grid-cols-[9.5rem_repeat(12,1fr)] items-center gap-y-2 text-[11px]">
-      <span/>
-      {MONTHS.map((label, i) => <button key={label} type="button" aria-pressed={month === i} onClick={() => onMonth(i)} className="mx-auto grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-tile aria-pressed:bg-primary aria-pressed:text-primary-foreground">{label[0]}</button>)}
-      {ROWS.map(row => <div key={row.label} className="contents">
-        <span className="truncate pr-2 font-medium" title={row.detail}>{row.label}</span>
-        <span className="relative col-span-12 h-2.5 rounded-full bg-tile">
-          <span className={cn('absolute inset-y-0 rounded-full bg-primary', row.tone)} style={{ left: `${row.from / 12 * 100}%`, width: `${(row.to - row.from + 1) / 12 * 100}%` }}/>
-          <span className="absolute -inset-y-1.5 w-0.5 rounded-full bg-destructive" style={{ left: `${10 / 12 * 100}%` }} aria-hidden="true"/>
-        </span>
-      </div>)}
-    </div>
-    <p className="flex items-start gap-2 rounded-2xl bg-tile p-3 text-xs text-pretty text-muted-foreground"><MapPin className="mt-0.5 size-3.5 shrink-0 text-destructive"/>
-      <span><b className="font-medium text-foreground">Corte de la estimación: {cutoff}.</b> El modelo usa la ventana abril–octubre; la cosecha y su pesaje llegan después. El reto no fija una fecha de corte, por eso la indicamos junto con los datos disponibles hasta ese día.</span></p>
   </div>;
 }

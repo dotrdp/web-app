@@ -10,57 +10,65 @@ async function signIn(page: Page, hash = '') {
 }
 const bar = (page: Page) => page.getByRole('navigation', { name: 'Barra de AgroCebada' });
 
-test('One account, three phases: no producer or technician roles anywhere', async ({ page }) => {
+test('One account, two phases: no producer or technician roles anywhere', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText(/Productor|Técnico|Entrar con otro rol/)).toHaveCount(0);
   await signIn(page);
   await expect(page.getByText(/Productor|Técnico|Análisis Pro/)).toHaveCount(0);
-  await bar(page).getByRole('button', { name: 'Panel de control' }).click();
-  await page.getByRole('region', { name: 'Panel de control' }).getByRole('tab', { name: 'Estimar' }).click();
-  await expect(bar(page).getByRole('button', { name: 'Volver al mapa' })).toBeVisible();
+  await page.keyboard.press('Alt+2');
   await expect(page).toHaveURL(/#\/estimar$/);
-  await expect(page.getByRole('heading', { name: 'Estimación de rendimiento' })).toBeVisible();
+  await expect(bar(page).getByRole('button', { name: 'Volver al mapa' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '¿Qué significa para un productor?' })).toBeVisible();
+  // The dashboard has no tabs and there is no third phase any more.
+  await expect(page.getByRole('region', { name: 'Panel de control' }).getByRole('tab', { name: 'Modelo' })).toHaveCount(0);
   await page.keyboard.press('Alt+3');
-  await expect(page).toHaveURL(/#\/avanzado$/);
-  await expect(page.getByRole('heading', { name: 'Indicadores avanzados' })).toBeVisible();
-  // Legacy routes land on the matching phase.
-  await page.goto('/#/technical'); await expect(page.getByRole('heading', { name: 'Indicadores avanzados' })).toBeVisible();
+  await expect(page).toHaveURL(/#\/estimar$/);
+  await page.keyboard.press('Alt+1');
+  await expect(page.getByRole('region', { name: 'Panel de control' })).toHaveCount(0);
+  // Legacy and removed routes land on a phase that exists.
+  await page.goto('/#/avanzado'); await expect(bar(page).getByRole('button', { name: 'Panel de control' })).toBeVisible();
 });
 
-test('Technical layers and controls exist only in the advanced phase', async ({ page }) => {
+test('The layers panel offers only the Explorar layers', async ({ page }) => {
   await signIn(page);
   const layers = page.getByRole('region', { name: 'Capas y simbología' });
   await expect(layers.getByRole('button', { name: 'Rendimiento' })).toBeVisible();
-  await expect(layers.getByRole('button', { name: 'Agua' })).toHaveCount(0);
-  await expect(layers.getByRole('button', { name: 'AlphaEarth' })).toHaveCount(0);
-  await page.keyboard.press('Alt+3');
-  await page.getByRole('tab', { name: 'Capas técnicas' }).click();
-  await expect(page.getByRole('slider', { name: 'Umbral de agua MNDWI' })).toBeVisible();
-  await page.getByRole('tabpanel', { name: 'Indicadores avanzados' }).getByRole('button', { name: /Error del modelo/ }).first().click();
-  await expect(page.getByTestId('map')).toHaveAttribute('data-mode', 'error');
-  await page.keyboard.press('Alt+1');
-  await expect(page.getByTestId('map')).toHaveAttribute('data-mode', 'parcels');
+  await expect(layers.getByRole('button', { name: 'Vegetación' })).toBeVisible();
+  for (const name of ['Agua', 'AlphaEarth', 'Clima', 'Terreno', 'Error del modelo']) await expect(layers.getByRole('button', { name })).toHaveCount(0);
 });
 
-test('Estimar answers the challenge: real metrics, productive reading, linked table and the 59-row submission', async ({ page }) => {
+test('Estimar answers the challenge: the plot, productive reading, the table and the 59-row submission', async ({ page }) => {
   await signIn(page, '#/estimar');
-  const panel = page.getByRole('tabpanel', { name: 'Estimar' });
-  await expect(panel.getByText('MAE · error típico')).toBeVisible();
-  await expect(panel.getByText(/^0\.32\s*t\/ha$/).first()).toBeVisible();
-  await expect(panel.getByText('4.2', { exact: true })).toHaveCount(0);
+  const panel = page.getByRole('region', { name: 'Panel de control' });
+  await expect(panel.getByRole('figure', { name: /Estimado vs registrado/ })).toBeVisible();
+  await expect(panel.getByText(/MAE 0\.32 t\/ha · R² 0\.67/)).toBeVisible();
   await expect(panel.getByText(/equivale a ±1\.\d+ t de grano/)).toBeVisible();
   await panel.getByRole('spinbutton', { name: 'Precio supuesto en pesos por tonelada' }).fill('7000');
   await expect(panel.getByText(/a \$7,000\/t/)).toBeVisible();
-  const rows = panel.getByRole('table', { name: 'Estimaciones de rendimiento' }).locator('tbody tr');
+  await expect(panel.getByRole('tab', { name: 'Mis terrenos' })).toHaveCount(0);
+  const table = panel.getByRole('table', { name: 'Estimaciones de rendimiento' });
+  const rows = table.locator('tbody tr');
   await expect(rows).toHaveCount(59);
   const download = page.waitForEvent('download');
   await panel.getByRole('button', { name: /Entrega · 59 parcelas/ }).click();
   const lines = (await readFile((await (await download).path())!, 'utf8')).trim().split(/\r\n/);
   expect(lines[0]).toBe('ID_POLIGONO,RENDIMIENTO_T_HA'); expect(lines).toHaveLength(60);
-  // Picking a parcel returns to the map with its card.
+  // A row click picks the parcel for the productive reading without leaving the dashboard.
   await rows.first().click();
+  await expect(panel.getByText(/En AGC_003 de 18\.68 ha/)).toBeVisible();
+  // Check all, then a selection of two goes to the map as a selection.
+  await table.getByRole('checkbox', { name: 'Seleccionar todo' }).click();
+  await expect(panel.getByText('59 seleccionadas')).toBeVisible();
+  await panel.getByRole('button', { name: 'Quitar selección' }).click();
+  await rows.nth(0).getByRole('checkbox').click(); await rows.nth(1).getByRole('checkbox').click();
+  await panel.getByRole('button', { name: 'Ver en el mapa · 2' }).click();
+  await expect(page.getByRole('heading', { name: 'Selección' })).toBeVisible();
+  // The last column flies to one parcel and opens its card.
+  await page.keyboard.press('Alt+2');
+  await panel.getByRole('button', { name: 'Ver AGC_011 en el mapa' }).click();
+  await expect(panel).toHaveCount(0);
   const card = page.getByRole('region', { name: 'Ficha de parcela' });
-  await expect(card.getByText('Rendimiento estimado')).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'AGC_011' })).toBeVisible();
   await expect(card.getByText('Intervalo 80 %')).toBeVisible();
 });
 
@@ -78,14 +86,11 @@ test('Launcher finds parcels, runs ">" commands and recolours the shell from the
   await expect(page.locator('html')).toHaveClass(/dark/);
 });
 
-test('Dashboard page replaces the map with the model gauges and the cycle cutoff', async ({ page }) => {
+test('Dashboard page replaces the map and the bar brings it back', async ({ page }) => {
   await signIn(page);
   await bar(page).getByRole('button', { name: 'Panel de control' }).click();
   const dash = page.getByRole('region', { name: 'Panel de control' });
-  await dash.getByRole('tab', { name: 'Modelo' }).click();
-  await expect(dash.getByRole('figure', { name: /R² · varianza: 0.67/ })).toBeVisible();
-  await dash.getByRole('tab', { name: 'Ciclo' }).click();
-  await expect(dash.getByText(/Corte de la estimación: 31 de octubre/)).toBeVisible();
+  await expect(dash.getByRole('table', { name: 'Estimaciones de rendimiento' })).toBeVisible();
   await expect(page.locator('[inert]').getByRole('toolbar', { name: 'Herramientas del mapa' })).toHaveCount(1);
   await bar(page).getByRole('button', { name: 'Volver al mapa' }).click();
   await expect(dash).toHaveCount(0);
@@ -130,8 +135,7 @@ test('Mobile keeps the dock, sheets and launcher inside the viewport', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.getByRole('navigation', { name: 'Barra de AgroCebada' }).getByRole('button', { name: 'Panel de control' }).click();
-  await page.getByRole('tab', { name: 'Estimar' }).click();
-  await expect(page.getByRole('heading', { name: 'Estimación de rendimiento' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '¿Qué significa para un productor?' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
