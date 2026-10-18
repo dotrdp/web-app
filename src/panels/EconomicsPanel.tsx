@@ -15,6 +15,12 @@ import { Stat } from './EstimationPanel';
 import RegionError from './RegionError';
 import ShiftPill from '../shell/ShiftPill';
 import { TABLE_OPTIONS } from './table-es';
+import { useMilliController } from '../milli/bridge';
+import { parcelRow, round, tableSlice } from '../milli/app-controller';
+import { applyTableSet, nextChecked, tableState } from '../milli/table-control';
+import { cn } from '@/lib/utils';
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 import type { Atlas, Parcel } from '../types';
 
 type Scope = 'all' | 'prediction' | 'training' | 'selected';
@@ -103,6 +109,44 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
   })();
 
 
+  // Milli runs the calculator on screen: it fills the inputs one by one (each flashes as it changes)
+  // and reads back the totals; the server computes the same totals with the same formulas.
+  const [touched, setTouched] = useState<string[]>([]);
+  const flash = (key: string) => setTouched(t => [...t, key]);
+  const ring = (key: string) => touched.includes(key) && 'ring-2 ring-primary transition-shadow';
+  useMilliController('economia', {
+    snapshot: () => ({ economia: { en_pantalla: true,
+      supuestos: { precio_mxn_t: price, costo_mxn_ha: costHa, semilla: seed, semilla_mxn_ha: seedCost == null ? null : Math.round(seedCost), cobertura: coverage, alcance: current },
+      calculado_para: picked.length ? `${picked.length} parcelas marcadas` : `todas las mostradas (${shown.length})`,
+      totales: { parcelas: calc.length, superficie_ha: round(totals.area, 2), produccion_t: round(totals.production, 1), ingreso_mxn: round(totals.income, 0), rango_ingreso_mxn: round(totals.band, 0),
+        costo_mxn: round(totals.cost, 0), margen_mxn: round(totals.margin, 0), punto_equilibrio_t_ha: round(totals.breakEven, 3), parcelas_sobre_equilibrio: totals.above },
+      tabla: tableState(table), marcadas: picked.slice(0, 100).map(r => r.parcel.properties.id) } }),
+    commands: {
+      calculator_set: async args => {
+        setTouched([]);
+        // The server's totals ignore the table's search and column filters; clear them so the screen matches.
+        table.setGlobalFilter(undefined); table.setColumnFilters([]);
+        const steps: [string, () => void][] = [];
+        if (args.price != null) steps.push(['price', () => setPrice(Number(args.price))]);
+        const s = args.seed as Record<string, number | string | undefined> | undefined;
+        if (s) steps.push(['seed', () => setSeed(v => ({ ...v, unit: s.unit as Seed['unit'], price: (s.price as number) ?? v.price, perM2: (s.per_m2 as number) ?? v.perM2, tkw: (s.tkw as number) ?? v.tkw,
+          bagPrice: (s.bag_price as number) ?? v.bagPrice, bagM2: (s.bag_m2 as number) ?? v.bagM2, other: (s.other as number) ?? v.other }))]);
+        if (args.cost_ha !== undefined) steps.push(['cost', () => setCostHa(args.cost_ha == null ? null : Number(args.cost_ha))]);
+        if (args.coverage) steps.push(['coverage', () => setCoverage(args.coverage as Coverage)]);
+        if (args.scope) steps.push(['scope', () => setScope(args.scope as Scope)]);
+        const ids = args.checked_parcel_ids as string[] | undefined;
+        steps.push(['checked', () => setChecked(ids?.length ? Object.fromEntries(ids.map(id => [id, true])) : {})]);
+        for (const [key, run] of steps) { run(); flash(key); await sleep(260); }
+        setTimeout(() => setTouched([]), 1400);
+        return {};
+      },
+      table_set: args => { applyTableSet(table, args); return {}; },
+      table_check: ({ mode, parcel_ids }) => { setChecked(c => nextChecked(c, String(mode), (parcel_ids as string[] | undefined) ?? [], shown.map(r => r.parcel.properties.id))); return {}; },
+      read_table: args => tableSlice(shown.map(r => ({ ...parcelRow(r.parcel), ingreso_mxn: round(r.income, 0), rango_ingreso_mxn: round(r.band, 0), costo_mxn: round(r.cost, 0), margen_mxn: round(r.margin, 0), marcada: !!checked[r.parcel.properties.id] })), args, { tabla: 'economia', ...tableState(table) }),
+      ids: ({ which }) => (which === 'checked' ? picked : calc).map(r => r.parcel.properties.id),
+    },
+  });
+
   return <div className="@container/econ grid min-w-0 gap-3 *:min-w-0">
     {/* The title says what the page is calculating for: every shown parcel, or the checked ones. */}
     <header className="grid gap-0.5">
@@ -121,9 +165,9 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
       <section aria-label="Supuestos" className="tile grid content-start gap-3 rounded-[20px] p-4 text-sm">
         <h3 className="text-sm font-medium">Supuestos</h3>
         <label className="grid gap-1"><span className="text-xs text-muted-foreground">Precio de la cebada (MXN/t)</span>
-          <input type="number" min={0} step={100} value={price} onChange={e => setPrice(Math.max(0, Number(e.target.value) || 0))} aria-label="Precio de la cebada en pesos por tonelada" className="h-9 rounded-full bg-frame px-3.5 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/></label>
+          <input type="number" min={0} step={100} value={price} onChange={e => setPrice(Math.max(0, Number(e.target.value) || 0))} aria-label="Precio de la cebada en pesos por tonelada" className={cn(ring('price'), "h-9 rounded-full bg-frame px-3.5 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring")}/></label>
         <label className="grid gap-1"><span className="text-xs text-muted-foreground">Costo de producción (MXN/ha)</span>
-          <input type="number" min={0} step={500} value={costHa ?? ''} placeholder="Escribe tu costo por hectárea" onChange={e => setCostHa(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))} aria-label="Costo de producción en pesos por hectárea" className="h-9 rounded-full bg-frame px-3.5 tabular-nums outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"/></label>
+          <input type="number" min={0} step={500} value={costHa ?? ''} placeholder="Escribe tu costo por hectárea" onChange={e => setCostHa(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))} aria-label="Costo de producción en pesos por hectárea" className={cn(ring('cost'), "h-9 rounded-full bg-frame px-3.5 tabular-nums outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring")}/></label>
         <section aria-labelledby="seed-title" className="grid gap-2 rounded-2xl bg-frame/60 p-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <Sprout className="size-4 text-primary"/><h4 id="seed-title" className="flex-1 text-xs font-medium">Calcular desde la semilla</h4>
@@ -138,7 +182,7 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
             {seedFields.map(([key, label, aria, step]) =>
               <label key={key} className="grid content-end gap-1"><span className="text-[11px] leading-tight text-muted-foreground">{label}</span>
                 <input type="number" min={0} step={step} value={seed[key] ?? ''} onChange={e => updateSeed({ [key]: numberOrNull(e.target.value) })} aria-label={aria}
-                  className="h-8 min-w-0 rounded-full bg-frame px-3 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/></label>)}
+                  className={cn(ring('seed'), "h-8 min-w-0 rounded-full bg-frame px-3 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring")}/></label>)}
           </div>
           <p className="text-[11px] leading-snug text-pretty text-muted-foreground" aria-live="polite">
             {seed.unit === 'kg'
@@ -149,12 +193,12 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
           <p className="text-[10px] leading-snug text-pretty text-muted-foreground/80">{seed.unit === 'kg' ? 'Dosis = semillas/m² × peso de mil semillas (g) ÷ 100.' : 'Bultos por hectárea = 10,000 m² ÷ m² que siembra un bulto.'} No ajusta por germinación ni establecimiento.</p>
         </section>
         <div className="grid gap-1"><span className="text-xs text-muted-foreground">Cobertura del rango</span>
-          <div role="group" aria-label="Cobertura del rango" className="flex w-fit rounded-full bg-frame p-0.5 text-xs">
+          <div role="group" aria-label="Cobertura del rango" className={cn(ring('coverage'), "flex w-fit rounded-full bg-frame p-0.5 text-xs")}>
             {(Object.keys(COVERAGE_LABEL) as Coverage[]).map(c => <button key={c} type="button" aria-pressed={coverage === c} onClick={() => setCoverage(c)} className="rounded-full px-3 py-1 aria-pressed:bg-primary aria-pressed:text-primary-foreground">{COVERAGE_LABEL[c]}</button>)}
           </div>
         </div>
         <div className="grid gap-1"><span className="text-xs text-muted-foreground">Parcelas</span>
-          <div role="group" aria-label="Parcelas incluidas" className="flex flex-wrap gap-1 rounded-[18px] bg-frame p-0.5 text-xs">
+          <div role="group" aria-label="Parcelas incluidas" className={cn(ring('scope'), "flex flex-wrap gap-1 rounded-[18px] bg-frame p-0.5 text-xs")}>
             {scopes.map(([key, label]) => <button key={key} type="button" aria-pressed={current === key} onClick={() => setScope(key)} className="rounded-full px-3 py-1 aria-pressed:bg-primary aria-pressed:text-primary-foreground">{label}</button>)}
           </div>
         </div>

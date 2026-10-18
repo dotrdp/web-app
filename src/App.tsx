@@ -28,7 +28,9 @@ import { LoadingState, LoadingValue } from './AgentProgress';
 import type { AgentStep } from './AgentProgress';
 import { BASEMAPS, BasemapPanel, BookmarksPanel, FiltersPanel, LayersPanel, MODES, SectionTitle } from './MapPanels';
 import TimeSlider from './TimeSlider';
-import { api, dateKey, download, filterParcels, fmt, mergedParcels, MONTH_NAMES, parcelCsv, polygonArea } from './lib';
+import { api, dateKey, download, filterParcels, fmt, IS_DEMO, mergedParcels, MONTH_NAMES, parcelCsv, polygonArea } from './lib';
+import { useAppMilli } from './milli/app-controller';
+import { startLive } from './milli/live';
 import { submissionCsv } from './model';
 import type { Predictions } from './model';
 import { DEFAULT_PLUGINS, PluginsPanel } from './plugins';
@@ -36,7 +38,7 @@ import type { PluginId } from './plugins';
 import Popout from './shell/Popout';
 import Bar, { MobileDock, PANEL_ITEMS, PHASES } from './shell/Bar';
 import type { LeftPanel } from './shell/Bar';
-import { Summary } from './shell/Summary';
+import MilliChat, { MilliEye, MilliProvider, useMilliWorking } from './milli/MilliChat';
 import Launcher from './shell/Launcher';
 import { MILLI, MilliAvatar, MilliName } from './shell/Milli';
 import type { Command } from './shell/Launcher';
@@ -194,6 +196,12 @@ export default function App() {
     step(); const timer = window.setInterval(step, 4200); return () => clearInterval(timer);
   }, [touring, visibleParcels]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Agente de IA Milli drives this tab through its live channel (server version only).
+  useEffect(() => user && !IS_DEMO ? startLive() : undefined, [user]);
+  useAppMilli({ atlas, parcels, visibleParcels, selected, selection, phase, dashboard, economics, left, right: draftMode ? 'draft' : rightPanel ?? (selected ? 'parcel' : null),
+    assistant, dark, scheme, mode, layers, filters, year, month, keyDate: key, tools: { draftMode, measureKind, selectArea, swipe, plugins }, map,
+    setDashboard, setEconomics, setLeft, switchMode, setLayers, setFilters, setYear, setMonth, chooseParcel, showSelection, exportMap });
+
   // Keyboard: Ctrl/⌘ K launcher, Alt 1–2 phases, Alt D dashboard, 1–9 the map tools in strip
   // order (refreshed every render, so disabled plugins close the gap), C cancels the active map tool,
   // Escape closes the top layer.
@@ -223,6 +231,12 @@ export default function App() {
     setLayers(l => ({ ...l, precipitation: next === 'climate', tmin: false, tmax: false, elevation: next === 'terrain', slope: false }));
   }
   function chooseParcel(id: string, locate = false) { setSelectedId(id); setRightPanel(null); if (locate) { const p = parcels.find(f => f.properties.id === id); if (p) setTimeout(() => map.current?.fitParcel(p), 40); } }
+  /** Leaves the dashboard and shows these parcels on the map with the selection summary. */
+  function showSelection(ids: string[]) {
+    const chosen = parcels.filter(p => ids.includes(p.properties.id)); if (!chosen.length) return;
+    const bounds = chosen.reduce((b, p) => [Math.min(b[0], p.properties.bounds[0]), Math.min(b[1], p.properties.bounds[1]), Math.max(b[2], p.properties.bounds[2]), Math.max(b[3], p.properties.bounds[3])], [Infinity, Infinity, -Infinity, -Infinity]);
+    setDashboard(false); setSelection(chosen.map(p => p.properties.id)); setRightPanel('selection'); setTimeout(() => map.current?.fitBounds(bounds), 60);
+  }
   function nextParcel(direction: number) { const list = visibleParcels.filter(p => p.properties.predictedYield != null || p.properties.group === 'custom'); if (!list.length) return; const index = list.findIndex(p => p.properties.id === selectedId); chooseParcel(list[(index + direction + list.length) % list.length].properties.id, true); }
   function cancelDraft() { queuedPrompts.current = null; controller.current?.abort(); requestRevision.current++; map.current?.cancel(); setDraftMode(null); setDraft(null); setProposal(null); setPrompts([]); setSegmentError(''); setSegmenting(false); setAdjusting(false); }
   function stopTools() { if (measureKind) { setMeasureKind(null); setMeasureValue(null); map.current?.measure(null); } setSelectArea(false); }
@@ -456,11 +470,7 @@ export default function App() {
             {economics ? <EconomicsPanel atlas={atlas} parcels={parcels} selected={selected} onLocate={id => { setDashboard(false); chooseParcel(id, true); }}/>
             : <EstimationPanel atlas={atlas} parcels={parcels} keyDate={key} onSelect={id => chooseParcel(id)}
               onLocate={id => { setDashboard(false); chooseParcel(id, true); }}
-              onShowSelection={ids => {
-                const chosen = parcels.filter(p => ids.includes(p.properties.id)); if (!chosen.length) return;
-                const bounds = chosen.reduce((b, p) => [Math.min(b[0], p.properties.bounds[0]), Math.min(b[1], p.properties.bounds[1]), Math.max(b[2], p.properties.bounds[2]), Math.max(b[3], p.properties.bounds[3])], [Infinity, Infinity, -Infinity, -Infinity]);
-                setDashboard(false); setSelection(ids); setRightPanel('selection'); setTimeout(() => map.current?.fitBounds(bounds), 60);
-              }}/>}
+              onShowSelection={showSelection}/>}
           </div></div>
         </motion.section>}
         </AnimatePresence>
@@ -497,24 +507,22 @@ export default function App() {
 
 
         {/* Top: the Agente de IA Milli (milli is Náhuatl for crop). Pinned to the centre above
-            every other layer, on the map and the dashboard; for now it opens on the Resumen tiles. */}
-        <div className="absolute top-0 left-1/2 z-[60] -translate-x-1/2">
+            every other layer, on the map and the dashboard. The chat's runtime lives above the
+            island, so closing it keeps the conversation and Milli keeps working. */}
+        <MilliProvider>
+        <div data-milli className="absolute top-0 left-1/2 z-[60] -translate-x-1/2">
           <AnimatePresence mode="wait">
           {assistant
             ? <Popout key="assistant" edges="top" label={MILLI} className="relative">
-                <div className="w-[min(760px,calc(100vw-7rem))] px-4 pt-3 pb-3 max-md:w-[calc(100vw-1.5rem)]">
-                  <header className="flex items-center gap-2.5 pb-3"><MilliAvatar size={28}/><h2 className="text-base"><MilliName/></h2><span className="text-sm text-muted-foreground">¿Qué quieres que haga Milli?</span></header>
-                  <Summary atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
-                </div>
+                <MilliChat/>
                 <button type="button" onClick={() => setAssistant(false)} aria-label={`Cerrar ${MILLI}`} className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
               </Popout>
             : <Popout key="island" edges="top" radius={16} className="relative" animate={false}>
-                <button type="button" onClick={() => setAssistant(true)} aria-label={`Abrir ${MILLI}`} className="flex h-10 items-center gap-2.5 pr-3.5 pl-2.5 text-sm text-muted-foreground hover:text-foreground">
-                  <MilliAvatar size={26}/><MilliName className="text-foreground"/>
-                </button>
+                <MilliIsland onOpen={() => setAssistant(true)}/>
               </Popout>}
           </AnimatePresence>
         </div>
+        </MilliProvider>
 
         <AnimatePresence>
         {launcher !== null
@@ -531,6 +539,17 @@ export default function App() {
   </div>
   <Toaster position="top-right"/>
   </TooltipProvider>;
+}
+
+/** The closed island: Milli's name, its dots waving while it works, and the eye when the user stopped following. */
+function MilliIsland({ onOpen }: { onOpen: () => void }) {
+  const working = useMilliWorking();
+  return <div className="flex items-center pr-1.5">
+    <button type="button" onClick={onOpen} aria-label={`Abrir ${MILLI}`} className="flex h-10 items-center gap-2.5 pr-3.5 pl-2.5 text-sm text-muted-foreground hover:text-foreground">
+      <MilliAvatar size={26}/><MilliName working={working} className="text-foreground"/>
+    </button>
+    <MilliEye/>
+  </div>;
 }
 
 /** Scripts, after ArcGIS's script tools. A placeholder until we settle how scripts run. */

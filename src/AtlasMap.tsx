@@ -76,7 +76,7 @@ export const yieldRgb = (t: number) => ramp(t);
 export { errorColor };
 
 export type MeasureKind = 'distance' | 'area';
-export interface MapHandle { zoomBy: (delta: number) => void; toggleFullscreen: () => Promise<void>; fitBounds: (bounds: number[]) => void; measure: (kind: MeasureKind | null) => void; showLocation: (coords: number[]) => void; exportPng: () => Promise<Blob | null>; fitAll: () => void; fitParcel: (parcel: Parcel) => void; fitGeometry: (geometry: object) => void; locate: (coords: number[]) => void; draw: () => void; edit: (parcel: Parcel) => void; proposal: (geometry: Geometry | null) => void; editDraft: (geometry: Geometry) => void; cancel: () => void; finish: () => void; undo: () => void; geometry: () => Geometry | null }
+export interface MapHandle { zoomBy: (delta: number) => void; toggleFullscreen: () => Promise<void>; fitBounds: (bounds: number[]) => void; measure: (kind: MeasureKind | null) => void; showLocation: (coords: number[]) => void; exportPng: () => Promise<Blob | null>; fitAll: () => void; fitParcel: (parcel: Parcel) => void; fitGeometry: (geometry: object) => void; /** The visible extent [west, south, east, north] in degrees and the zoom. */ view: () => { bbox: number[]; zoom: number } | null; locate: (coords: number[]) => void; draw: () => void; edit: (parcel: Parcel) => void; proposal: (geometry: Geometry | null) => void; editDraft: (geometry: Geometry) => void; cancel: () => void; finish: () => void; undo: () => void; geometry: () => Geometry | null }
 interface Props {
   atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; mode: MapMode; year: number; keyDate: string; filters: MapFilters; settings: LayerSettings; manifest?: ImageryManifest | null; imageryVisible?: boolean;
   onReady?: () => void; onImageryBusy?: (busy: boolean) => void; onImageryFailure?: () => void; onMapClick?: (coords: number[]) => void; onCancel?: () => void;
@@ -172,6 +172,11 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   }
   useImperativeHandle(ref, () => ({
     zoomBy, toggleFullscreen,
+    view() {
+      const r = runtime.current, size = r?.map.getSize(); if (!r || !size) return null;
+      const v = r.map.getView();
+      return { bbox: transformExtent(v.calculateExtent(size), 'EPSG:3857', 'EPSG:4326').map(x => Math.round(x * 1e4) / 1e4), zoom: Math.round((v.getZoom() ?? 0) * 10) / 10 };
+    },
     fitBounds(bounds) { runtime.current?.map.getView().fit(transformExtent(bounds, 'EPSG:4326', 'EPSG:3857'), { padding: pad(80, 64, 100), maxZoom: 13, duration: 600 }); },
     measure,
     showLocation(coords) {

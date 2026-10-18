@@ -5,6 +5,11 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { validateGeometry } from './geometry.mjs';
+import { createLive } from './milli/live.mjs';
+import { createMilli } from './milli/agent.mjs';
+import { loadAtlas } from './milli/data.mjs';
+import { createScriptedModel } from './milli/models/scripted.mjs';
+import { createRelayModel } from './milli/models/relay.mjs';
 export { validateGeometry } from './geometry.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -15,7 +20,16 @@ const cookieName = 'agrocebada_session';
 /** Notes are plain text; this keeps one save well under the 256 kB JSON body limit. */
 const MAX_NOTES = 50_000;
 
-export async function createApp({ stateDir = process.env.STATE_DIR || path.join(root, '.data-cache/server'), password = process.env.ADMIN_PASSWORD || 'Fira2026!', dataDir = path.join(root, 'public/data') } = {}) {
+/** Milli's model. Only the scripted stand-in exists for now; a provider adapter plugs in here by name. */
+function milliModel(name = process.env.MILLI_MODEL || 'scripted', stateDir) {
+  // MILLI_PACE: milliseconds per streamed word of the scripted model (the e2e tests slow it down).
+  if (name === 'scripted') return createScriptedModel(process.env.MILLI_PACE ? { pace: Number(process.env.MILLI_PACE) } : {});
+  // Development only: each turn is answered through files (scripts/milli-relay.mjs).
+  if (name === 'relay') return createRelayModel({ dir: path.join(stateDir, 'milli-relay') });
+  throw new Error(`Modelo de Milli desconocido: ${name}`);
+}
+
+export async function createApp({ stateDir = process.env.STATE_DIR || path.join(root, '.data-cache/server'), password = process.env.ADMIN_PASSWORD || 'Fira2026!', dataDir = path.join(root, 'public/data'), model = milliModel(undefined, stateDir), liveTimeoutMs } = {}) {
   await mkdir(stateDir, { recursive: true });
   const statePath = path.join(stateDir, 'workspace.json');
   let state;
@@ -35,7 +49,9 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
   const attempts = new Map();
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '256kb' }));
+  // Milli's chat carries up to three 2 MB CSV attachments; every other endpoint keeps a small body limit.
+  const smallJson = express.json({ limit: '256kb' }), chatJson = express.json({ limit: '7mb' });
+  app.use((req, res, next) => (req.path === '/api/milli/chat' ? chatJson : smallJson)(req, res, next));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
@@ -50,7 +66,7 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
     }
     const token = (req.headers.cookie || '').split(';').map(c => c.trim()).find(c => c.startsWith(cookieName + '='))?.slice(cookieName.length + 1);
     const session = token && sessions.get(sha(token));
-    if (session && session.expires > Date.now()) req.user = state.user;
+    if (session && session.expires > Date.now()) { req.user = state.user; req.sessionHash = sha(token); }
     else if (token) sessions.delete(sha(token));
     next();
   });
@@ -115,6 +131,17 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
       state.overrides[id] = override; await persist(); res.json(override);
     } catch (e) { if (e.code) return next(e); res.status(400).json({ error: e.message }); }
   });
+  // Milli: the live channel to each tab, and the agent (chat, thread, feedback).
+  const live = createLive(liveTimeoutMs ? { timeoutMs: liveTimeoutMs } : {});
+  const milli = createMilli({ stateDir, atlas: await loadAtlas(dataDir), account: state.user.name, live, model,
+    workspace: () => ({ overrides: state.overrides, fields: state.fields }),
+    notes: { get: () => ({ text: state.notes ?? '', updatedAt: state.notesUpdatedAt ?? null }), set: async text => { state.notes = text; state.notesUpdatedAt = new Date().toISOString(); await persist(); } } });
+  app.get('/api/live', live.connect);
+  app.post('/api/live/:screen/reply', live.reply);
+  app.post('/api/milli/chat', milli.chat);
+  app.get('/api/milli/thread/:id', milli.getThread);
+  app.post('/api/milli/feedback', milli.feedback);
+  app.locals.milli = { live, connectAgent: milli.connectAgent };
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Este recurso no existe.' }));
   app.use((err, _req, res, _next) => { console.error(err.message); res.status(err.type === 'entity.parse.failed' ? 400 : 500).json({ error: err.type === 'entity.parse.failed' ? 'El cuerpo de la solicitud no es válido.' : 'No pudimos guardar el cambio. Intenta de nuevo.' }); });
   return app;

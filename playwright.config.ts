@@ -12,6 +12,6 @@ export default defineConfig({
     command: demo ? 'npm run preview:demo' : 'npm run dev',
     url: demo ? localUrl : `${localUrl}/api/health`,
     reuseExistingServer: false, timeout: 30_000,
-    env: { PORT: '8081', STATE_DIR: `/tmp/agrocebada-e2e-${Date.now()}` },
+    env: { PORT: '8081', STATE_DIR: `/tmp/agrocebada-e2e-${Date.now()}`, MILLI_PACE: '45' },
   },
 });

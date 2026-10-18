@@ -1,5 +1,7 @@
 // Agente de IA Milli (milli is Náhuatl for crop): the barley mark as its avatar, its
-// name and three dots that read as an agent ready to talk.
+// name and three dots that read as an agent ready to talk; while it works they wave (stealth
+// typing dots).
+import { TypingDots } from '@/components/ui/typing-indicator';
 import { cn } from '@/lib/utils';
 import { LogoMark } from '../Logo';
 
@@ -12,9 +14,11 @@ export function MilliAvatar({ size = 24 }: { size?: number }) {
   </span>;
 }
 
-export function MilliName({ className }: { className?: string }) {
+export function MilliName({ className, working = false }: { className?: string; working?: boolean }) {
   return <span className={cn('inline-flex items-center gap-2 font-semibold whitespace-nowrap', className)}>
     {MILLI}
-    <span aria-hidden="true" className="flex items-center gap-[3px]">{[1, .65, .35].map(o => <span key={o} className="size-1 rounded-full bg-primary" style={{ opacity: o }}/>)}</span>
+    {working
+      ? <TypingDots dot={4} aria-label="Milli está trabajando" className="text-primary"/>
+      : <span aria-hidden="true" className="flex items-center gap-[3px]">{[1, .65, .35].map(o => <span key={o} className="size-1 rounded-full bg-primary" style={{ opacity: o }}/>)}</span>}
   </span>;
 }

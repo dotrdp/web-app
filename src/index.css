@@ -9,6 +9,38 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Stealth UI (agenda, expandable card, thumbs feedback, typing indicator) speaks its own token names;
+     they alias the crop-theme variables below so those components follow light/dark and every scheme. */
+  --color-page: var(--page);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --shadow-soft: var(--shadow);
+  --shadow-pop: var(--pop);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --text-2xs: 10.5px;
+  --text-2xs--line-height: 14px;
+  --animate-pulse-soft: pulse-soft 2.5s ease-in-out infinite;
+  --animate-ping-soft: ping-soft 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  --animate-dot-wave: dot-wave 1.2s ease-in-out infinite;
+  @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  @keyframes ping-soft { 0% { transform: scale(1); opacity: 0.55; } 80%, 100% { transform: scale(2.4); opacity: 0; } }
+  @keyframes dot-wave { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-3px); opacity: 1; } }
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
   --color-background: var(--background);
@@ -114,6 +146,29 @@
   --sidebar-ring: var(--ring);
 }
 
+/* Stealth UI tokens, from the crop theme (light). */
+:root, [data-scheme] {
+  --page: var(--tile);
+  --raised: color-mix(in oklch, var(--frame) 55%, white);
+  --hover: color-mix(in oklch, var(--tile) 60%, var(--frame));
+  --line: var(--border);
+  --line-2: var(--input);
+  --fg: var(--foreground);
+  --fg-2: var(--muted-foreground);
+  --fg-3: color-mix(in oklch, var(--muted-foreground) 72%, var(--frame));
+  --fg-4: color-mix(in oklch, var(--muted-foreground) 42%, var(--frame));
+  --success: oklch(0.52 0.13 150);
+  --danger: var(--destructive);
+  --warning: oklch(0.6 0.13 70);
+  --info: oklch(0.52 0.12 245);
+  --success-soft: color-mix(in oklch, var(--success) 12%, transparent);
+  --danger-soft: color-mix(in oklch, var(--danger) 12%, transparent);
+  --warning-soft: color-mix(in oklch, var(--warning) 12%, transparent);
+  --info-soft: color-mix(in oklch, var(--info) 12%, transparent);
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 12px 32px -14px rgb(0 0 0 / 0.18);
+  --pop: 0 1px 0 rgb(255 255 255 / 0.7) inset, 0 0 0 1px rgb(0 0 0 / 0.05), 0 16px 40px -14px rgb(0 0 0 / 0.22);
+}
+
 .dark, .dark [data-scheme] {
   --frame: oklch(0.205 calc(0.014 * var(--hc)) var(--h));
   --tile: oklch(0.255 calc(0.018 * var(--hc)) var(--h));
@@ -133,6 +188,16 @@
   --chart-3: oklch(0.8 0.13 128);
   --chart-4: oklch(0.68 0.08 230);
   --chart-5: oklch(0.78 0.12 75);
+}
+/* Stealth UI tokens, dark. */
+.dark, .dark [data-scheme] {
+  --raised: color-mix(in oklch, var(--frame) 86%, white);
+  --hover: var(--tile);
+  --success: oklch(0.75 0.13 150);
+  --warning: oklch(0.78 0.12 75);
+  --info: oklch(0.75 0.1 245);
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 40px -12px rgb(0 0 0 / 0.9);
+  --pop: 0 1px 0 rgb(255 255 255 / 0.05) inset, 0 0 0 1px rgb(0 0 0 / 0.4), 0 16px 48px -16px rgb(0 0 0 / 0.95);
 }
 
 @layer base {

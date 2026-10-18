@@ -122,11 +122,12 @@ test('Dashboard page replaces the map and the bar brings it back', async ({ page
   await expect(bar(page).getByRole('button', { name: 'Capas y simbología' })).toBeVisible();
 });
 
-test('Agente de IA Milli stays in its island on the map and on the dashboard, opening on the Resumen', async ({ page }) => {
+test('Agente de IA Milli stays in its island on the map and on the dashboard, opening on its chat', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Abrir Agente de IA Milli' }).click();
   const milli = page.getByRole('region', { name: 'Agente de IA Milli' });
-  await expect(milli.getByRole('region', { name: 'Clima del mes' })).toBeVisible();
+  await expect(milli.getByRole('textbox', { name: 'Mensaje para Milli' })).toBeVisible();
+  await expect(milli.getByRole('heading', { name: '¿Qué quieres que haga Milli?' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(milli).toHaveCount(0);
   await page.keyboard.press('Alt+d');

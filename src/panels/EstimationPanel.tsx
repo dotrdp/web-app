@@ -17,10 +17,17 @@ import { dateKey, download, fmt, MONTH_NAMES, MONTHS, parcelCsv } from '../lib';
 import { COVERAGE_LABEL, interval } from '../model';
 import ShiftPill from '../shell/ShiftPill';
 import { TABLE_OPTIONS } from './table-es';
+import { useMilliController } from '../milli/bridge';
+import { parcelRow, round, tableSlice } from '../milli/app-controller';
+import { applyTableSet, nextChecked, tableState } from '../milli/table-control';
 import type { Atlas, Parcel } from '../types';
 
 type SetFilter = 'all' | 'prediction' | 'training' | 'municipio';
 const SETS: [SetFilter, string][] = [['all', 'Todas'], ['prediction', 'Reservadas · 59'], ['training', 'Con rendimiento · 138'], ['municipio', 'Por municipio']];
+/** Milli's names for the set tabs. */
+const TAB_OF: Record<string, SetFilter> = { todas: 'all', reservadas: 'prediction', con_rendimiento: 'training', por_municipio: 'municipio' };
+const TAB_NAME: Record<SetFilter, string> = { all: 'todas', prediction: 'reservadas', training: 'con_rendimiento', municipio: 'por_municipio' };
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 type Municipality = { name: string; state: string; count: number; ha: number; production: number; estHa: number; band: number };
 const chartConfig = { mean: { label: 'NDVI medio', color: 'var(--primary)' }, range: { label: 'NDVI mín–máx', color: 'var(--primary)' }, rain: { label: 'Lluvia', color: 'var(--chart-4)' } } satisfies ChartConfig;
 const YEARS = [2022, 2023, 2024, 2025];
@@ -122,11 +129,63 @@ export default function EstimationPanel({ atlas, parcels, keyDate, onSelect, onL
   // NDVI can dip below zero (bare or wet soil); the axis follows it down in tenths.
   const ndviFloor = Math.min(0, Math.floor(Math.min(...season.map(d => d.range?.[0] ?? 0)) * 10) / 10);
 
+  // Milli: reads and drives the tables and the plot. When it reads series for many parcels, the plot
+  // follows along, checking them in batches so the curves move while it reads.
+  const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
+  const animation = useRef(0);
+  const stopReading = () => { animation.current++; setReading(null); };
+  const known = (ids: string[]) => { const all = new Map(parcels.map(p => [p.properties.id.toUpperCase(), p.properties.id])); return ids.map(id => all.get(id.toUpperCase())).filter((id): id is string => !!id); };
+  /** Shows the "all" set when some ids aren't in the current one, so their checks are visible. */
+  const reveal = (ids: string[]) => { if (set === 'municipio' || ids.some(id => !rows.some(p => p.properties.id === id))) setSet('all'); };
+  useMilliController('estimacion', {
+    snapshot: () => ({ panel: { en_pantalla: true, pestaña: TAB_NAME[set], tabla: set === 'municipio' ? tableState(municipalityTable) : tableState(parcelTable),
+      filas_marcadas: set === 'municipio' ? { municipios: Object.keys(checkedGroups) } : { total: picked.length, ids: picked.slice(0, 100).map(p => p.properties.id) },
+      grafica: { año: seasonYear, alcance: scopeLabel, parcelas: scope.length,
+        meses: season.map(d => ({ mes: d.month, ndvi_media: round(d.mean, 3), ndvi_min: round(d.range?.[0], 3), ndvi_max: round(d.range?.[1], 3), lluvia_mm: round(d.rain, 1), escenas: d.scenes })),
+        integrales: integrals.map(x => ({ año: x.year, ndvi_mes: round(x.value, 3), meses_con_dato: x.months })) },
+      milli_leyendo: reading } }),
+    commands: {
+      table_set: ({ set_tab, ...rest }) => {
+        stopReading();
+        const next = set_tab ? TAB_OF[set_tab as string] : set; if (set_tab) setSet(next);
+        if (next === 'municipio') applyTableSet(municipalityTable, rest); else applyTableSet(parcelTable, rest);
+        return {};
+      },
+      table_check: ({ mode, parcel_ids }) => {
+        stopReading();
+        const ids = known((parcel_ids as string[] | undefined) ?? []);
+        if (mode !== 'all' && mode !== 'none' && !ids.length) throw new Error('Ninguna de esas parcelas existe.');
+        reveal(ids);
+        setChecked(c => nextChecked(c, String(mode), ids, parcelTable.getRowModel().rows.map(r => r.id)));
+        return { marcadas_ahora: mode === 'none' ? 0 : undefined };
+      },
+      plot_set: ({ year }) => { setSeasonYear(Number(year)); return {}; },
+      show_series: async ({ ids, year }) => {
+        const run = ++animation.current, list = known(ids as string[]);
+        setSeasonYear(Number(year)); reveal(list);
+        const steps = Math.min(list.length, 14), per = Math.ceil(list.length / Math.max(steps, 1));
+        for (let k = 1; k <= steps; k++) {
+          if (animation.current !== run) return {};
+          const part = list.slice(0, k * per);
+          setChecked(Object.fromEntries(part.map(id => [id, true]))); setReading({ done: part.length, total: list.length });
+          await sleep(140);
+        }
+        await sleep(700); if (animation.current === run) setReading(null);
+        return { parcelas: list.length };
+      },
+      read_table: args => args.table === 'municipios'
+        ? tableSlice(municipalityTable.getRowModel().rows.map(r => { const g = r.original; return { municipio: g.name, estado: g.state, parcelas: g.count, superficie_ha: round(g.ha, 1), rendimiento_t_ha: g.estHa ? round(g.production / g.estHa, 3) : null, produccion_t: round(g.production, 1), error_tipico_t: round(g.band, 1) }; }), args, { tabla: 'municipios', pestaña: TAB_NAME[set] })
+        : tableSlice(parcelTable.getRowModel().rows.map(r => { const est = r.original.properties.predictedYield, range = est == null ? null : interval(model, est, coverage); return { ...parcelRow(r.original), intervalo_80: range ? [round(range[0], 2), round(range[1], 2)] : null, marcada: !!checked[r.id] }; }), args, { tabla: 'estimaciones', pestaña: TAB_NAME[set], ...tableState(parcelTable) }),
+      ids: ({ which }) => (which === 'checked' ? picked : scope).map(p => p.properties.id),
+    },
+  });
+
   return <div className="@container/est grid min-w-0 gap-3 *:min-w-0">
     <div className="grid gap-3 *:min-w-0 @3xl/est:grid-cols-[1.25fr_1fr]">
       <figure className="tile grid content-start gap-1 rounded-[20px] p-3">
         <div className="flex flex-wrap items-start gap-2 px-1">
-          <figcaption className="mr-auto text-sm font-medium">NDVI y lluvia por mes<span className="block text-xs font-normal text-muted-foreground">{scopeLabel} · Sentinel-2 (FIRA, ≤30 % nubes) · CHIRPS</span></figcaption>
+          <figcaption className="mr-auto text-sm font-medium">NDVI y lluvia por mes<span className="block text-xs font-normal text-muted-foreground">{scopeLabel} · Sentinel-2 (FIRA, ≤30 % nubes) · CHIRPS</span>
+            {reading && <span role="status" className="mt-1 flex w-fit items-center gap-1.5 rounded-full bg-primary-container px-2.5 py-0.5 text-[11px] font-normal text-on-primary-container tabular-nums"><span className="size-1.5 animate-pulse rounded-full bg-primary"/>Milli lee {reading.done} de {reading.total} parcelas</span>}</figcaption>
           <div role="group" aria-label="Año" className="flex rounded-full bg-frame/70 p-0.5 text-xs">
             {YEARS.map(y => <button key={y} type="button" aria-pressed={seasonYear === y} onClick={() => setSeasonYear(y)} className="relative rounded-full px-2.5 py-1 tabular-nums text-muted-foreground transition-colors aria-pressed:text-primary-foreground">
               {seasonYear === y && <ShiftPill id="year-pill" className="bg-primary"/>}<span className="relative z-10">{y}</span>

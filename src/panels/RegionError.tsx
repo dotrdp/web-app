@@ -13,6 +13,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { DataTable, useDataTable } from '@/components/ui/data-table';
 import { fmt } from '../lib';
 import { TABLE_OPTIONS } from './table-es';
+import { useMilliController } from '../milli/bridge';
+import { round, tableSlice } from '../milli/app-controller';
 import type { Parcel } from '../types';
 
 type Measured = { n: number; mae: number };
@@ -74,6 +76,19 @@ export default function RegionError({ all, shown, picked, overall, onPick }: {
   const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => Math.round(i * step * 10) / 10);
   const who = picked.size ? `${current.length} ${current.length === 1 ? 'parcela seleccionada' : 'parcelas seleccionadas'}` : `${current.length} parcelas mostradas`;
   const stateRow = states.find(s => s.name === state);
+
+  useMilliController('region', {
+    snapshot: () => ({ economia: { error_esperado: { vista: state ? `municipios de ${state}` : 'estados', error_general_t_ha: round(overall, 3), para: who,
+      estados: states.map(s => ({ estado: s.name, parcelas: s.n, error_esperado_t_ha: round(s.expected, 3) })) } } }),
+    commands: {
+      region_error_drill: ({ state: next }) => { setState(next as string | null); return {}; },
+      read_table: args => {
+        if (!state) throw new Error('La tabla de municipios se abre con region_error_drill(state). Ahora se ven los estados (get_screen_state → economia.error_esperado).');
+        return tableSlice(table.getRowModel().rows.map(r => ({ municipio: r.original.name, parcelas: r.original.parcels, marcadas: r.original.picked, error_esperado_t_ha: round(r.original.expected, 3),
+          fuente: r.original.source, medido_en_parcelas: r.original.measured?.n ?? null })), args, { tabla: 'error_municipios', estado: state });
+      },
+    },
+  });
 
   return <figure className="tile grid min-h-[300px] content-start gap-2 rounded-[20px] p-3">
     <div className="flex items-start gap-2 px-1">

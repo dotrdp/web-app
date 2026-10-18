@@ -2,6 +2,7 @@
 // after typing stops, and flushed when the panel closes.
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib';
+import { useMilliController } from '../milli/bridge';
 
 type Notes = { text: string; updatedAt: string | null };
 type Status = 'loading' | 'saved' | 'dirty' | 'saving' | 'error';
@@ -31,11 +32,18 @@ export default function NotesPanel() {
     setText(value); pending.current = value; setStatus('dirty');
     window.clearTimeout(timer.current); timer.current = window.setTimeout(() => void save(), SAVE_DELAY_MS);
   };
+  // Milli already saved its edit on the server; show it and scroll to where it wrote.
+  const area = useRef<HTMLTextAreaElement>(null);
+  useMilliController('notas', { commands: { show: ({ text: next }) => {
+    window.clearTimeout(timer.current); pending.current = null;
+    setText(String(next)); setSavedAt(new Date().toISOString()); setStatus('saved');
+    requestAnimationFrame(() => { const el = area.current; if (el) el.scrollTop = el.scrollHeight; });
+  } } });
   const time = savedAt ? new Date(savedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : null;
   const label = { loading: 'Cargando…', saved: time ? `Guardado · ${time}` : 'Guardado', dirty: 'Sin guardar…', saving: 'Guardando…', error: 'No se pudo guardar. Reintentaremos al seguir escribiendo.' }[status];
 
   return <div className="grid min-h-0 gap-2">
-    <textarea value={text} onChange={e => change(e.target.value)} disabled={status === 'loading'} maxLength={MAX_NOTES} aria-label="Notas"
+    <textarea ref={area} value={text} onChange={e => change(e.target.value)} disabled={status === 'loading'} maxLength={MAX_NOTES} aria-label="Notas"
       placeholder="Escribe tus notas: parcelas por visitar, observaciones de campo, pendientes…"
       className="min-h-[60vh] w-full resize-y rounded-2xl bg-tile p-3.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"/>
     <p className={`flex justify-between gap-2 px-1 text-[11px] ${status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} aria-live="polite">
