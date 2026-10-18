@@ -117,7 +117,7 @@ export default function App() {
 
   const [phase, setPhase] = useState<Phase>(routePhase);
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
-  const [assistant, setAssistant] = useState(false);
+  const [assistant, setAssistant] = useState(false), [milliOpened, setMilliOpened] = useState(false);
   const [dashboard, setDashboard] = useState(() => routePhase() === 'estimar');
   // Second dashboard page (the calculator); leaving the dashboard returns it to the main page.
   const [economics, setEconomics] = useState(false);
@@ -301,9 +301,12 @@ export default function App() {
   const leftWidth = !left ? 0 : isMobile ? 0 : isSheet ? Math.min(780, Math.max(560, viewWidth * .5)) : 340;
   // The month strip shares the bottom edge with the tool strip; it only appears when both fit.
   // Fill the gap up to the tool strip rather than leave a thin map sliver between them.
-  const timeWidth = Math.min(520, viewWidth - 66 - leftWidth - (left ? 28 : 0) - 520 - 40);
+  // Milli's chat docks to the right edge on desktop; the map, the dashboard and the right-hand cards make room for it.
+  const chatWidth = assistant && !isMobile ? Math.round(Math.min(460, Math.max(380, viewWidth * .3))) : 0;
+  const timeWidth = Math.min(520, viewWidth - 66 - leftWidth - (left ? 28 : 0) - 520 - 40 - chatWidth);
   const showTime = (temporal || (mode === 'alphaearth' && !draftMode)) && !isMobile && timeWidth >= 300;
   const rightWidth = right && !isMobile ? 372 : 0;
+  const openMilli = () => { setAssistant(true); setMilliOpened(true); };
   const identified = identify && plugins.identify ? parcels.find(p => p.properties.id === identify.id) : null;
   const estimates = parcels.map(p => p.properties.predictedYield).filter((v): v is number => v != null).sort((a, b) => a - b);
   const parcelRank = (p: Parcel) => p.properties.predictedYield == null ? null : { percentile: Math.round(estimates.filter(v => v < p.properties.predictedYield!).length / Math.max(1, estimates.length - 1) * 100), of: estimates.length };
@@ -311,7 +314,7 @@ export default function App() {
   const freeWidth = viewWidth - 66 - leftWidth - rightWidth;
   const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes' || left === 'scripts' || left === 'notes');
   const cancellable = !!draftMode || !!measureKind || selectArea || rightPanel === 'export';
-  const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth}px) / 2)`;
+  const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth + chatWidth}px) / 2)`;
 
   const basemapPreview = (k: string) => <span className="block size-full bg-cover bg-center" style={{ backgroundImage: `url('/basemaps/${k}.png')` }}/>;
   const schemePreview = (k: Scheme) => <span data-scheme={k} className="grid size-full place-items-center bg-frame"><span className="flex items-center gap-1.5"><CropMark crop={k} size={34}/><span className="grid gap-1"><span className="h-1.5 w-8 rounded-full bg-primary"/><span className="h-1.5 w-5 rounded-full bg-primary-container"/><span className="h-1.5 w-6 rounded-full bg-tile-strong"/></span></span></span>;
@@ -368,12 +371,12 @@ export default function App() {
       onDashboard={() => setDashboard(d => !d)} onEconomics={setEconomics} onPanel={openLeft} onLogout={() => void logout()}/>
 
     <div className="relative min-h-0 flex-1 p-(--gap) md:pl-0">
-      <main ref={viewport} className="relative h-full select-text" aria-label="Atlas AgroCebada" style={{ '--left-w': `${leftWidth}px`, '--right-w': `${rightWidth}px` } as CSSProperties}>
+      <main ref={viewport} className="relative h-full select-text" aria-label="Atlas AgroCebada" style={{ '--left-w': `${leftWidth}px`, '--right-w': `${rightWidth + chatWidth}px` } as CSSProperties}>
         {/* The map and everything that belongs to it fade away for the dashboard page. */}
         <motion.div className="absolute inset-0" inert={dashboard} initial={false} animate={dashboard ? { opacity: 0, scale: .985, filter: 'blur(6px)' } : { opacity: 1, scale: 1, filter: 'blur(0px)' }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }} style={{ pointerEvents: dashboard ? 'none' : undefined }}>
           <div className="shell-viewport absolute inset-0 overflow-hidden bg-tile">
             <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} mode={mode} year={year} keyDate={key} filters={filters} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'}
-              padding={{ left: leftWidth, right: rightWidth }} statusTarget={isMobile || launcher !== null ? null : statusEl} highlightId={hoverId} swipe={swipe} selectArea={selectArea} labels={plugins.labels}
+              padding={{ left: leftWidth, right: rightWidth + chatWidth }} statusTarget={isMobile || launcher !== null ? null : statusEl} highlightId={hoverId} swipe={swipe} selectArea={selectArea} labels={plugins.labels}
               onReady={mapReady} onImageryBusy={setImageryBusy} onImageryFailure={() => setPlaying(false)} onMeasure={setMeasureValue} onFullscreen={setFullscreen}
               onHover={(id, pixel) => setIdentify(id && pixel ? { id, pixel } : null)}
               onAreaSelect={ids => { setSelection(ids); setRightPanel('selection'); setSelectArea(false); }}
@@ -394,7 +397,7 @@ export default function App() {
 
           {/* Right edge: parcel card, selection summary, export, delineation. */}
           <AnimatePresence mode="wait">
-          {right && <Popout key={right} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth }}>
+          {right && <Popout key={right + (chatWidth ? '-beside-milli' : '')} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth, right: chatWidth }}>
             {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onNext={nextParcel}
               ranking={parcelRank(selected)} onSimilar={() => { const y = selected.properties.predictedYield; if (y == null) return; setFilters(f => ({ ...f, yieldBand: [y - .25, y + .25] })); setLeft('filters'); setTimeout(() => map.current?.fitAll(), 60); }}/>}
             {right === 'selection' && <SelectionSummary parcels={selectionParcels} atlas={atlas} keyDate={key} onClose={() => { setRightPanel(null); setSelection([]); }} onPick={id => chooseParcel(id, true)}/>}
@@ -442,7 +445,7 @@ export default function App() {
           </AnimatePresence>
 
           <AnimatePresence>
-          {launcher === null && !(isMobile && (left || right)) && <Popout key="tools" edges={isMobile ? 'right' : ['bottom', 'right']} label="Herramientas del mapa" animate={false} className={isMobile ? 'top-1/2 right-0 -translate-y-1/2' : 'right-0 bottom-0 max-w-[36rem]'}>
+          {launcher === null && !(isMobile && (left || right)) && <Popout key={chatWidth ? 'tools-beside-milli' : 'tools'} edges={isMobile ? 'right' : ['bottom', 'right']} label="Herramientas del mapa" animate={milliOpened} className={isMobile ? 'top-1/2 right-0 -translate-y-1/2' : 'right-0 bottom-0 max-w-[36rem]'} style={chatWidth ? { right: chatWidth } : undefined}>
             <AnimatePresence>{cancellable && !isMobile && <motion.p key="cancel-hint" aria-live="polite" className="pointer-events-none absolute right-4 bottom-full mb-1.5 text-xs whitespace-nowrap text-foreground [text-shadow:0_0_2px_var(--frame),0_0_4px_var(--frame),0_0_8px_var(--frame)]"
             initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: .2 }}>Presiona <kbd className="font-sans font-semibold">C</kbd> para cancelar</motion.p>}</AnimatePresence>
           <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
@@ -466,12 +469,12 @@ export default function App() {
         <AnimatePresence custom={dashboard}>
         {dashboard && <motion.section key={economics ? 'economics' : 'dashboard'} aria-label={economics ? 'Economía del productor' : 'Panel de control'} className="dashboard-canvas absolute inset-0 z-20 overflow-hidden rounded-(--view-r)"
           variants={PAGE} initial="enter" animate="shown" exit="leave">
-          <div className="h-full overflow-y-auto"><div className="w-full px-4 pt-14 pb-4">
+          <motion.div className="h-full overflow-y-auto" initial={false} animate={{ paddingRight: chatWidth }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }}><div className="w-full px-4 pt-14 pb-4">
             {economics ? <EconomicsPanel atlas={atlas} parcels={parcels} selected={selected} onLocate={id => { setDashboard(false); chooseParcel(id, true); }}/>
             : <EstimationPanel atlas={atlas} parcels={parcels} keyDate={key} onSelect={id => chooseParcel(id)}
               onLocate={id => { setDashboard(false); chooseParcel(id, true); }}
               onShowSelection={showSelection}/>}
-          </div></div>
+          </div></motion.div>
         </motion.section>}
         </AnimatePresence>
 
@@ -511,15 +514,21 @@ export default function App() {
             island, so closing it keeps the conversation and Milli keeps working. */}
         <MilliProvider>
         <div data-milli className="absolute top-0 left-1/2 z-[60] -translate-x-1/2">
-          <AnimatePresence mode="wait">
-          {assistant
-            ? <Popout key="assistant" edges="top" label={MILLI} className="relative">
-                <MilliChat/>
-                <button type="button" onClick={() => setAssistant(false)} aria-label={`Cerrar ${MILLI}`} className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
-              </Popout>
-            : <Popout key="island" edges="top" radius={16} className="relative" animate={false}>
-                <MilliIsland onOpen={() => setAssistant(true)}/>
-              </Popout>}
+          <AnimatePresence>
+          {!assistant && <Popout key="island" edges="top" radius={16} className="relative" animate={milliOpened}>
+            <MilliIsland onOpen={openMilli}/>
+          </Popout>}
+          {assistant && isMobile && <Popout key="assistant" edges="top" label={MILLI} className="relative">
+            <MilliChat onClose={() => setAssistant(false)}/>
+          </Popout>}
+          </AnimatePresence>
+        </div>
+        {/* Opened on desktop, the chat swells out of the right edge while the island melts back into the top. */}
+        <div data-milli className="pointer-events-none absolute inset-0 z-[60] *:pointer-events-auto">
+          <AnimatePresence>
+          {assistant && !isMobile && <Popout key="assistant-docked" edges={['right', 'top', 'bottom']} label={MILLI} className="top-0 right-0 bottom-0" style={{ width: chatWidth }}>
+            <MilliChat docked onClose={() => setAssistant(false)}/>
+          </Popout>}
           </AnimatePresence>
         </div>
         </MilliProvider>

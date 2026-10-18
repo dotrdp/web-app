@@ -14,7 +14,7 @@ import { ThumbsFeedback } from '@/components/ui/thumbs-feedback';
 import { TypingIndicator } from '@/components/ui/typing-indicator';
 import { cn } from '@/lib/utils';
 import { api, IS_DEMO } from '../lib';
-import { MilliAvatar, MilliName } from '../shell/Milli';
+import { MILLI, MilliAvatar, MilliName } from '../shell/Milli';
 import ActionAgenda from './ActionAgenda';
 import { replayDeferred } from './bridge';
 import ExportApproval from './ExportApproval';
@@ -68,12 +68,12 @@ const SUGGESTIONS = [
   'Muéstrame en el mapa las parcelas de Puebla y selecciónalas',
 ];
 
-export default function MilliChat() {
+export default function MilliChat({ docked = false, onClose }: { docked?: boolean; onClose: () => void }) {
   const aui = useAui();
   const running = useAuiState(s => s.thread.isRunning);
   const empty = useAuiState(s => s.thread.messages.length === 0);
   const working = useMilliWorking();
-  return <div data-milli className="flex h-[min(680px,calc(100dvh-5.5rem))] w-[min(580px,calc(100vw-1.5rem))] flex-col">
+  return <div data-milli className={cn('flex flex-col', docked ? 'h-full w-full' : 'h-[min(680px,calc(100dvh-5.5rem))] w-[calc(100vw-1.5rem)]')}>
     <header className="flex items-center gap-2.5 px-4 pt-3 pb-2">
       <MilliAvatar size={28}/>
       <div className="grid min-w-0 flex-1">
@@ -83,6 +83,8 @@ export default function MilliChat() {
       <MilliEye/>
       {!empty && <button type="button" disabled={running} onClick={() => { resetThread(); aui.thread.reset(); }} title="Nueva conversación" aria-label="Nueva conversación"
         className="grid size-8 place-items-center rounded-full text-muted-foreground hover:bg-tile hover:text-foreground disabled:opacity-40"><RotateCcw className="size-4"/></button>}
+      <button type="button" onClick={onClose} title="Cerrar (Esc)" aria-label={`Cerrar ${MILLI}`}
+        className="grid size-8 place-items-center rounded-full text-muted-foreground hover:bg-tile hover:text-foreground"><X className="size-4"/></button>
     </header>
     {IS_DEMO
       ? <p className="m-4 rounded-2xl bg-tile p-4 text-sm text-muted-foreground">Milli necesita la versión con servidor de AgroCebada: lee los datos y maneja la pantalla desde ahí. En esta demostración estática no está disponible.</p>

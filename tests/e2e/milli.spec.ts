@@ -68,7 +68,7 @@ test('Clicking away from Milli stops following; the eye shows what it did and go
   // Take over once the task starts (a new task always starts followed), before Milli touches the map.
   await expect(chat.getByText('Milli está trabajando · 0 de 3 pasos')).toBeVisible();
   await expect(watching).toBeVisible(); // the screen follows Milli, and says so
-  await page.mouse.click(1300, 620); // the map, away from the chat
+  await page.mouse.click(720, 640); // the map, away from the chat
   await expect(eye).toBeVisible();
   await expect(watching).toHaveCount(0);
   await expect(chat.getByLabel('Respuesta de Milli')).toBeVisible({ timeout: 30_000 });
@@ -81,7 +81,7 @@ test('Clicking away from Milli stops following; the eye shows what it did and go
   await chat.getByRole('textbox', { name: 'Mensaje para Milli' }).fill('Compara el NDVI de julio 2025 de las parcelas reservadas de Calpulalpan y exporta la tabla');
   await chat.getByRole('button', { name: 'Enviar mensaje' }).click();
   await expect(chat.getByText('Milli está trabajando · 0 de 5 pasos')).toBeVisible();
-  await page.mouse.click(1300, 620);
+  await page.mouse.click(720, 640);
   await expect(eye).toBeVisible();
   await expect(chat.getByRole('button', { name: 'Permitir descarga' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('region', { name: 'Panel de control' })).toHaveCount(0);
