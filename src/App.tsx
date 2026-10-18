@@ -503,7 +503,11 @@ function SettingsPanel({ dark, scheme, preview, onDark, onScheme, onSources, chi
   return <div className="grid gap-6">
     <section className="grid gap-2"><SectionTitle>Tema</SectionTitle>
       <div role="group" aria-label="Tema" className="grid grid-cols-2 gap-1 rounded-full bg-tile p-1">
-        {([[false, 'Claro', Sun], [true, 'Oscuro', Moon]] as const).map(([value, label, Icon]) => <button key={label} type="button" aria-pressed={dark === value} onClick={() => onDark(value)} className="flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground aria-pressed:bg-frame aria-pressed:text-foreground aria-pressed:shadow-sm [&_svg]:size-4"><Icon/>{label}</button>)}
+        {([[false, 'Claro', Sun], [true, 'Oscuro', Moon]] as const).map(([value, label, Icon]) => <button key={label} type="button" aria-pressed={dark === value} onClick={() => onDark(value)} className="relative flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground transition-colors aria-pressed:text-foreground [&_svg]:size-4">
+          {/* One pill shifts under whichever option is active. */}
+          {dark === value && <motion.span layoutId="theme-pill" aria-hidden="true" className="absolute inset-0 rounded-full bg-frame shadow-sm" transition={{ type: 'spring', bounce: .2, visualDuration: .35 }}/>}
+          <span className="relative z-10 flex items-center gap-2"><Icon/>{label}</span>
+        </button>)}
       </div>
     </section>
     <section className="grid gap-2"><SectionTitle>Esquema de color</SectionTitle>
