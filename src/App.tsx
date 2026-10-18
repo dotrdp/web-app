@@ -44,7 +44,8 @@ import Launcher from './shell/Launcher';
 import { MILLI, MilliAvatar, MilliName } from './shell/Milli';
 import type { Command } from './shell/Launcher';
 import ShellButton from './shell/ShellButton';
-import { LogoMark } from './Logo';
+import { CropMark } from './CropMarks';
+import type { Crop } from './CropMarks';
 import EstimationPanel, { Stat } from './panels/EstimationPanel';
 import AdvancedPanel from './panels/AdvancedPanel';
 import type { AdvancedTab } from './panels/AdvancedPanel';
@@ -56,8 +57,8 @@ import './shell/shell.css';
 type Sheet = 'fuentes' | 'tabla';
 const PANEL_KEYS: string[] = PANEL_ITEMS.map(p => p.key);
 type Left = LeftPanel | Sheet;
-type Scheme = 'cebada' | 'trigo' | 'tierra' | 'noche' | 'laguna';
-const SCHEMES: { key: Scheme; label: string }[] = [{ key: 'cebada', label: 'Cebada' }, { key: 'trigo', label: 'Trigo' }, { key: 'tierra', label: 'Tierra' }, { key: 'noche', label: 'Noche' }, { key: 'laguna', label: 'Laguna' }];
+type Scheme = Crop;
+const SCHEMES: { key: Scheme; label: string }[] = [{ key: 'maiz', label: 'Maíz' }, { key: 'sorgo', label: 'Sorgo' }, { key: 'trigo', label: 'Trigo' }, { key: 'arroz', label: 'Arroz' }, { key: 'cebada', label: 'Cebada' }, { key: 'mijo', label: 'Mijo' }];
 const SHEETS: Sheet[] = ['fuentes', 'tabla'];
 const EMPTY_WORKSPACE: Workspace = { overrides: {}, fields: [] };
 const EMPTY_FILTERS: MapFilters = { query: '', state: 'all', group: 'all', ndviEnabled: true, ndviThreshold: -1, onlyNdvi: false };
@@ -278,13 +279,13 @@ export default function App() {
   const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth}px) / 2)`;
 
   const basemapPreview = (k: string) => <span className="block size-full bg-cover bg-center" style={{ backgroundImage: `url('/basemaps/${k}.png')` }}/>;
-  const schemePreview = (k: Scheme) => <span data-scheme={k} className="grid size-full place-items-center bg-frame"><span className="flex items-center gap-1.5"><LogoMark size={30}/><span className="grid gap-1"><span className="h-1.5 w-8 rounded-full bg-primary"/><span className="h-1.5 w-5 rounded-full bg-primary-container"/><span className="h-1.5 w-6 rounded-full bg-tile-strong"/></span></span></span>;
+  const schemePreview = (k: Scheme) => <span data-scheme={k} className="grid size-full place-items-center bg-frame"><span className="flex items-center gap-1.5"><CropMark crop={k} size={34}/><span className="grid gap-1"><span className="h-1.5 w-8 rounded-full bg-primary"/><span className="h-1.5 w-5 rounded-full bg-primary-container"/><span className="h-1.5 w-6 rounded-full bg-tile-strong"/></span></span></span>;
   const enabledTool = (id: PluginId) => plugins[id];
   const commands: Command[] = [
     ...PHASES.map((p, i) => ({ id: `fase${i + 1}`, title: `Fase ${i + 1} · ${p.label}`, subtitle: p.detail, icon: <p.icon/>, keywords: p.key, run: () => goPhase(p.key) })),
     { id: 'tablero', title: 'Panel de control', subtitle: 'Resumen, gauges del modelo y ciclo (Alt D)', icon: <ChartSpline/>, keywords: 'dashboard modelo', run: () => setDashboard(true) },
     { id: 'base', title: 'Mapa base', subtitle: 'Topográfico, claro, oscuro o satélite', icon: <Layers3/>, keywords: 'basemap fondo', carousel: 'base' },
-    { id: 'esquema', title: 'Esquema de color', subtitle: 'Paletas generadas desde el logotipo', icon: <Palette/>, keywords: 'tema color scheme', carousel: 'scheme' },
+    { id: 'esquema', title: 'Esquema de color', subtitle: 'Una paleta por cultivo: maíz, sorgo, trigo, arroz, cebada y mijo', icon: <Palette/>, keywords: 'tema color scheme cultivo', carousel: 'scheme' },
     { id: dark ? 'claro' : 'oscuro', title: dark ? 'Tema claro' : 'Tema oscuro', subtitle: 'Cambia la luminosidad del marco', icon: dark ? <Sun/> : <Moon/>, run: () => setDark(d => !d) },
     ...MODES.filter(m => !m.pro || advanced).map(m => ({ id: 'capa ' + m.label.toLowerCase(), title: `Capa · ${m.label}`, subtitle: m.detail, icon: <m.icon/>, keywords: m.key, run: () => switchMode(m.key) })),
     ...(enabledTool('sam') ? [{ id: 'delimitar', title: 'Delimitar con IA', subtitle: 'SAM 2.1 sobre Sentinel-2', icon: <WandSparkles/>, run: startSegment }] : []),

@@ -1,6 +1,6 @@
 // AgroCebada mark: three ears of barley drawn in lines only (stems and leaves, chevron
-// grains, fine awns). The ink takes the scheme's primary tone, so every palette
-// (Cebada, Trigo, Tierra, Noche, Laguna) starts from the logo. /favicon.svg keeps the
+// grains, fine awns). The ink takes the scheme's primary tone, so the mark follows
+// every crop palette (Maíz, Sorgo, Trigo, Arroz, Cebada, Mijo). /favicon.svg keeps the
 // original green.
 import { cn } from '@/lib/utils';
 

@@ -56,26 +56,28 @@
   --radius-2xl: calc(var(--radius) + 8px);
 }
 
-/* Noctalia / Caelestia-style tonal schemes seeded from the barley mark. Every
-   surface derives from one hue (--h): the frame and its popouts share --frame so
-   they read as one continuous shell around the map; tiles sit one tone deeper. */
-:root, [data-scheme="cebada"] { --h: 128; --hc: 1; }
-[data-scheme="trigo"] { --h: 78; --hc: 1.15; }
-[data-scheme="tierra"] { --h: 28; --hc: 1.05; }
-[data-scheme="noche"] { --h: 292; --hc: 1.2; }
-[data-scheme="laguna"] { --h: 215; --hc: 1.05; }
+/* Noctalia / Caelestia-style tonal schemes, one per cereal (gramíneas), each seeded
+   from the plant's colour. Every surface derives from one hue (--h) and a chroma
+   factor (--hc): the frame and its popouts share --frame so they read as one
+   continuous shell around the map; tiles sit one tone deeper. */
+:root, [data-scheme="cebada"] { --h: 128; --hc: 1; }   /* barley green */
+[data-scheme="maiz"] { --h: 92; --hc: 1.25; }          /* corn kernels */
+[data-scheme="sorgo"] { --h: 32; --hc: 1.15; }         /* rust panicle */
+[data-scheme="trigo"] { --h: 72; --hc: 1.15; }         /* amber ears */
+[data-scheme="arroz"] { --h: 165; --hc: 1; }           /* paddy green */
+[data-scheme="mijo"] { --h: 55; --hc: .75; }           /* sandy millet */
 
 :root, [data-scheme] {
   --radius: 0.875rem;
-  --frame: oklch(0.962 calc(0.016 * var(--hc)) var(--h));
-  --tile: oklch(0.928 calc(0.026 * var(--hc)) var(--h));
-  --tile-strong: oklch(0.895 calc(0.036 * var(--hc)) var(--h));
-  --primary: oklch(0.47 calc(0.11 * var(--hc)) var(--h));
+  --frame: oklch(0.915 calc(0.024 * var(--hc)) var(--h));
+  --tile: oklch(0.865 calc(0.038 * var(--hc)) var(--h));
+  --tile-strong: oklch(0.82 calc(0.048 * var(--hc)) var(--h));
+  --primary: oklch(0.36 calc(0.12 * var(--hc)) var(--h));
   --primary-foreground: oklch(0.985 0.01 var(--h));
-  --primary-container: oklch(0.88 calc(0.06 * var(--hc)) var(--h));
-  --on-primary-container: oklch(0.29 calc(0.08 * var(--hc)) var(--h));
+  --primary-container: oklch(0.81 calc(0.075 * var(--hc)) var(--h));
+  --on-primary-container: oklch(0.18 calc(0.08 * var(--hc)) var(--h));
   --background: var(--frame);
-  --foreground: oklch(0.22 calc(0.02 * var(--hc)) var(--h));
+  --foreground: oklch(0.13 calc(0.02 * var(--hc)) var(--h));
   --card: var(--tile);
   --card-foreground: var(--foreground);
   /* Previews set data-scheme on a subtree, so the tokens are declared on it too. */
@@ -84,12 +86,12 @@
   --secondary: var(--tile);
   --secondary-foreground: var(--foreground);
   --muted: var(--tile);
-  --muted-foreground: oklch(0.47 calc(0.025 * var(--hc)) var(--h));
+  --muted-foreground: oklch(0.33 calc(0.03 * var(--hc)) var(--h));
   --accent: var(--primary-container);
   --accent-foreground: var(--on-primary-container);
   --destructive: oklch(0.56 0.2 27);
-  --border: oklch(0.86 calc(0.025 * var(--hc)) var(--h));
-  --input: oklch(0.84 calc(0.025 * var(--hc)) var(--h));
+  --border: oklch(0.72 calc(0.034 * var(--hc)) var(--h));
+  --input: oklch(0.68 calc(0.034 * var(--hc)) var(--h));
   --ring: var(--primary);
   /* Data colours stay fixed across schemes: green vegetation, slate rain, amber heat. */
   --chart-1: oklch(0.52 0.12 152);

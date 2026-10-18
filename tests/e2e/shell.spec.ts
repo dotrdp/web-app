@@ -72,8 +72,8 @@ test('Launcher finds parcels, runs ">" commands and recolours the shell from the
   await expect(page.getByRole('region', { name: 'Ficha de parcela' }).getByRole('heading', { name: 'AGC_001' })).toBeVisible();
   await page.getByRole('button', { name: 'Buscar o ejecutar un comando (Ctrl K)' }).click();
   await input.fill('>esquema ');
-  await page.getByRole('option', { name: 'Noche' }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-scheme', 'noche');
+  await page.getByRole('option', { name: 'Trigo' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-scheme', 'trigo');
   await input.fill('>oscuro'); await input.press('Enter');
   await expect(page.locator('html')).toHaveClass(/dark/);
 });
@@ -142,8 +142,8 @@ test('Bar: settings gather theme, colour scheme, plugins and sources; filters an
   const settings = page.getByRole('region', { name: 'Ajustes' });
   await settings.getByRole('button', { name: 'Oscuro' }).click();
   await expect(page.locator('html')).toHaveClass(/dark/);
-  await settings.getByRole('button', { name: 'Laguna' }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-scheme', 'laguna');
+  await settings.getByRole('button', { name: 'Arroz' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-scheme', 'arroz');
   await expect(settings.getByRole('switch').first()).toBeVisible();
   await settings.getByRole('button', { name: /Datos y fuentes/ }).click();
   await expect(page.getByRole('region', { name: 'Datos y fuentes' })).toBeVisible();

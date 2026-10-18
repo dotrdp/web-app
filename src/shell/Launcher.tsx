@@ -78,7 +78,7 @@ export default function Launcher({ initial = '', parcels, commands, carousels, o
 
   return <div className="flex w-[min(620px,calc(100vw-2rem))] flex-col gap-2 p-3" onKeyDown={key}>
     {carousel ? <div className="flex items-end justify-center gap-3 overflow-hidden px-2 pt-3 pb-1" role="listbox" aria-label={carouselKey === 'base' ? 'Mapas base' : 'Esquemas de color'}>
-      {carousel.items.map((item, i) => { const d = i - slide; if (Math.abs(d) > 3) return null; return <button key={item.key} type="button" role="option" aria-selected={i === slide} onClick={() => { setSlide(i); carousel.onPick(item.key); }}
+      {carousel.items.map((item, i) => { const d = i - slide; if (Math.abs(d) > 2) return null; return <button key={item.key} type="button" role="option" aria-selected={i === slide} onClick={() => { setSlide(i); carousel.onPick(item.key); }}
         className={cn('carousel-item grid shrink-0 justify-items-center gap-1.5 text-xs outline-none', i === slide ? 'z-10 scale-110' : 'opacity-75 hover:opacity-100')}>
         <span className={cn('block h-[68px] w-[104px] overflow-hidden rounded-xl bg-tile ring-1 ring-border ring-offset-2 ring-offset-frame', i === slide && 'ring-2 ring-primary', item.key === carousel.value && i !== slide && 'ring-1 ring-primary/50')}>{item.preview}</span>
         <span className={cn('text-muted-foreground', i === slide && 'font-medium text-foreground')}>{item.label}</span>
