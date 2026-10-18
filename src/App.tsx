@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, FlaskConical, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Puzzle, Ruler, Search, Send, SquareDashed, Sun, Table2, Tags, Telescope, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -351,6 +352,7 @@ export default function App() {
         {/* Top: dashboard handle, or the dashboard itself. */}
         {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
 
+        <AnimatePresence mode="wait">
         {!isMobile && (dashboard || freeWidth >= 360) && (dashboard
           ? <Popout key="dash" edges="top" label="Panel de control" className="top-0 -translate-x-1/2" style={{ left: freeCenter }}>
               <Dashboard atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} tab={dashboardTab} onTab={setDashboardTab} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
@@ -361,8 +363,10 @@ export default function App() {
                 <span className="size-1.5 rounded-full bg-primary"/><span className="font-medium text-foreground">{modeLabel}</span><span>· {periodLabel}</span><ChevronDown className="size-3.5"/>
               </button>
             </Popout>)}
+        </AnimatePresence>
 
         {/* Left edge: map panels and the phase sheets. */}
+        <AnimatePresence mode="wait">
         {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
           {left === 'estimar' && <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
           {left === 'avanzado' && <AdvancedPanel atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} keyDate={key} mode={mode} filters={filters} layers={layers} manifest={manifest} tab={advancedTab} onTab={setAdvancedTab}
@@ -380,8 +384,10 @@ export default function App() {
             </div>
           </>}
         </Popout>}
+        </AnimatePresence>
 
         {/* Right edge: parcel card, selection summary, export, delineation. */}
+        <AnimatePresence mode="wait">
         {right && <Popout key={right} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth }}>
           {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} advanced={advanced} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAdvanced={advanced && left === 'avanzado' ? undefined : () => { setAdvancedTab('parcela'); goPhase('avanzado'); }} onNext={nextParcel}
             ranking={parcelRank(selected)} onSimilar={() => { const y = selected.properties.predictedYield; if (y == null) return; setFilters(f => ({ ...f, yieldBand: [y - .25, y + .25] })); setLeft('filters'); setTimeout(() => map.current?.fitAll(), 60); }}/>}
@@ -420,12 +426,16 @@ export default function App() {
             <footer className="flex items-center gap-2 px-4 pb-4"><Button variant="outline" onClick={cancelDraft} className="mr-auto rounded-full bg-transparent">Cancelar</Button>{proposal && <ShellButton label="Exportar propuesta y correcciones" disabled={!draft} onClick={exportProposal}><Download/></ShellButton>}<Button className="rounded-full" disabled={!draft || saving || segmenting} onClick={() => void saveDraft()}>{saving ? <><Spinner/>Guardando…</> : draftMode === 'edit' ? 'Guardar límites' : 'Guardar parcela'}</Button></footer>
           </section>}
         </Popout>}
+        </AnimatePresence>
 
         {/* Bottom-left: time. Bottom-centre: launcher. Bottom-right: tools and navigation. */}
+        <AnimatePresence mode="wait">
         {showTime && launcher === null && <Popout key={'time' + mode + (left ? 'l' : '')} edges={left ? 'bottom' : ['bottom', 'left']} className="bottom-0 @container/time" style={{ width: timeWidth, left: left ? leftWidth + 28 : 0 }}>
           <div className="pt-1 pr-2 pb-0.5"><TimeSlider mode={mode} year={year} month={month} keyDate={key} playing={playing} onPlay={setPlaying} onMonth={setMonth} onYear={setYear} onDate={(y, m) => { setYear(y); setMonth(m); }}/></div>
         </Popout>}
+        </AnimatePresence>
 
+        <AnimatePresence>
         {launcher !== null
           ? <Popout key="launcher" edges="bottom" label="Lanzador" className={cn('shadow-[0_-18px_48px_-20px_rgb(0_0_0/0.35)]', isMobile ? 'inset-x-0 bottom-0 z-40' : 'bottom-0 z-40 -translate-x-1/2')} style={isMobile ? undefined : { left: freeCenter }}>
               <Launcher initial={launcher} parcels={parcels} commands={commands}
@@ -433,7 +443,9 @@ export default function App() {
                 onClose={() => setLauncher(null)} onParcel={id => chooseParcel(id, true)} onPlace={coords => { map.current?.locate(coords); }} onMunicipality={(name, geometry) => { map.current?.fitGeometry(geometry); toast(name); }}/>
             </Popout>
           : null}
+        </AnimatePresence>
 
+        <AnimatePresence>
         {launcher === null && !(isMobile && (left || right)) && <Popout key="tools" edges={isMobile ? 'right' : ['bottom', 'right']} label="Herramientas del mapa" animate={false} className={isMobile ? 'top-1/2 right-0 -translate-y-1/2' : 'right-0 bottom-0 max-w-[36rem]'}>
           <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
             {!isMobile && <><ShellButton label={`Buscar o ejecutar un comando (${shortcutKey} K)`} onClick={() => setLauncher('')}><Search/></ShellButton><span className="mx-1 h-5 w-px bg-border" aria-hidden="true"/></>}
@@ -446,6 +458,7 @@ export default function App() {
           </div>
           {!isMobile && <div ref={setStatusEl} className="px-3.5 pt-1 pb-2"/>}
         </Popout>}
+        </AnimatePresence>
       </main>
     </div>
     <MobileDock phase={phase} panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} onLogo={() => setLauncher('')} onPhase={next => goPhase(next)} onPanel={openLeft}/>

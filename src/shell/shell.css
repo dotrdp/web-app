@@ -11,18 +11,10 @@
 /* Flex child with min-height 0: the body shrinks to the popout's max-height and scrolls inside. */
 .popout-body { position: relative; flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; border-radius: inherit; }
 
-/* Reveal from the attached edge; the negative insets keep the fillets visible. */
-@keyframes reveal-top { from { clip-path: inset(0 -40px 100% -40px); } to { clip-path: inset(0 -40px -40px -40px); } }
-@keyframes reveal-bottom { from { clip-path: inset(100% -40px 0 -40px); } to { clip-path: inset(-40px -40px 0 -40px); } }
-@keyframes reveal-left { from { clip-path: inset(-40px 100% -40px 0); } to { clip-path: inset(-40px -40px -40px 0); } }
-@keyframes reveal-right { from { clip-path: inset(-40px 0 -40px 100%); } to { clip-path: inset(-40px 0 -40px -40px); } }
+/* The popout itself grows as a blob (useBlob in Popout.tsx); its content fades in behind it. */
 @keyframes popout-fade { from { opacity: 0; } to { opacity: 1; } }
-.popout[data-edge="top"] { animation: reveal-top .34s cubic-bezier(.2, .9, .25, 1) both; }
-.popout[data-edge="bottom"] { animation: reveal-bottom .34s cubic-bezier(.2, .9, .25, 1) both; }
-.popout[data-edge="left"] { animation: reveal-left .34s cubic-bezier(.2, .9, .25, 1) both; }
-.popout[data-edge="right"] { animation: reveal-right .34s cubic-bezier(.2, .9, .25, 1) both; }
-.popout[data-animate="false"] { animation: none; }
-.popout-body > * { animation: popout-fade .3s ease-out .06s both; }
+.popout-body > * { animation: popout-fade .3s ease-out .12s both; }
+.popout[data-animate="false"] .popout-body > * { animation: none; }
 
 /* Vertical text, as in the bar's active-window title. */
 .bar-vertical { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
@@ -58,7 +50,7 @@
   .shell { --bar: 0px; --gap: 6px; --view-r: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .popout, .popout-body > * { animation: none !important; }
+  .popout-body > * { animation: none !important; }
 }
 
 /* The mark grows grain by grain while the atlas loads. */
