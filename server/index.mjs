@@ -12,6 +12,9 @@ const publicUser = u => ({ id: u.id, username: u.username, name: u.name });
 const sha = value => createHash('sha256').update(value).digest('hex');
 const cookieName = 'agrocebada_session';
 
+/** Notes are plain text; this keeps one save well under the 256 kB JSON body limit. */
+const MAX_NOTES = 50_000;
+
 export async function createApp({ stateDir = process.env.STATE_DIR || path.join(root, '.data-cache/server'), password = process.env.ADMIN_PASSWORD || 'Fira2026!', dataDir = path.join(root, 'public/data') } = {}) {
   await mkdir(stateDir, { recursive: true });
   const statePath = path.join(stateDir, 'workspace.json');
@@ -87,6 +90,13 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
   });
   app.use('/api', (req, res, next) => req.user ? next() : res.status(401).json({ error: 'Inicia sesión para continuar.' }));
   app.get('/api/workspace', (_req, res) => res.json({ overrides: state.overrides, fields: state.fields }));
+  // Free-text notes from the Notas side menu, saved with the rest of the workspace.
+  app.get('/api/notes', (_req, res) => res.json({ text: state.notes ?? '', updatedAt: state.notesUpdatedAt ?? null }));
+  app.put('/api/notes', async (req, res, next) => {
+    const text = req.body?.text;
+    if (typeof text !== 'string' || text.length > MAX_NOTES) return res.status(400).json({ error: `Las notas deben ser texto de hasta ${MAX_NOTES.toLocaleString('es-MX')} caracteres.` });
+    try { state.notes = text; state.notesUpdatedAt = new Date().toISOString(); await persist(); res.json({ text: state.notes, updatedAt: state.notesUpdatedAt }); } catch (e) { next(e); }
+  });
   app.post('/api/fields', async (req, res, next) => {
     try {
       const { geometry, name } = req.body || {};

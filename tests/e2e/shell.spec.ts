@@ -166,7 +166,7 @@ test('Mobile keeps the dock, sheets and launcher inside the viewport', async ({ 
 
 test('Bar: settings gather theme, colour scheme, plugins and sources; filters and bookmarks share a panel', async ({ page }) => {
   await signIn(page);
-  await expect(bar(page).getByRole('button')).toHaveCount(7);
+  await expect(bar(page).getByRole('button')).toHaveCount(9);
   await bar(page).getByRole('button', { name: 'Ajustes' }).click();
   const settings = page.getByRole('region', { name: 'Ajustes' });
   await settings.getByRole('button', { name: 'Oscuro' }).click();
@@ -230,12 +230,12 @@ test('Number keys toggle the map tools in strip order', async ({ page }) => {
   await expect(page.getByRole('slider', { name: 'Posición del comparador' })).toBeVisible();
 });
 
-test('Dashboard tools: main page, the producer economics calculator and the Scripts menu exist only on the dashboard', async ({ page }) => {
+test('Dashboard tools: the main page and producer economics tabs exist only on the dashboard; Scripts is always in the pill', async ({ page }) => {
   await signIn(page);
   const tools = bar(page).getByRole('group', { name: 'Herramientas del panel' });
   await expect(tools).toHaveCount(0);
   await page.keyboard.press('Alt+d');
-  await expect(tools.getByRole('button')).toHaveCount(3);
+  await expect(tools.getByRole('button')).toHaveCount(2);
   await expect(tools.getByRole('button', { name: 'Panel principal' })).toHaveAttribute('aria-pressed', 'true');
   await tools.getByRole('button', { name: 'Economía del productor' }).click();
   const econ = page.getByRole('region', { name: 'Economía del productor' });
@@ -279,12 +279,27 @@ test('Dashboard tools: main page, the producer economics calculator and the Scri
   await econ.getByRole('button', { name: 'Quitar selección' }).click();
   await econ.getByRole('button', { name: 'Volver a los estados' }).click();
   await expect(econ.getByText('Haz clic en un estado para ver sus municipios')).toBeVisible();
-  await tools.getByRole('button', { name: 'Scripts' }).click();
+  await bar(page).getByRole('button', { name: 'Scripts' }).click();
   await expect(page.getByRole('region', { name: 'Scripts' })).toBeVisible();
   await tools.getByRole('button', { name: 'Panel principal' }).click();
   await expect(page.getByRole('region', { name: 'Panel de control' })).toBeVisible();
-  // Leaving the dashboard takes its tools and the Scripts menu with it.
+  // Leaving the dashboard takes its page tabs with it; Scripts lives in the pill and stays.
   await page.keyboard.press('Alt+d');
   await expect(tools).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Scripts' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Scripts' })).toBeVisible();
+});
+
+test('Notas: always in the pill, saved as you type and back when reopened', async ({ page }) => {
+  await signIn(page);
+  const notes = bar(page).getByRole('button', { name: 'Notas' });
+  await notes.click();
+  const panel = page.getByRole('region', { name: 'Notas' });
+  const box = panel.getByRole('textbox', { name: 'Notas' });
+  await box.fill('Visitar AGC_011 el lunes');
+  await expect(panel.getByText(/^Guardado/)).toBeVisible();
+  await notes.click();
+  await expect(panel).toHaveCount(0);
+  await page.keyboard.press('Alt+d');
+  await notes.click();
+  await expect(page.getByRole('region', { name: 'Notas' }).getByRole('textbox', { name: 'Notas' })).toHaveValue('Visitar AGC_011 el lunes');
 });

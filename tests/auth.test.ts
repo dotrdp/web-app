@@ -31,6 +31,14 @@ test('Authenticated single account, protected writes, geometry validation and du
     assert.equal((await post('/api/fields', { geometry: crossing }, cookie)).status, 400);
     const original = JSON.parse(fs.readFileSync(new URL('../public/data/parcels.geojson', import.meta.url), 'utf8'));
     for (const f of original.features) assert.ok(validateGeometry(f.geometry) > 0);
+    // Notes: protected, validated, durable.
+    const put = (body: unknown, c = cookie) => fetch(root + '/api/notes', { method: 'PUT', headers: { 'Content-Type': 'application/json', Cookie: c }, body: JSON.stringify(body) });
+    assert.equal((await put({ text: 'x' }, '')).status, 401);
+    assert.equal((await put({ text: 42 })).status, 400);
+    assert.equal((await put({ text: 'x'.repeat(50_001) })).status, 400);
+    assert.equal((await put({ text: 'Revisar AGC_011 en campo' })).status, 200);
+    assert.equal((await (await fetch(root + '/api/notes', { headers: { Cookie: cookie } })).json()).text, 'Revisar AGC_011 en campo');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(stateDir, 'workspace.json'), 'utf8')).notes, 'Revisar AGC_011 en campo');
     await post('/api/auth/logout', {}, cookie); assert.equal((await fetch(root + '/api/workspace', { headers: { Cookie: cookie } })).status, 401);
   } finally { await new Promise<void>(resolve => server.close(resolve)); }
 });

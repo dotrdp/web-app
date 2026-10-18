@@ -46,14 +46,15 @@ import { CropMark } from './CropMarks';
 import type { Crop } from './CropMarks';
 import EstimationPanel, { Stat } from './panels/EstimationPanel';
 import EconomicsPanel from './panels/EconomicsPanel';
+import NotesPanel from './panels/NotesPanel';
 import AttributeTable from './panels/AttributeTable';
 import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Override, Parcel, Phase, SegmentationPrompt, SegmentationProposal, User, Workspace } from './types';
 import './map.css';
 import './shell/shell.css';
 
 type Sheet = 'fuentes' | 'tabla';
-// Everything the bar can show as open: the map panels plus Ajustes and the dashboard's Scripts menu.
-const PANEL_KEYS: string[] = [...PANEL_ITEMS.map(p => p.key), 'settings', 'scripts'];
+// Everything the bar can show as open: the map panels plus Ajustes, Scripts and Notas.
+const PANEL_KEYS: string[] = [...PANEL_ITEMS.map(p => p.key), 'settings', 'scripts', 'notes'];
 type Left = LeftPanel | Sheet;
 type Scheme = Crop;
 const SCHEMES: { key: Scheme; label: string }[] = [{ key: 'maiz', label: 'Maíz' }, { key: 'sorgo', label: 'Sorgo' }, { key: 'trigo', label: 'Trigo' }, { key: 'arroz', label: 'Arroz' }, { key: 'cebada', label: 'Cebada' }, { key: 'mijo', label: 'Mijo' }];
@@ -116,9 +117,9 @@ export default function App() {
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
   const [assistant, setAssistant] = useState(false);
   const [dashboard, setDashboard] = useState(() => routePhase() === 'estimar');
-  // Second dashboard page (the calculator) and the Scripts menu exist only while the dashboard is open.
+  // Second dashboard page (the calculator); leaving the dashboard returns it to the main page.
   const [economics, setEconomics] = useState(false);
-  useEffect(() => { if (!dashboard) { setEconomics(false); setLeft(l => l === 'scripts' ? null : l); } }, [dashboard]);
+  useEffect(() => { if (!dashboard) setEconomics(false); }, [dashboard]);
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
   const [selectedId, setSelectedId] = useState<string | null>(null), [hoverId, setHoverId] = useState<string | null>(null);
@@ -294,7 +295,7 @@ export default function App() {
   const parcelRank = (p: Parcel) => p.properties.predictedYield == null ? null : { percentile: Math.round(estimates.filter(v => v < p.properties.predictedYield!).length / Math.max(1, estimates.length - 1) * 100), of: estimates.length };
   const selectionParcels = parcels.filter(p => selection.includes(p.properties.id));
   const freeWidth = viewWidth - 66 - leftWidth - rightWidth;
-  const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes' || left === 'scripts');
+  const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes' || left === 'scripts' || left === 'notes');
   const cancellable = !!draftMode || !!measureKind || selectArea || rightPanel === 'export';
   const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth}px) / 2)`;
 
@@ -345,7 +346,7 @@ export default function App() {
   // the layers panel, the bar and the launcher, so the strip stays short.
   const visibleTools = tools.filter(t => plugins[t.id] && !['heatmap', 'labels', 'identify', 'table'].includes(t.id));
   toolKeys.current = isMobile ? [] : visibleTools.map(t => t.run);
-  const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes', scripts: 'Scripts' } as Record<string, string>)[k];
+  const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes', scripts: 'Scripts', notes: 'Notas' } as Record<string, string>)[k];
 
   return <TooltipProvider delayDuration={300}>
   <div className="shell fixed inset-0 flex select-none max-md:flex-col" data-phase={phase}>
@@ -481,6 +482,7 @@ export default function App() {
                   <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
                 </div>}
                 {left === 'scripts' && <ScriptsPanel/>}
+                {left === 'notes' && <NotesPanel/>}
                 {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
                   <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
                 </SettingsPanel>}
@@ -531,7 +533,7 @@ export default function App() {
   </TooltipProvider>;
 }
 
-/** Scripts (dashboard only), after ArcGIS's script tools. A placeholder until we settle how scripts run. */
+/** Scripts, after ArcGIS's script tools. A placeholder until we settle how scripts run. */
 function ScriptsPanel() {
   return <div className="grid justify-items-center gap-3 px-2 py-10 text-center">
     <span className="grid size-12 place-items-center rounded-full bg-primary-container text-on-primary-container"><CodeXml className="size-5"/></span>

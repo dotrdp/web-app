@@ -6,10 +6,11 @@ export const DEMO_USER: User = { id: 'demo-user', username: 'testuser', name: 'C
 export const DEMO_PASSWORD = 'Fira2026!';
 const emptyWorkspace = (): Workspace => ({ overrides: {}, fields: [] });
 
-// Page memory only: reload and logout reset drawn parcels and corrections.
+// Page memory only: reload and logout reset drawn parcels, corrections and notes.
 export function createDemoApi(loadOriginalIds?: () => Promise<string[]>) {
   let user: User | null = null;
   let workspace = emptyWorkspace();
+  let notes = { text: '', updatedAt: null as string | null };
   let originalIds: Promise<string[]> | undefined;
   async function ids() {
     originalIds ||= loadOriginalIds ? loadOriginalIds() : fetch('/data/parcels.geojson').then(async response => {
@@ -30,9 +31,14 @@ export function createDemoApi(loadOriginalIds?: () => Promise<string[]>) {
       if (body.username !== DEMO_USER.username || body.password !== DEMO_PASSWORD) throw new Error('El usuario o la contraseña no coinciden.');
       user = DEMO_USER; return reply({ user });
     }
-    if (method === 'POST' && path === '/api/auth/logout') { user = null; workspace = emptyWorkspace(); return reply({ ok: true }); }
+    if (method === 'POST' && path === '/api/auth/logout') { user = null; workspace = emptyWorkspace(); notes = { text: '', updatedAt: null }; return reply({ ok: true }); }
     if (!user) throw new Error('Inicia sesión para continuar.');
     if (method === 'GET' && path === '/api/workspace') { await ids(); return reply(workspace); }
+    if (method === 'GET' && path === '/api/notes') return reply(notes);
+    if (method === 'PUT' && path === '/api/notes') {
+      if (typeof body.text !== 'string' || body.text.length > 50_000) throw new Error('Las notas deben ser texto de hasta 50,000 caracteres.');
+      notes = { text: body.text, updatedAt: new Date().toISOString() }; return reply(notes);
+    }
     if (method === 'POST' && path === '/api/fields') {
       await ids(); const area = validateGeometry(body.geometry);
       const field: Field = { id: 'user-' + crypto.randomUUID(), name: String(body.name || 'Mi parcela').trim().slice(0, 80), geometry: body.geometry as Geometry, area, createdAt: new Date().toISOString(), ...(body.segmentation ? { segmentation: { ...body.segmentation, correctedGeometry: body.geometry } } : {}) };

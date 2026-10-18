@@ -20,7 +20,11 @@ test('One account, page memory only: drawn fields and corrections reset on logou
   const workspace=await api<Workspace>('/api/workspace');assert.equal(workspace.fields.length,1);assert.equal(Object.keys(workspace.overrides).length,2);
   workspace.fields.length=0;assert.equal((await api<Workspace>('/api/workspace')).fields.length,1);
   const newPage=create();await login(newPage);assert.deepEqual(await newPage<Workspace>('/api/workspace'),{fields:[],overrides:{}});
+  await api('/api/notes',{method:'PUT',body:JSON.stringify({text:'Visitar Calpulalpan'})});assert.equal((await api<{text:string}>('/api/notes')).text,'Visitar Calpulalpan');
+  await assert.rejects(api('/api/notes',{method:'PUT',body:JSON.stringify({text:5})}),/texto/);
+  assert.equal((await newPage<{text:string}>('/api/notes')).text,'');
   await api('/api/auth/logout',{method:'POST'});await login(api);assert.deepEqual(await api<Workspace>('/api/workspace'),{fields:[],overrides:{}});
+  assert.equal((await api<{text:string}>('/api/notes')).text,'');
 });
 
 test('Producer and technician accounts no longer exist; admin and analysis endpoints are gone',async()=>{

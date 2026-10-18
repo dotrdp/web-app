@@ -1,11 +1,11 @@
 // The vertical bar (Caelestia's left bar): settings and the dashboard at the top,
 // map panels as tray icons, and sign-out closing the column. On the dashboard page
 // the map panels fade with the map, the dashboard icon morphs into a map, and the
-// dashboard's own pages and tools (main page, economics calculator, scripts) take the map
-// panels' place below the pill.
+// dashboard's own pages (main page, economics calculator) take the map panels' place below
+// the pill. Scripts and Notas sit above sign-out on both screens.
 import type { LucideIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Calculator, ChartSpline, CodeXml, Filter, Layers3, LayoutDashboard, LogOut, Map as MapIcon, Settings, Table2, Telescope } from 'lucide-react';
+import { Calculator, ChartSpline, CodeXml, Filter, NotebookPen, Layers3, LayoutDashboard, LogOut, Map as MapIcon, Settings, Table2, Telescope } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { LogoMark } from '../Logo';
@@ -13,7 +13,7 @@ import MorphIcon from './MorphIcon';
 import ShiftPill from './ShiftPill';
 import type { Phase } from '../types';
 
-export type LeftPanel = 'layers' | 'basemap' | 'tabla' | 'filters' | 'settings' | 'scripts';
+export type LeftPanel = 'layers' | 'basemap' | 'tabla' | 'filters' | 'settings' | 'scripts' | 'notes';
 export const PHASES: { key: Phase; label: string; detail: string; icon: LucideIcon }[] = [
   { key: 'explorar', label: 'Explorar', detail: 'Mapa, parcelas y vegetación', icon: Telescope },
   { key: 'estimar', label: 'Estimar', detail: 'Rendimiento, error y entrega', icon: ChartSpline },
@@ -61,12 +61,16 @@ export default function Bar({ panel, dashboard, economics, filtered, onDashboard
           {/* Page tabs: highlighted while current rather than morphing, since they switch pages. */}
           <BarButton label="Panel principal" active={!economics} morph={false} pill="page-pill" onClick={() => onEconomics(false)}><ChartSpline/></BarButton>
           <BarButton label="Economía del productor" active={economics} morph={false} pill="page-pill" onClick={() => onEconomics(true)}><Calculator/></BarButton>
-          <BarButton label="Scripts" active={panel === 'scripts'} onClick={() => onPanel('scripts')}><CodeXml/></BarButton>
         </motion.div>}
       </AnimatePresence>
     </div>
 
-    <BarButton label="Cerrar sesión" onClick={onLogout} className="mt-auto text-destructive/80 hover:text-destructive"><LogOut/></BarButton>
+    {/* Bottom of the bar, on both screens: Scripts and Notas above sign-out. */}
+    <div className="mt-auto flex flex-col items-center gap-1">
+      <BarButton label="Scripts" active={panel === 'scripts'} onClick={() => onPanel('scripts')}><CodeXml/></BarButton>
+      <BarButton label="Notas" active={panel === 'notes'} onClick={() => onPanel('notes')}><NotebookPen/></BarButton>
+      <BarButton label="Cerrar sesión" onClick={onLogout} className="mt-1.5 text-destructive/80 hover:text-destructive"><LogOut/></BarButton>
+    </div>
   </nav>;
 }
 
