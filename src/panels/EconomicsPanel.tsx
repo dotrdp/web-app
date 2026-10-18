@@ -12,6 +12,7 @@ import { fmt } from '../lib';
 import { COVERAGE_LABEL, DEFAULT_PRICE_MXN_T, money, productiveError } from '../model';
 import type { Coverage } from '../model';
 import { Stat } from './EstimationPanel';
+import RegionError from './RegionError';
 import ShiftPill from '../shell/ShiftPill';
 import { TABLE_OPTIONS } from './table-es';
 import type { Atlas, Parcel } from '../types';
@@ -142,14 +143,17 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
         </div>
       </section>
 
-      <section aria-label="Resultado" className="grid content-start gap-2 @2xl/econ:grid-cols-3">
-        <Stat label="Producción estimada" value={fmt(totals.production, 0)} unit="t" hint={`${rows.length} ${rows.length === 1 ? 'parcela' : 'parcelas'} · ${fmt(totals.area, 1)} ha`}/>
-        <Stat label="Ingreso estimado" value={money(totals.income)} hint={`± ${money(totals.band)} con ${COVERAGE_LABEL[coverage]} de cobertura (suma por parcela, cota conservadora)`}/>
-        <Stat label="Ingreso por hectárea" value={totals.area ? money(totals.income / totals.area) : '—'} hint={`a ${money(price)}/t`}/>
-        <Stat label="Costo total" value={totals.cost == null ? '—' : money(totals.cost)} hint={costHa == null ? 'Escribe tu costo por hectárea para calcularlo' : `${money(costHa)}/ha`}/>
-        <Stat label="Margen estimado" value={totals.margin == null ? '—' : money(totals.margin)} className={totals.margin != null && totals.margin < 0 ? 'text-destructive' : undefined} hint={totals.margin == null ? 'Ingreso menos costo' : `${money(totals.margin / Math.max(totals.area, 1e-9))}/ha`}/>
-        <Stat label="Punto de equilibrio" value={totals.breakEven == null ? '—' : fmt(totals.breakEven)} unit={totals.breakEven == null ? undefined : 't/ha'} hint={totals.above == null ? 'Rendimiento que cubre el costo' : `${totals.above} de ${rows.length} parcelas lo superan`}/>
-      </section>
+      <div className="grid content-start gap-3">
+        <section aria-label="Resultado" className="grid content-start gap-2 @2xl/econ:grid-cols-3">
+          <Stat label="Producción estimada" value={fmt(totals.production, 0)} unit="t" hint={`${rows.length} ${rows.length === 1 ? 'parcela' : 'parcelas'} · ${fmt(totals.area, 1)} ha`}/>
+          <Stat label="Ingreso estimado" value={money(totals.income)} hint={`± ${money(totals.band)} con ${COVERAGE_LABEL[coverage]} de cobertura (suma por parcela, cota conservadora)`}/>
+          <Stat label="Ingreso por hectárea" value={totals.area ? money(totals.income / totals.area) : '—'} hint={`a ${money(price)}/t`}/>
+          <Stat label="Costo total" value={totals.cost == null ? '—' : money(totals.cost)} hint={costHa == null ? 'Escribe tu costo por hectárea para calcularlo' : `${money(costHa)}/ha`}/>
+          <Stat label="Margen estimado" value={totals.margin == null ? '—' : money(totals.margin)} className={totals.margin != null && totals.margin < 0 ? 'text-destructive' : undefined} hint={totals.margin == null ? 'Ingreso menos costo' : `${money(totals.margin / Math.max(totals.area, 1e-9))}/ha`}/>
+          <Stat label="Punto de equilibrio" value={totals.breakEven == null ? '—' : fmt(totals.breakEven)} unit={totals.breakEven == null ? undefined : 't/ha'} hint={totals.above == null ? 'Rendimiento que cubre el costo' : `${totals.above} de ${rows.length} parcelas lo superan`}/>
+        </section>
+        <RegionError parcels={parcels} overall={m.mae_t_ha}/>
+      </div>
     </div>
 
     <section aria-labelledby="error-money-title" className="grid gap-3 rounded-[20px] bg-primary-container/60 p-4 text-on-primary-container @3xl/econ:grid-cols-[1.4fr_1fr]">

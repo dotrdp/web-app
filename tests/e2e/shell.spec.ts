@@ -258,6 +258,15 @@ test('Dashboard tools: main page, the producer economics calculator and the Scri
   await expect(econ.getByText(/Usas 4\.00 bultos\/ha/)).toBeVisible();
   await econ.getByRole('spinbutton', { name: 'Precio del bulto de semilla en pesos' }).fill('900');
   await expect(econ.getByRole('spinbutton', { name: 'Costo de producción en pesos por hectárea' })).toHaveValue('18600');
+  // Expected error by state; a state opens its municipalities, and the arrow comes back.
+  const region = econ.getByRole('figure').filter({ hasText: 'Error esperado por estado' });
+  await expect(region.getByText('Haz clic en un estado para ver sus municipios')).toBeVisible();
+  await region.getByRole('group', { name: 'Ver municipios de un estado' }).getByRole('button', { name: /^Hidalgo/ }).click();
+  const munis = econ.getByRole('table', { name: 'Error esperado por municipio en Hidalgo' });
+  await expect(munis.locator('tbody tr')).toHaveCount(6);
+  await expect(munis.getByText('poca muestra').first()).toBeVisible();
+  await econ.getByRole('button', { name: 'Volver a los estados' }).click();
+  await expect(econ.getByText('Haz clic en un estado para ver sus municipios')).toBeVisible();
   await tools.getByRole('button', { name: 'Scripts' }).click();
   await expect(page.getByRole('region', { name: 'Scripts' })).toBeVisible();
   await tools.getByRole('button', { name: 'Panel principal' }).click();
