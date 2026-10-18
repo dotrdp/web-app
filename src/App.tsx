@@ -133,6 +133,7 @@ export default function App() {
   const segmentationMonth = useRef('');
   const queuedPrompts = useRef<SegmentationPrompt[] | null>(null);
   const map = useRef<MapHandle>(null), key = dateKey(year, month);
+  const toolKeys = useRef<(() => void)[]>([]);
   const viewport = useRef<HTMLDivElement>(null);
   const [statusEl, setStatusEl] = useState<HTMLDivElement | null>(null);
   const temporal = !['parcels', 'terrain', 'alphaearth', 'error'].includes(mode) && !draftMode;
@@ -186,7 +187,8 @@ export default function App() {
     step(); const timer = window.setInterval(step, 4200); return () => clearInterval(timer);
   }, [touring, visibleParcels]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, C cancels the active map tool,
+  // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, 1–9 the map tools in strip
+  // order (refreshed every render, so disabled plugins close the gap), C cancels the active map tool,
   // Escape closes the top layer.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -194,6 +196,7 @@ export default function App() {
       if (event.altKey && ['1', '2', '3'].includes(event.key)) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key); return; }
       if (event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); setDashboard(d => !d); return; }
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || (event.target as HTMLElement | null)?.isContentEditable;
+      if (/^[1-9]$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing && launcher === null && !dashboard) { const run = toolKeys.current[Number(event.key) - 1]; if (run) { event.preventDefault(); run(); } return; }
       if (event.key.toLowerCase() === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey && !typing && launcher === null) { if (cancelTools()) event.preventDefault(); return; }
       if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (assistant) setAssistant(false); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
     };
@@ -336,6 +339,7 @@ export default function App() {
   // The pill keeps the editing and analysis tools; heat map, labels, identify and the table live in
   // the layers panel, the bar and the launcher, so the strip stays short.
   const visibleTools = tools.filter(t => plugins[t.id] && !['heatmap', 'labels', 'identify', 'table'].includes(t.id));
+  toolKeys.current = isMobile ? [] : visibleTools.map(t => t.run);
   const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes' } as Record<string, string>)[k];
 
   return <TooltipProvider delayDuration={300}>
@@ -364,8 +368,8 @@ export default function App() {
             {liveImagery && (imageryError || !manifest || imageryBusy) && <div role={manifest || imageryError ? 'status' : undefined} className={cn('imagery-caption pointer-events-auto flex w-fit items-center gap-2 rounded-full bg-frame px-3.5 py-1.5 text-xs text-muted-foreground shadow-md', imageryError && 'text-amber-800 dark:text-amber-200')}>
               {imageryError ? <><TriangleAlert className="size-3.5"/><span>{imageryError}</span><Button size="xs" variant="outline" className="rounded-full" onClick={() => setImageryRevision(v => v + 1)}>Reintentar</Button></> : <LoadingState label={manifest ? 'Preparando imágenes Sentinel-2…' : 'Cargando observaciones Sentinel-2…'}/>}
             </div>}
-            {measureKind && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><Ruler className="size-4 text-muted-foreground"/><span className="text-muted-foreground">{measureKind === 'area' ? 'Área' : 'Distancia'}</span><span className="font-medium tabular-nums">{measureValue ?? 'Haz clic en el mapa'}</span><Button size="xs" variant="ghost" className="rounded-full" onClick={() => toggleMeasure(null)}>Terminar</Button></div>}
-            {selectArea && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><BoxSelect className="size-4 text-muted-foreground"/>Arrastra un rectángulo sobre las parcelas<Button size="xs" variant="ghost" className="rounded-full" onClick={() => setSelectArea(false)}>Cancelar</Button></div>}
+            {measureKind && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1.5 px-3.5 text-sm shadow-md"><Ruler className="size-4 text-muted-foreground"/><span className="text-muted-foreground">{measureKind === 'area' ? 'Área' : 'Distancia'}</span><span className="font-medium tabular-nums">{measureValue ?? 'Haz clic en el mapa'}</span></div>}
+            {selectArea && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1.5 px-3.5 text-sm shadow-md"><BoxSelect className="size-4 text-muted-foreground"/>Arrastra un rectángulo sobre las parcelas</div>}
           </div>
 
           {/* Right edge: parcel card, selection summary, export, delineation. */}
@@ -423,7 +427,7 @@ export default function App() {
             initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: .2 }}>Presiona <kbd className="font-sans font-semibold">C</kbd> para cancelar</motion.p>}</AnimatePresence>
           <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
               {!isMobile && <><ShellButton label={`Buscar o ejecutar un comando (${shortcutKey} K)`} onClick={() => setLauncher('')}><Search/></ShellButton><span className="mx-1 h-5 w-px bg-border" aria-hidden="true"/></>}
-              {visibleTools.filter(t => !isMobile || ['sam', 'measure', 'export', 'locate'].includes(t.id)).map(t => <ShellButton key={t.id} label={t.label} side={isMobile ? 'left' : 'top'} pressed={t.pressed} busy={t.busy} morph={t.id !== 'swipe'} onClick={t.run}>{t.icon}</ShellButton>)}
+              {visibleTools.filter(t => !isMobile || ['sam', 'measure', 'export', 'locate'].includes(t.id)).map(t => <ShellButton key={t.id} label={t.label} side={isMobile ? 'left' : 'top'} pressed={t.pressed} busy={t.busy} morph={t.id !== 'swipe'} hotkey={isMobile ? undefined : String(visibleTools.indexOf(t) + 1)} onClick={t.run}>{t.icon}</ShellButton>)}
               <span className={cn('mx-1 h-5 w-px bg-border', isMobile && 'h-px w-5')} aria-hidden="true"/>
               <ShellButton label="Ver todas las parcelas" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.fitAll()}><Home/></ShellButton>
               <ShellButton label="Alejar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(-1)}><Minus/></ShellButton>

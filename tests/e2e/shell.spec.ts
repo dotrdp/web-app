@@ -188,3 +188,15 @@ test('Toggles morph into an X while active, and C cancels the running map tool b
   await layers.click();
   await expect(layers.locator('svg.lucide-x')).toHaveCount(0);
 });
+
+test('Number keys toggle the map tools in strip order', async ({ page }) => {
+  await signIn(page);
+  const tools = page.getByRole('toolbar', { name: 'Herramientas del mapa' });
+  await expect(tools.getByRole('button', { name: 'Medir distancia' })).toHaveAttribute('aria-keyshortcuts', '3');
+  await page.keyboard.press('3');
+  await expect(tools.getByRole('button', { name: 'Medir distancia' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('3');
+  await expect(tools.getByRole('button', { name: 'Medir distancia' })).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('6');
+  await expect(page.getByRole('slider', { name: 'Posición del comparador' })).toBeVisible();
+});
