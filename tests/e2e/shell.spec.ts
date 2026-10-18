@@ -18,7 +18,7 @@ test('One account, two phases: no producer or technician roles anywhere', async 
   await page.keyboard.press('Alt+2');
   await expect(page).toHaveURL(/#\/estimar$/);
   await expect(bar(page).getByRole('button', { name: 'Volver al mapa' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '¿Qué significa para un productor?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '¿Qué haremos hoy?' })).toBeVisible();
   // The dashboard has no tabs and there is no third phase any more.
   await expect(page.getByRole('region', { name: 'Panel de control' }).getByRole('tab', { name: 'Modelo' })).toHaveCount(0);
   await page.keyboard.press('Alt+3');
@@ -37,34 +37,37 @@ test('The layers panel offers only the Explorar layers', async ({ page }) => {
   for (const name of ['Agua', 'AlphaEarth', 'Clima', 'Terreno', 'Error del modelo']) await expect(layers.getByRole('button', { name })).toHaveCount(0);
 });
 
-test('Estimar answers the challenge: the plot, productive reading, the table and the 59-row submission', async ({ page }) => {
+test('Estimar: the season plot and NDVI integral, the table with one export, and the 59-row submission from the map', async ({ page }) => {
   await signIn(page, '#/estimar');
   const panel = page.getByRole('region', { name: 'Panel de control' });
   const season = panel.getByRole('figure').filter({ hasText: 'NDVI y lluvia por mes' });
   await expect(season.getByText(/^Parcelas mostradas · promedio de 59 ·/)).toBeVisible();
-  await season.getByRole('button', { name: '2023' }).click();
-  await expect(season.getByRole('button', { name: '2023' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(panel.getByText(/equivale a ±1\.\d+ t de grano/)).toBeVisible();
-  await panel.getByRole('spinbutton', { name: 'Precio supuesto en pesos por tonelada' }).fill('7000');
-  await expect(panel.getByText(/a \$7,000\/t/)).toBeVisible();
+  const years = season.getByRole('group', { name: 'Año' });
+  await years.getByRole('button', { name: '2023' }).click();
+  await expect(years.getByRole('button', { name: '2023' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('img', { name: 'Campo de cebada en macollaje al atardecer' })).toBeVisible();
+  // NDVI integral over the cycle, one per year; picking a year moves the chart too.
+  const integral = season.getByRole('region', { name: 'Integral de NDVI' });
+  await expect(integral.getByRole('button')).toHaveCount(4);
+  await integral.getByRole('button', { name: /2024/ }).click();
+  await expect(season.getByRole('group', { name: 'Año' }).getByRole('button', { name: '2024' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(integral.getByRole('button', { name: /2024\s*\d+\.\d{2}/ })).toBeVisible();
   await expect(panel.getByRole('tab', { name: 'Mis terrenos' })).toHaveCount(0);
   const table = panel.getByRole('table', { name: 'Estimaciones de rendimiento' });
   const rows = table.locator('tbody tr');
   await expect(rows).toHaveCount(59);
-  const download = page.waitForEvent('download');
-  await panel.getByRole('button', { name: /Entrega · 59 parcelas/ }).click();
-  const lines = (await readFile((await (await download).path())!, 'utf8')).trim().split(/\r\n/);
-  expect(lines[0]).toBe('ID_POLIGONO,RENDIMIENTO_T_HA'); expect(lines).toHaveLength(60);
-  // A row click picks the parcel for the productive reading without leaving the dashboard.
-  await rows.first().click();
-  await expect(panel.getByText(/En AGC_003 de 18\.68 ha/)).toBeVisible();
+  // One export: every shown row, or only the checked ones with their count on the button.
+  const csvLines = async (name: RegExp) => { const download = page.waitForEvent('download'); await panel.getByRole('button', { name }).click(); return (await readFile((await (await download).path())!, 'utf8')).trim().split(/\r?\n/); };
+  await expect(panel.getByRole('button', { name: /Entrega|Tabla CSV|GeoJSON/ })).toHaveCount(0);
+  expect(await csvLines(/^Exportar filas mostradas$/)).toHaveLength(60);
   // Check all, then a selection of two goes to the map as a selection.
   await table.getByRole('checkbox', { name: 'Seleccionar todo' }).click();
-  await expect(panel.getByText('59 seleccionadas')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Exportar seleccionadas 59' })).toBeVisible();
   await panel.getByRole('button', { name: 'Quitar selección' }).click();
   await rows.nth(0).getByRole('checkbox').click(); await rows.nth(1).getByRole('checkbox').click();
   // The plot follows the table: the shown parcels, or only the checked ones.
   await expect(season.getByText(/^Seleccionadas · promedio de 2 ·/)).toBeVisible();
+  expect(await csvLines(/^Exportar seleccionadas 2$/)).toHaveLength(3);
   await rows.nth(1).getByRole('checkbox').click();
   await expect(season.getByText(/^AGC_003 · Sentinel-2/)).toBeVisible();
   await rows.nth(1).getByRole('checkbox').click();
@@ -76,7 +79,7 @@ test('Estimar answers the challenge: the plot, productive reading, the table and
   const groups = panel.getByRole('table', { name: 'Estimaciones por municipio' }).locator('tbody tr');
   await expect(groups.first().getByRole('checkbox')).toBeVisible();
   await groups.first().getByRole('checkbox').click();
-  await expect(panel.getByText(/^\d+ seleccionadas?$/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: /^Exportar seleccionadas \d+$/ })).toBeVisible();
   await expect(season.getByText(/^(Seleccionadas · promedio de \d+|AGC_\d+) · Sentinel-2/)).toBeVisible();
   await panel.getByRole('button', { name: 'Quitar selección' }).click();
   await panel.getByRole('tab', { name: 'Reservadas · 59' }).click();
@@ -86,6 +89,12 @@ test('Estimar answers the challenge: the plot, productive reading, the table and
   const card = page.getByRole('region', { name: 'Ficha de parcela' });
   await expect(card.getByRole('heading', { name: 'AGC_011' })).toBeVisible();
   await expect(card.getByText('Intervalo 80 %')).toBeVisible();
+  // The challenge submission now lives in the map's export panel.
+  await page.getByRole('toolbar', { name: 'Herramientas del mapa' }).getByRole('button', { name: 'Exportar' }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: /Entrega del reto/ }).click();
+  const lines = (await readFile((await (await download).path())!, 'utf8')).trim().split(/\r\n/);
+  expect(lines[0]).toBe('ID_POLIGONO,RENDIMIENTO_T_HA'); expect(lines).toHaveLength(60);
 });
 
 test('Launcher finds parcels, runs ">" commands and recolours the shell from the logo palette', async ({ page }) => {
@@ -151,7 +160,7 @@ test('Mobile keeps the dock, sheets and launcher inside the viewport', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.getByRole('navigation', { name: 'Barra de AgroCebada' }).getByRole('button', { name: 'Panel de control' }).click();
-  await expect(page.getByRole('heading', { name: '¿Qué significa para un productor?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '¿Qué haremos hoy?' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 

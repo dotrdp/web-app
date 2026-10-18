@@ -435,7 +435,7 @@ export default function App() {
         {dashboard && <motion.section key="dashboard" aria-label="Panel de control" className="dashboard-canvas absolute inset-0 z-20 overflow-hidden rounded-(--view-r)"
           initial={{ opacity: 0, scale: 1.015 }} animate={{ opacity: 1, scale: 1, transition: { duration: .36, delay: .12, ease: [.2, 0, 0, 1] } }} exit={{ opacity: 0, scale: 1.015, transition: { duration: .22 } }}>
           <div className="h-full overflow-y-auto"><div className="mx-auto w-full max-w-[1180px] px-4 pt-14 pb-6">
-            <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => chooseParcel(id)}
+            <EstimationPanel atlas={atlas} parcels={parcels} keyDate={key} onSelect={id => chooseParcel(id)}
               onLocate={id => { setDashboard(false); chooseParcel(id, true); }}
               onShowSelection={ids => {
                 const chosen = parcels.filter(p => ids.includes(p.properties.id)); if (!chosen.length) return;
