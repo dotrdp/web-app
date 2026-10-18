@@ -245,6 +245,19 @@ test('Dashboard tools: main page, the producer economics calculator and the Scri
   await econ.getByRole('spinbutton', { name: 'Costo de producción en pesos por hectárea' }).fill('14000');
   await expect(econ.getByText(/de \d+ parcelas lo superan/)).toBeVisible();
   await expect(econ.getByRole('table', { name: 'Economía por parcela' }).locator('tbody tr').first()).toBeVisible();
+  // The seed calculator fills the cost per hectare: 300 seeds/m² × 45 g ÷ 100 = 135 kg/ha × $12 + $15,000.
+  await expect(econ.getByRole('heading', { name: 'Calcular desde la semilla' })).toBeVisible();
+  await econ.getByRole('spinbutton', { name: 'Semillas sembradas por metro cuadrado' }).fill('300');
+  await expect(econ.getByText(/Dosis: 135\.0 kg\/ha/)).toBeVisible();
+  await econ.getByRole('spinbutton', { name: 'Precio de la semilla en pesos por kilogramo' }).fill('12');
+  await econ.getByRole('spinbutton', { name: 'Otros costos de producción en pesos por hectárea' }).fill('15000');
+  await expect(econ.getByRole('spinbutton', { name: 'Costo de producción en pesos por hectárea' })).toHaveValue('16620');
+  // Bought by the bulto: 10,000 m² ÷ 2,500 m² per bulto = 4 bultos × $900 + $15,000 other costs.
+  await econ.getByRole('group', { name: 'Compra de la semilla' }).getByRole('button', { name: 'Por bulto' }).click();
+  await econ.getByRole('spinbutton', { name: 'Metros cuadrados que siembra un bulto' }).fill('2500');
+  await expect(econ.getByText(/Usas 4\.00 bultos\/ha/)).toBeVisible();
+  await econ.getByRole('spinbutton', { name: 'Precio del bulto de semilla en pesos' }).fill('900');
+  await expect(econ.getByRole('spinbutton', { name: 'Costo de producción en pesos por hectárea' })).toHaveValue('18600');
   await tools.getByRole('button', { name: 'Scripts' }).click();
   await expect(page.getByRole('region', { name: 'Scripts' })).toBeVisible();
   await tools.getByRole('button', { name: 'Panel principal' }).click();

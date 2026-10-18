@@ -15,6 +15,7 @@ import { DataTable, useDataTable } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
 import { dateKey, download, fmt, MONTH_NAMES, MONTHS, parcelCsv } from '../lib';
 import { COVERAGE_LABEL, interval } from '../model';
+import ShiftPill from '../shell/ShiftPill';
 import { TABLE_OPTIONS } from './table-es';
 import type { Atlas, Parcel } from '../types';
 
@@ -88,7 +89,9 @@ export default function EstimationPanel({ atlas, parcels, keyDate, onSelect, onL
   const clearChecks = () => { setChecked({}); setCheckedGroups({}); };
   // The set filter sits in the table's own toolbar, left of its search.
   const setTabs = () => <div role="tablist" aria-label="Conjunto" className="flex w-fit flex-wrap gap-1 rounded-full bg-tile p-1 text-xs">
-    {SETS.map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={set === key} onClick={() => setSet(key)} className="rounded-full px-3 py-1 text-muted-foreground aria-selected:bg-frame aria-selected:text-foreground aria-selected:shadow-sm">{label}</button>)}
+    {SETS.map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={set === key} onClick={() => setSet(key)} className="relative rounded-full px-3 py-1 text-muted-foreground transition-colors aria-selected:text-foreground">
+      {set === key && <ShiftPill id="set-pill" className="bg-frame shadow-sm"/>}<span className="relative z-10">{label}</span>
+    </button>)}
   </div>;
   const parcelTable = useDataTable<Parcel>({ ...TABLE_OPTIONS, data: rows, columns: parcelColumns, getRowId: p => p.properties.id, initialState: { sorting: [{ id: 'id', desc: false }] }, enableRowSelection: true, selectAllMode: 'all', positionToolbarAlertBanner: 'none', state: { rowSelection: checked }, onRowSelectionChange: setChecked,
     onRowClick: ({ row }) => onSelect(row.original.properties.id), renderToolbarActions: setTabs, renderCaption: () => <span className="sr-only">Estimaciones de rendimiento</span> });
@@ -125,7 +128,9 @@ export default function EstimationPanel({ atlas, parcels, keyDate, onSelect, onL
         <div className="flex flex-wrap items-start gap-2 px-1">
           <figcaption className="mr-auto text-sm font-medium">NDVI y lluvia por mes<span className="block text-xs font-normal text-muted-foreground">{scopeLabel} · Sentinel-2 (FIRA, ≤30 % nubes) · CHIRPS</span></figcaption>
           <div role="group" aria-label="Año" className="flex rounded-full bg-frame/70 p-0.5 text-xs">
-            {YEARS.map(y => <button key={y} type="button" aria-pressed={seasonYear === y} onClick={() => setSeasonYear(y)} className="rounded-full px-2.5 py-1 tabular-nums text-muted-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground">{y}</button>)}
+            {YEARS.map(y => <button key={y} type="button" aria-pressed={seasonYear === y} onClick={() => setSeasonYear(y)} className="relative rounded-full px-2.5 py-1 tabular-nums text-muted-foreground transition-colors aria-pressed:text-primary-foreground">
+              {seasonYear === y && <ShiftPill id="year-pill" className="bg-primary"/>}<span className="relative z-10">{y}</span>
+            </button>)}
           </div>
         </div>
         <ChartContainer config={chartConfig} className="aspect-auto h-[260px] w-full">
@@ -147,9 +152,10 @@ export default function EstimationPanel({ atlas, parcels, keyDate, onSelect, onL
           <h4 className="flex items-baseline gap-1.5 text-xs font-medium">Integral de NDVI<span className="font-normal text-muted-foreground">· abril–octubre · NDVI·mes</span></h4>
           <div className="grid grid-cols-4 gap-2">
             {integrals.map(x => <button key={x.year} type="button" aria-pressed={seasonYear === x.year} onClick={() => setSeasonYear(x.year)} title={`${x.months} meses con observación`}
-              className="grid gap-1 rounded-xl px-2 py-1.5 text-left hover:bg-frame/60 aria-pressed:bg-frame/80">
-              <span className="flex items-baseline justify-between gap-1 tabular-nums"><span className="text-[11px] text-muted-foreground">{x.year}</span><span className="text-sm font-medium">{x.value == null ? '—' : fmt(x.value)}</span></span>
-              <span className="h-1.5 overflow-hidden rounded-full bg-frame/70"><span className="block h-full rounded-full bg-primary" style={{ width: `${(x.value ?? 0) / maxIntegral * 100}%`, opacity: seasonYear === x.year ? 1 : .45 }}/></span>
+              className="relative grid gap-1 rounded-xl px-2 py-1.5 text-left hover:bg-frame/60">
+              {seasonYear === x.year && <ShiftPill id="integral-pill" className="bg-frame/80"/>}
+              <span className="relative z-10 flex items-baseline justify-between gap-1 tabular-nums"><span className="text-[11px] text-muted-foreground">{x.year}</span><span className="text-sm font-medium">{x.value == null ? '—' : fmt(x.value)}</span></span>
+              <span className="relative z-10 h-1.5 overflow-hidden rounded-full bg-frame/70"><span className="block h-full rounded-full bg-primary transition-opacity" style={{ width: `${(x.value ?? 0) / maxIntegral * 100}%`, opacity: seasonYear === x.year ? 1 : .45 }}/></span>
             </button>)}
           </div>
         </section>

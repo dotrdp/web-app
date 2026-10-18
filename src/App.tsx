@@ -41,6 +41,7 @@ import Launcher from './shell/Launcher';
 import { MILLI, MilliAvatar, MilliName } from './shell/Milli';
 import type { Command } from './shell/Launcher';
 import ShellButton from './shell/ShellButton';
+import ShiftPill from './shell/ShiftPill';
 import { CropMark } from './CropMarks';
 import type { Crop } from './CropMarks';
 import EstimationPanel, { Stat } from './panels/EstimationPanel';
@@ -545,8 +546,7 @@ function SettingsPanel({ dark, scheme, preview, onDark, onScheme, onSources, chi
     <section className="grid gap-2"><SectionTitle>Tema</SectionTitle>
       <div role="group" aria-label="Tema" className="grid grid-cols-2 gap-1 rounded-full bg-tile p-1">
         {([[false, 'Claro', Sun], [true, 'Oscuro', Moon]] as const).map(([value, label, Icon]) => <button key={label} type="button" aria-pressed={dark === value} onClick={() => onDark(value)} className="relative flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground transition-colors aria-pressed:text-foreground [&_svg]:size-4">
-          {/* One pill shifts under whichever option is active. */}
-          {dark === value && <motion.span layoutId="theme-pill" aria-hidden="true" className="absolute inset-0 rounded-full bg-frame shadow-sm" transition={{ type: 'spring', bounce: .2, visualDuration: .35 }}/>}
+          {dark === value && <ShiftPill id="theme-pill" className="bg-frame shadow-sm"/>}
           <span className="relative z-10 flex items-center gap-2"><Icon/>{label}</span>
         </button>)}
       </div>

@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import { LogoMark } from '../Logo';
 import MorphIcon from './MorphIcon';
+import ShiftPill from './ShiftPill';
 import type { Phase } from '../types';
 
 export type LeftPanel = 'layers' | 'basemap' | 'tabla' | 'filters' | 'settings' | 'scripts';
@@ -24,12 +25,13 @@ export const PANEL_ITEMS: { key: LeftPanel; label: string; icon: LucideIcon }[] 
   { key: 'filters', label: 'Filtros y marcadores', icon: Filter },
 ];
 
-function BarButton({ label, active, onClick, children, className, dot, shortcut, morph = true }: { label: string; active?: boolean; onClick: () => void; children: React.ReactNode; className?: string; dot?: boolean; shortcut?: string; morph?: boolean }) {
+function BarButton({ label, active, onClick, children, className, dot, shortcut, morph = true, pill }: { label: string; active?: boolean; onClick: () => void; children: React.ReactNode; className?: string; dot?: boolean; shortcut?: string; morph?: boolean; pill?: string }) {
   return <Tooltip>
     <TooltipTrigger asChild>
       <button type="button" aria-label={label} aria-pressed={active} onClick={onClick}
-        className={cn('relative grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-tile hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-primary-container aria-pressed:text-on-primary-container [&_svg]:size-[18px]', className)}>
-        {active === undefined || !morph ? children : <MorphIcon active={active}>{children}</MorphIcon>}
+        className={cn('relative grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-tile hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-primary-container aria-pressed:text-on-primary-container [&_svg]:size-[18px]', pill && 'aria-pressed:bg-transparent', className)}>
+        {pill && active && <ShiftPill id={pill} className="bg-primary-container"/>}
+        <span className="relative z-10 grid place-items-center">{active === undefined || !morph ? children : <MorphIcon active={active}>{children}</MorphIcon>}</span>
         {dot && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-frame" aria-hidden="true"/>}
       </button>
     </TooltipTrigger>
@@ -57,8 +59,8 @@ export default function Bar({ panel, dashboard, economics, filtered, onDashboard
         {dashboard && <motion.div key="dashboard-tools" role="group" aria-label="Herramientas del panel" className="flex flex-col items-center gap-1"
           initial={{ opacity: 0, y: -8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }}>
           {/* Page tabs: highlighted while current rather than morphing, since they switch pages. */}
-          <BarButton label="Panel principal" active={!economics} morph={false} onClick={() => onEconomics(false)}><ChartSpline/></BarButton>
-          <BarButton label="Economía del productor" active={economics} morph={false} onClick={() => onEconomics(true)}><Calculator/></BarButton>
+          <BarButton label="Panel principal" active={!economics} morph={false} pill="page-pill" onClick={() => onEconomics(false)}><ChartSpline/></BarButton>
+          <BarButton label="Economía del productor" active={economics} morph={false} pill="page-pill" onClick={() => onEconomics(true)}><Calculator/></BarButton>
           <BarButton label="Scripts" active={panel === 'scripts'} onClick={() => onPanel('scripts')}><CodeXml/></BarButton>
         </motion.div>}
       </AnimatePresence>

@@ -1,9 +1,10 @@
 // Economía del productor: the calculator page of the dashboard. Turns the estimate and its
 // out-of-fold error into money at an editable price and, when the producer enters one, a
-// cost per hectare: income with its range, margin and break-even yield, for all parcels, a
-// set, or the selected parcel, plus the same reading per parcel in a table.
+// cost per hectare (typed, or worked out from the seed, bought by the kilo (seeds per m² and
+// thousand-kernel weight) or by the bulto (m² one bulto sows), plus other costs): income with its range, margin and break-even yield, for all
+// parcels, a set, or the selected parcel, plus the same reading per parcel in a table.
 import { useMemo, useRef, useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { MapPin, Sprout } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable, useDataTable } from '@/components/ui/data-table';
@@ -11,16 +12,43 @@ import { fmt } from '../lib';
 import { COVERAGE_LABEL, DEFAULT_PRICE_MXN_T, money, productiveError } from '../model';
 import type { Coverage } from '../model';
 import { Stat } from './EstimationPanel';
+import ShiftPill from '../shell/ShiftPill';
 import { TABLE_OPTIONS } from './table-es';
 import type { Atlas, Parcel } from '../types';
 
 type Scope = 'all' | 'prediction' | 'training' | 'selected';
+type Seed = { unit: 'kg' | 'bulto'; price: number | null; perM2: number | null; tkw: number | null; bagPrice: number | null; bagM2: number | null; other: number | null };
+/** Typical barley thousand-kernel weight (g); editable, as seed lots vary. */
+const DEFAULT_TKW_G = 45;
+/** Seed rate: seeds/m² × thousand-kernel weight (g) ÷ 100 = kg/ha (10,000 m²/ha, 1,000 seeds, 1,000 g/kg). */
+const seedKgHa = (perM2: number, tkw: number) => perM2 * tkw / 100;
+/** Seed cost per hectare: kg/ha × price per kg, or bultos/ha (10,000 m² ÷ m² per bulto) × price per bulto. */
+function seedCostHa(s: Seed) {
+  if (s.unit === 'kg') return s.price != null && s.perM2 != null && s.tkw != null ? seedKgHa(s.perM2, s.tkw) * s.price : null;
+  return s.bagPrice != null && s.bagM2 ? 10_000 / s.bagM2 * s.bagPrice : null;
+}
 type Row = { parcel: Parcel; estimate: number; production: number; income: number; band: number; cost: number | null; margin: number | null };
 
 export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: { atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; onLocate: (id: string) => void }) {
   const model = atlas.predictions, m = model.metrics;
   const [price, setPrice] = useState(DEFAULT_PRICE_MXN_T);
   const [costHa, setCostHa] = useState<number | null>(null);
+  // Seed calculator: once its inputs are complete it fills the cost per hectare (seed + other costs).
+  const [seed, setSeed] = useState<Seed>({ unit: 'kg', price: null, perM2: null, tkw: DEFAULT_TKW_G, bagPrice: null, bagM2: null, other: null });
+  const seedKg = seed.unit === 'kg' && seed.perM2 != null && seed.tkw != null ? seedKgHa(seed.perM2, seed.tkw) : null;
+  const bags = seed.unit === 'bulto' && seed.bagM2 ? 10_000 / seed.bagM2 : null;
+  const seedCost = seedCostHa(seed);
+  const updateSeed = (next: Partial<Seed>) => {
+    const s = { ...seed, ...next }; setSeed(s);
+    const cost = seedCostHa(s); if (cost != null) setCostHa(Math.round(cost + (s.other ?? 0)));
+  };
+  const seedFields: (readonly [Exclude<keyof Seed, 'unit'>, string, string, number])[] = [
+    ...(seed.unit === 'kg'
+      ? [['price', 'Precio de la semilla (MXN/kg)', 'Precio de la semilla en pesos por kilogramo', 1], ['perM2', 'Semillas por m²', 'Semillas sembradas por metro cuadrado', 10], ['tkw', 'Peso de mil semillas (g)', 'Peso de mil semillas en gramos', 1]] as const
+      : [['bagPrice', 'Precio del bulto (MXN)', 'Precio del bulto de semilla en pesos', 10], ['bagM2', '¿Cuántos m² siembra un bulto?', 'Metros cuadrados que siembra un bulto', 100]] as const),
+    ['other', 'Otros costos (MXN/ha)', 'Otros costos de producción en pesos por hectárea', 500],
+  ];
+  const numberOrNull = (value: string) => value === '' ? null : Math.max(0, Number(value) || 0);
   const [coverage, setCoverage] = useState<Coverage>('0.8');
   const [scope, setScope] = useState<Scope>(selected ? 'selected' : 'all');
   const locate = useRef(onLocate); locate.current = onLocate;
@@ -78,6 +106,30 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
           <input type="number" min={0} step={100} value={price} onChange={e => setPrice(Math.max(0, Number(e.target.value) || 0))} aria-label="Precio de la cebada en pesos por tonelada" className="h-9 rounded-full bg-frame px-3.5 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/></label>
         <label className="grid gap-1"><span className="text-xs text-muted-foreground">Costo de producción (MXN/ha)</span>
           <input type="number" min={0} step={500} value={costHa ?? ''} placeholder="Escribe tu costo por hectárea" onChange={e => setCostHa(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))} aria-label="Costo de producción en pesos por hectárea" className="h-9 rounded-full bg-frame px-3.5 tabular-nums outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"/></label>
+        <section aria-labelledby="seed-title" className="grid gap-2 rounded-2xl bg-frame/60 p-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Sprout className="size-4 text-primary"/><h4 id="seed-title" className="flex-1 text-xs font-medium">Calcular desde la semilla</h4>
+            <div role="group" aria-label="Compra de la semilla" className="flex rounded-full bg-frame p-0.5 text-[11px]">
+              {([['kg', 'Por kg'], ['bulto', 'Por bulto']] as const).map(([unit, label]) => <button key={unit} type="button" aria-pressed={seed.unit === unit} onClick={() => updateSeed({ unit })}
+                className="relative rounded-full px-2.5 py-0.5 text-muted-foreground transition-colors aria-pressed:text-primary-foreground">
+                {seed.unit === unit && <ShiftPill id="seed-unit-pill" className="bg-primary"/>}<span className="relative z-10">{label}</span>
+              </button>)}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {seedFields.map(([key, label, aria, step]) =>
+              <label key={key} className="grid content-end gap-1"><span className="text-[11px] leading-tight text-muted-foreground">{label}</span>
+                <input type="number" min={0} step={step} value={seed[key] ?? ''} onChange={e => updateSeed({ [key]: numberOrNull(e.target.value) })} aria-label={aria}
+                  className="h-8 min-w-0 rounded-full bg-frame px-3 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"/></label>)}
+          </div>
+          <p className="text-[11px] leading-snug text-pretty text-muted-foreground" aria-live="polite">
+            {seed.unit === 'kg'
+              ? seedKg == null ? 'Escribe las semillas por m² para calcular la dosis.' : <>Dosis: <b className="font-medium text-foreground tabular-nums">{fmt(seedKg, 1)} kg/ha</b>{seedCost == null && ' · escribe el precio de la semilla para calcular su costo.'}</>
+              : bags == null ? 'Escribe cuántos m² siembra un bulto.' : <>Usas <b className="font-medium text-foreground tabular-nums">{fmt(bags, 2)} bultos/ha</b>{seedCost == null && ' · escribe el precio del bulto para calcular su costo.'}</>}
+            {seedCost != null && <> · semilla <b className="font-medium text-foreground tabular-nums">{money(seedCost)}/ha</b>{seed.other ? <> + otros {money(seed.other)}/ha</> : null} → se llenó el costo por hectárea.</>}
+          </p>
+          <p className="text-[10px] leading-snug text-pretty text-muted-foreground/80">{seed.unit === 'kg' ? 'Dosis = semillas/m² × peso de mil semillas (g) ÷ 100.' : 'Bultos por hectárea = 10,000 m² ÷ m² que siembra un bulto.'} No ajusta por germinación ni establecimiento.</p>
+        </section>
         <div className="grid gap-1"><span className="text-xs text-muted-foreground">Cobertura del rango</span>
           <div role="group" aria-label="Cobertura del rango" className="flex w-fit rounded-full bg-frame p-0.5 text-xs">
             {(Object.keys(COVERAGE_LABEL) as Coverage[]).map(c => <button key={c} type="button" aria-pressed={coverage === c} onClick={() => setCoverage(c)} className="rounded-full px-3 py-1 aria-pressed:bg-primary aria-pressed:text-primary-foreground">{COVERAGE_LABEL[c]}</button>)}
