@@ -29,12 +29,39 @@ test('One account, two phases: no producer or technician roles anywhere', async 
   await page.goto('/#/avanzado'); await expect(bar(page).getByRole('button', { name: 'Panel de control' })).toBeVisible();
 });
 
-test('The layers panel offers only the Explorar layers', async ({ page }) => {
+test('Layers: a stack of switchable layers with transparency, thresholds, descriptions and order', async ({ page }) => {
   await signIn(page);
-  const layers = page.getByRole('region', { name: 'Capas y simbología' });
-  await expect(layers.getByRole('button', { name: 'Rendimiento' })).toBeVisible();
-  await expect(layers.getByRole('button', { name: 'Vegetación' })).toBeVisible();
-  for (const name of ['Agua', 'AlphaEarth', 'Clima', 'Terreno', 'Error del modelo']) await expect(layers.getByRole('button', { name })).toHaveCount(0);
+  const layers = page.getByRole('region', { name: 'Capas y simbología' }), map = page.getByTestId('map');
+  for (const name of ['Mapa de calor', 'Municipios', 'Vegetación', 'Agua', 'Lluvia', 'Temperatura máxima', 'Temperatura mínima', 'Elevación', 'Pendiente'])
+    await expect(layers.getByRole('switch', { name, exact: true })).toHaveAttribute('aria-checked', 'false');
+  // No yield layer: the map opens on the parcels alone.
+  await expect(layers.getByText('Ninguna capa activa')).toBeVisible();
+  await expect(map).toHaveAttribute('data-layers', '');
+  await expect(layers.getByRole('switch', { name: /Rendimiento/ })).toHaveCount(0);
+  // On: transparency appears; a monthly layer brings the months.
+  await layers.getByRole('switch', { name: 'Lluvia' }).click();
+  await expect(layers.getByRole('slider', { name: 'Transparencia de Lluvia' })).toHaveAttribute('aria-valuenow', '20');
+  await expect(map).toHaveAttribute('data-layers', 'precipitation');
+  await expect(page.getByRole('button', { name: 'Reproducir meses' })).toBeVisible();
+  // Indices also get a threshold, starting at its default.
+  await layers.getByRole('switch', { name: 'Agua' }).click();
+  await expect(layers.getByRole('slider', { name: 'Umbral MNDWI' })).toHaveAttribute('aria-valuenow', '0');
+  await expect(map).toHaveAttribute('data-layers', 'water precipitation');
+  // Hovering a layer explains it.
+  await layers.getByText('Mapa de calor', { exact: true }).hover();
+  await expect(page.getByRole('tooltip')).toContainText('producción estimada');
+  // Dragging the handle reorders the stack: Lluvia goes to the top and draws above Agua.
+  const handle = layers.getByRole('button', { name: 'Mover Lluvia' }), target = layers.getByRole('listitem', { name: 'Mapa de calor' });
+  const from = (await handle.boundingBox())!, to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down();
+  for (let k = 1; k <= 12; k++) await page.mouse.move(from.x + from.width / 2, from.y + (to.y + 4 - from.y) * k / 12);
+  await page.mouse.up();
+  await expect(layers.getByRole('listitem').first()).toHaveAccessibleName('Lluvia');
+  await expect(map).toHaveAttribute('data-layers', 'precipitation water');
+  // Everything off again.
+  await layers.getByRole('button', { name: 'Apagar todas' }).click();
+  await expect(map).toHaveAttribute('data-layers', '');
+  await expect(page.getByRole('button', { name: 'Reproducir meses' })).toHaveCount(0);
 });
 
 test('Estimar: the season plot and NDVI integral, the table with one export, and the 59-row submission from the map', async ({ page }) => {

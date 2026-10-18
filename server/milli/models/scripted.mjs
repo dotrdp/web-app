@@ -14,6 +14,7 @@ const fmt = (v, d = 2) => v == null ? '—' : Number(v).toLocaleString('es-MX', 
 const money = v => v == null ? '—' : Number(v).toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
 const stateIn = text => STATES.find(s => new RegExp(s, 'i').test(text)) ?? null;
 const numberIn = (text, re) => { const m = text.match(re); return m ? Number(m[1].replace(/[,\s]/g, '')) : null; };
+const MONTH_LABELS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const delay = (ms, signal) => new Promise(r => { const t = setTimeout(r, ms); signal?.addEventListener('abort', () => { clearTimeout(t); r(); }, { once: true }); });
 
 /** Turn context: the user's text, attachments, earlier results by tool name, the screen id. */
@@ -57,6 +58,10 @@ const ndviScenario = {
       const ranked = Object.keys(s.by_parcel).filter(id => july(id) != null).sort((a, b) => july(b) - july(a));
       return { reasoning: `En julio de 2025 el NDVI medio del grupo fue ${fmt(s.average[6]?.ndvi_mean, 3)} con ${fmt(s.average[6]?.precip_mm, 0)} mm de lluvia. La más verde es ${ranked[0]} (${fmt(july(ranked[0]), 3)}) y la menos ${ranked.at(-1)} (${fmt(july(ranked.at(-1)), 3)}). Ahora las marco en la tabla del panel para que la gráfica las muestre.`,
         calls: [['update_task', { screen_id: screen, step: 1, status: 'done', note: `NDVI julio ${fmt(s.average[6]?.ndvi_mean, 3)}` }], ['update_task', { screen_id: screen, step: 2, status: 'running' }],
+          ['create_plot', { title: `NDVI y lluvia 2025 · ${ranked.length} parcelas`, subtitle: 'Promedio del grupo por mes', kind: 'line', x: MONTH_LABELS,
+            y_label: 'NDVI', y_min: 0, y_max: 1, y2_label: 'Lluvia', y2_unit: 'mm',
+            series: [{ name: 'NDVI medio', values: s.average.map(m => m.ndvi_mean ?? null), color: 'verde' }, { name: 'Lluvia', values: s.average.map(m => m.precip_mm ?? null), type: 'bar', axis: 'right', color: 'azul' }],
+            reference_lines: [{ axis: 'x', value: 'jul', label: 'Julio' }], note: 'NDVI de FIRA (Sentinel-2, ≤30 % nubes) y lluvia CHIRPS.' }],
           ['navigate', { screen_id: screen, page: 'panel' }], ['table_set', { screen_id: screen, table: 'estimaciones', set_tab: 'reservadas', search: '' }],
           ['table_check', { screen_id: screen, table: 'estimaciones', mode: 'set', parcel_ids: ranked }], ['plot_set', { screen_id: screen, year: 2025 }]], memo: { ranked } };
     },
@@ -74,9 +79,37 @@ const ndviScenario = {
       const s = results.get_series, july = id => s.by_parcel[id]?.[6]?.ndvi_mean;
       const ranked = Object.keys(s.by_parcel).filter(id => july(id) != null).sort((a, b) => july(b) - july(a));
       const approved = results.request_export?.approved !== false && !results.request_export?.error;
-      const answer = `**NDVI de julio de 2025 · ${ranked.length} parcelas reservadas**\n\n- NDVI medio del grupo: **${fmt(s.average[6]?.ndvi_mean, 3)}** (lluvia de julio: ${fmt(s.average[6]?.precip_mm, 0)} mm).\n- Más verdes: ${ranked.slice(0, 3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n- Menos verdes: ${ranked.slice(-3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n\nLas dejé marcadas en el panel con su gráfica de 2025 y anoté el resumen en Notas. ${approved ? 'Descargué la tabla en CSV.' : 'No descargué la tabla porque no diste permiso.'}`;
+      const answer = `**NDVI de julio de 2025 · ${ranked.length} parcelas reservadas**\n\n- NDVI medio del grupo: **${fmt(s.average[6]?.ndvi_mean, 3)}** (lluvia de julio: ${fmt(s.average[6]?.precip_mm, 0)} mm).\n- Más verdes: ${ranked.slice(0, 3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n- Menos verdes: ${ranked.slice(-3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n\nLa gráfica de arriba muestra la temporada del grupo. Las dejé marcadas en el panel con su gráfica de 2025 y anoté el resumen en Notas. ${approved ? 'Descargué la tabla en CSV.' : 'No descargué la tabla porque no diste permiso.'}`;
       return { reasoning: 'Tengo todo: cierro la tarea con la respuesta.',
         calls: [['update_task', { screen_id: screen, step: 4, status: approved ? 'done' : 'skipped' }], ['finish_task', { screen_id: screen, answer }]] };
+    },
+  ],
+};
+
+const plotScenario = {
+  match: t => /gr[aá]fic|plot|dispersi|diagrama/i.test(t),
+  steps: [
+    ({ screen }) => ({ reasoning: 'Quieren ver qué tan bien estima el modelo. Leo las parcelas con rendimiento registrado, mido el error por estado y lo dibujo en el chat: dispersión de estimado contra registrado y barras del error.',
+      calls: [['start_task', { screen_id: screen, title: 'Estimado contra registrado', goal: 'Graficar el rendimiento estimado contra el registrado y el error por estado.', steps: ['Leer las parcelas con rendimiento registrado', 'Medir el error por estado', 'Graficar', 'Responder'] }]] }),
+    ({ screen }) => ({ reasoning: 'Busco las parcelas con rendimiento registrado y su estimado fuera de partición.',
+      calls: [['update_task', { screen_id: screen, step: 0, status: 'running' }], ['query_parcels', { has_observed: true, fields: ['id', 'state', 'municipality', 'observed', 'predicted'], limit: 500 }]] }),
+    ({ screen, results }) => ({ reasoning: `Son ${results.query_parcels.total} parcelas. Ahora el error medido por estado.`,
+      calls: [['update_task', { screen_id: screen, step: 0, status: 'done', note: `${results.query_parcels.total} parcelas` }], ['update_task', { screen_id: screen, step: 1, status: 'running' }], ['get_region_error', { level: 'estado' }]] }),
+    ({ screen, results }) => {
+      const rows = results.query_parcels.rows.filter(r => r.observed != null && r.predicted != null), regions = results.get_region_error.regions;
+      return { reasoning: 'Dibujo las dos gráficas: una serie por estado en la dispersión, con la recta y = x, y el MAE y RMSE de cada estado en barras.',
+        calls: [['update_task', { screen_id: screen, step: 1, status: 'done' }], ['update_task', { screen_id: screen, step: 2, status: 'running' }],
+          ['create_plot', { title: 'Rendimiento estimado contra registrado', subtitle: `${rows.length} parcelas · estimado fuera de partición`, kind: 'scatter', x_label: 'Registrado (t/ha)', y_label: 'Estimado', y_unit: 't/ha', identity_line: true,
+            series: STATES.map(st => ({ name: st, points: rows.filter(r => r.state === st).map(r => ({ x: r.observed, y: r.predicted, label: `${r.id} · ${r.municipality}` })) })).filter(x => x.points.length),
+            note: 'Sobre la diagonal, el modelo estimó de más; debajo, de menos.' }],
+          ['create_plot', { title: 'Error del modelo por estado', kind: 'bar', x: regions.map(r => r.name), y_label: 'Error', y_unit: 't/ha',
+            series: [{ name: 'MAE', values: regions.map(r => r.measured?.mae ?? null), color: 'verde' }, { name: 'RMSE', values: regions.map(r => r.measured?.rmse ?? null), color: 'ambar' }],
+            reference_lines: [{ axis: 'y', value: results.get_region_error.overall.mae, label: 'MAE global' }] }]] };
+    },
+    ({ screen, results }) => {
+      const e = results.get_region_error, worst = [...e.regions].sort((a, b) => (b.measured?.mae ?? 0) - (a.measured?.mae ?? 0))[0];
+      const answer = `Dibujé dos gráficas con las **${results.query_parcels.total} parcelas** que tienen rendimiento registrado:\n\n1. **Estimado contra registrado**: cada punto es una parcela, por estado; cuanto más cerca de la diagonal, mejor la estimación.\n2. **Error por estado**: ${e.regions.map(r => `${r.name} MAE ${fmt(r.measured?.mae)} t/ha`).join(', ')}.\n\nEl MAE global es **${fmt(e.overall.mae)} t/ha**; ${worst.name} es donde más se equivoca el modelo.`;
+      return { reasoning: 'Cierro con la lectura de las gráficas.', calls: [['update_task', { screen_id: screen, step: 2, status: 'done' }], ['update_task', { screen_id: screen, step: 3, status: 'done' }], ['finish_task', { screen_id: screen, answer }]] };
     },
   ],
 };
@@ -117,9 +150,9 @@ const mapScenario = {
       calls: [['start_task', { screen_id: screen, title: `Parcelas en el mapa${stateIn(text) ? ` · ${stateIn(text)}` : ''}`, goal: 'Encontrar las parcelas pedidas y mostrarlas seleccionadas en el mapa.', steps: ['Buscar las parcelas', 'Preparar el mapa', 'Seleccionarlas'] }]] }),
     ({ screen, text }) => ({ reasoning: 'Busco las parcelas en el atlas.', calls: [['update_task', { screen_id: screen, step: 0, status: 'running' }],
       ['query_parcels', { state: stateIn(text) ?? undefined, predicted_min: numberIn(text, /(\d+(?:[.,]\d+)?)\s*t/i) ?? undefined, sort: 'predicted', desc: true, fields: ['id', 'municipality', 'predicted'], limit: 300 }]] }),
-    ({ screen, text, results }) => ({ reasoning: `Son ${results.query_parcels.total} parcelas. Pongo el mapa en rendimiento estimado y filtro por estado.`,
+    ({ screen, text, results }) => ({ reasoning: `Son ${results.query_parcels.total} parcelas. Enciendo el mapa de calor de la producción y filtro por estado.`,
       calls: [['update_task', { screen_id: screen, step: 0, status: 'done', note: `${results.query_parcels.total} parcelas` }], ['update_task', { screen_id: screen, step: 1, status: 'running' }],
-        ['navigate', { screen_id: screen, page: 'mapa' }], ['set_map_layer', { screen_id: screen, mode: 'rendimiento', yield_field: 'estimado' }], ['set_map_filters', { screen_id: screen, state: stateIn(text) ?? 'all' }]] }),
+        ['navigate', { screen_id: screen, page: 'mapa' }], ['set_map_layer', { screen_id: screen, layers: [{ id: 'heatmap', on: true }] }], ['set_map_filters', { screen_id: screen, state: stateIn(text) ?? 'all' }]] }),
     ({ screen, results }) => {
       const ids = results.query_parcels.rows.map(r => r.id);
       return { reasoning: 'Las selecciono y encuadro.', calls: [['update_task', { screen_id: screen, step: 1, status: 'done' }], ['update_task', { screen_id: screen, step: 2, status: 'running' }], ['map_select_parcels', { screen_id: screen, parcel_ids: ids }]] };
@@ -159,13 +192,13 @@ const screenScenario = {
     ({ screen }) => ({ reasoning: 'Leo el estado completo de la pantalla.', calls: [['update_task', { screen_id: screen, step: 0, status: 'running' }], ['get_screen_state', { screen_id: screen }]] }),
     ({ screen, results }) => {
       const s = results.get_screen_state ?? {}, page = { mapa: 'el mapa', panel: 'el panel de control', economia: 'la calculadora de economía' }[s.vista?.pagina] ?? 'la aplicación';
-      const answer = `Estás en **${page}**${s.mapa ? ` (capa ${s.mapa.capa}, ${s.mapa.parcelas_visibles} parcelas visibles)` : ''}.\n\nPuedo, por ejemplo:\n- comparar el **NDVI** de un grupo de parcelas y mostrarlo en la gráfica,\n- calcular **ingreso y margen** con tu costo por hectárea,\n- **filtrar y seleccionar** parcelas en el mapa,\n- analizar un **CSV** que adjuntes.`;
+      const answer = `Estás en **${page}**${s.mapa ? ` (capas: ${s.mapa.capas_activas}, ${s.mapa.parcelas_visibles} parcelas visibles)` : ''}.\n\nPuedo, por ejemplo:\n- comparar el **NDVI** de un grupo de parcelas y mostrarlo en la gráfica,\n- calcular **ingreso y margen** con tu costo por hectárea,\n- **filtrar y seleccionar** parcelas en el mapa,\n- analizar un **CSV** que adjuntes.`;
       return { reasoning: 'Respondo con sugerencias.', calls: [['update_task', { screen_id: screen, step: 0, status: 'done' }], ['update_task', { screen_id: screen, step: 1, status: 'done' }], ['finish_task', { screen_id: screen, answer }]] };
     },
   ],
 };
 
-export const SCENARIOS = [csvScenario, ndviScenario, economicsScenario, mapScenario, screenScenario];
+export const SCENARIOS = [csvScenario, plotScenario, ndviScenario, economicsScenario, mapScenario, screenScenario];
 
 export function createScriptedModel({ scenarios = SCENARIOS, pace = 18 } = {}) {
   return {

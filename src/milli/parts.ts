@@ -45,6 +45,7 @@ const PAGE: Record<string, string> = { mapa: 'el mapa', panel: 'el panel de cont
 const PANEL: Record<string, string> = { capas: 'Capas', mapa_base: 'Mapa base', tabla: 'Tabla de atributos', filtros: 'Filtros', ajustes: 'Ajustes', notas: 'Notas', ninguno: 'ningún panel' };
 const TABLE: Record<string, string> = { estimaciones: 'estimaciones', municipios: 'municipios', economia: 'economía', error_municipios: 'error por municipio', atributos: 'atributos' };
 const EXPORT: Record<string, string> = { estimaciones_csv: 'la tabla de estimaciones (CSV)', entrega_csv: 'la entrega del reto (CSV, 59 parcelas)', parcelas_geojson: 'las parcelas (GeoJSON)', mapa_png: 'la imagen del mapa (PNG)', seleccion_csv: 'la selección (CSV)' };
+const LAYER_NAMES: Record<string, string> = { ndvi: 'Vegetación', water: 'Agua', precipitation: 'Lluvia', tmax: 'Temperatura máxima', tmin: 'Temperatura mínima', elevation: 'Elevación', slope: 'Pendiente', heatmap: 'Mapa de calor', municipalities: 'Municipios' };
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const count = (v: unknown, one: string, many: string) => { const n = Array.isArray(v) ? v.length : 0; return `${n} ${n === 1 ? one : many}`; };
 
@@ -65,7 +66,10 @@ export function actionTitle(name: string, a: Record<string, unknown>) {
     case 'map_fly_to': return a.parcel_id ? `Ir a ${a.parcel_id} en el mapa` : a.all ? 'Ver todas las parcelas' : 'Mover el mapa';
     case 'select_parcel': return `Seleccionar ${a.parcel_id}`;
     case 'map_select_parcels': return `Seleccionar ${count(a.parcel_ids, 'parcela', 'parcelas')} en el mapa`;
-    case 'set_map_layer': return a.mode === 'vegetacion' ? 'Mostrar la vegetación' : a.yield_field ? `Mostrar el rendimiento ${a.yield_field}` : 'Cambiar la capa del mapa';
+    case 'set_map_layer': {
+      const on = ((a.layers as { id: string; on?: boolean }[] | undefined) ?? []).filter(l => l.on).map(l => LAYER_NAMES[l.id] ?? l.id);
+      return a.all_off ? 'Apagar las capas del mapa' : on.length ? `Mostrar ${on.join(' y ').toLowerCase()}` : 'Ajustar las capas del mapa';
+    }
     case 'set_map_filters': return a.reset ? 'Quitar los filtros del mapa' : a.state && a.state !== 'all' ? `Filtrar el mapa: ${a.state}` : 'Filtrar el mapa';
     case 'set_time': return `Mapa en ${MONTHS[Number(a.month) - 1] ?? ''} ${a.year}`;
     case 'table_set': return a.set_tab ? `Tabla: ${String(a.set_tab).replace('_', ' ')}` : 'Ajustar la tabla';
@@ -74,6 +78,7 @@ export function actionTitle(name: string, a: Record<string, unknown>) {
     case 'calculator_set': return 'Calcular la economía';
     case 'region_error_drill': return a.state ? `Error por municipio en ${a.state}` : 'Error por estado';
     case 'write_notes': return 'Escribir en Notas';
+    case 'create_plot': return `Graficar «${a.title}»`;
     case 'request_export': return `Descargar ${EXPORT[String(a.kind)] ?? a.kind}`;
     default: return name;
   }
@@ -96,6 +101,7 @@ export function actionDetail(action: Action): string {
     case 'get_region_error': { const o = r.overall as Record<string, number> | undefined; return o ? `MAE ${o.mae?.toFixed(2)} t/ha en ${o.n} parcelas` : ''; }
     case 'map_select_parcels': return `${r.seleccionadas} seleccionadas`;
     case 'write_notes': return `${Number(r.characters).toLocaleString('es-MX')} caracteres`;
+    case 'create_plot': return `${Number(r.points).toLocaleString('es-MX')} puntos · en el chat`;
     case 'request_export': return r.archivo ? `${r.archivo}` : '';
     default: return 'Hecho';
   }

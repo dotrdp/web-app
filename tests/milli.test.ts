@@ -41,7 +41,7 @@ test('MCP: every tool is listed with a schema, and screen tools demand the conve
   const { tools } = await client.listTools();
   const names = tools.map(t => t.name);
   for (const n of ['start_task', 'update_task', 'finish_task', 'get_screen_state', 'read_table', 'read_notes', 'query_parcels', 'get_series', 'get_integrals', 'get_region_error', 'get_model_metrics', 'read_attachment',
-    'navigate', 'open_panel', 'map_fly_to', 'select_parcel', 'map_select_parcels', 'set_map_layer', 'set_map_filters', 'set_time', 'table_set', 'table_check', 'plot_set', 'calculator_set', 'region_error_drill', 'write_notes', 'request_export'])
+    'navigate', 'open_panel', 'map_fly_to', 'select_parcel', 'map_select_parcels', 'set_map_layer', 'set_map_filters', 'set_time', 'table_set', 'table_check', 'plot_set', 'calculator_set', 'region_error_drill', 'write_notes', 'request_export', 'create_plot'])
     assert.ok(names.includes(n), `missing tool ${n}`);
   for (const t of tools) { assert.equal(t.inputSchema.type, 'object'); assert.ok((t.description ?? '').length > 20, `${t.name} needs a real description`); }
   const wrong = await client.callTool({ name: 'navigate', arguments: { screen_id: 'otra-pantalla-123456', page: 'panel' } });
@@ -91,6 +91,23 @@ test('MCP: task lifecycle, notes, and the plot animation for bulk reads', async 
   assert.deepEqual(notified.map(e => (e as { type: string; phase?: string }).phase ?? (e as { type: string }).type), ['start', 'update', 'show_series', 'finish']);
 });
 
+test('MCP: create_plot accepts coherent charts for the chat and explains incoherent ones', async () => {
+  const { client, sent } = await mcpClient();
+  const plot = async (args: Record<string, unknown>) => client.callTool({ name: 'create_plot', arguments: { title: 'Prueba', ...args } });
+  const line = json(await plot({ kind: 'line', x: ['ene', 'feb', 'mar'], series: [{ name: 'NDVI', values: [0.2, null, 0.4] }, { name: 'Lluvia', values: [10, 20, 30], type: 'bar', axis: 'right' }] }) as never);
+  assert.deepEqual(line, { ok: true, plot_id: 'grafica_1', kind: 'line', series: 2, points: 5, shown: 'en el chat' });
+  const scatter = json(await plot({ kind: 'scatter', identity_line: true, series: [{ name: 'Puebla', points: [{ x: 3, y: 3.2, label: 'AGC_001' }] }] }) as never);
+  assert.equal(scatter.plot_id, 'grafica_2');
+  const text = (r: unknown) => (r as { content: { text: string }[] }).content[0].text;
+  const short = await plot({ kind: 'bar', x: ['a', 'b'], series: [{ name: 'MAE', values: [1] }] });
+  assert.equal(short.isError, true); assert.match(text(short), /tiene 1 valores y x tiene 2/);
+  const noPoints = await plot({ kind: 'scatter', series: [{ name: 'Puebla', values: [1] }] });
+  assert.equal(noPoints.isError, true); assert.match(text(noPoints), /no tiene points/);
+  assert.equal((await plot({ kind: 'line', series: [{ name: 'x', values: [1] }] })).isError, true); // no x
+  assert.equal((await plot({ kind: 'pie', x: ['a'], series: [{ name: 'x', values: [1] }] })).isError, true);
+  assert.equal(sent.length, 0, 'plots go to the chat, not to the screen');
+});
+
 // ── Full conversations over HTTP, with a simulated browser tab on the live channel ────────────
 
 type Ev = Record<string, any>;
@@ -125,7 +142,7 @@ async function setup(options: Record<string, unknown> = {}) {
           if (e.type !== 'command') continue;
           commands.push(e);
           const result = e.command === 'calculator_set' ? { shown: true, totals: { parcels: 51, area: 400, production: 1700, income: 11050000, band: 900000, cost: 6000000, margin: 5050000, breakEven: 2.31, above: 49 } }
-            : e.command === 'state' ? { vista: { pagina: 'mapa' }, mapa: { capa: 'Rendimiento estimado', parcelas_visibles: 197 } } : { shown: true };
+            : e.command === 'state' ? { vista: { pagina: 'mapa' }, mapa: { capas_activas: 'ninguna (solo parcelas)', parcelas_visibles: 197 } } : { shown: true };
           await fetch(`${root}/api/live/${screen}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookieValue }, body: JSON.stringify({ cmdId: e.cmdId, ok: true, result }) });
         }
       } catch { /* aborted */ }
@@ -145,7 +162,7 @@ test('Conversation: NDVI analysis drives the screen, asks to export, resumes on 
     const threadId = first.find(e => e.type === 'thread')!.id;
     const calls = first.filter(e => e.type === 'tool-call').map(e => e.name);
     assert.equal(calls[0], 'start_task');
-    for (const n of ['query_parcels', 'get_series', 'navigate', 'table_set', 'table_check', 'plot_set', 'write_notes']) assert.ok(calls.includes(n), `expected ${n}`);
+    for (const n of ['query_parcels', 'get_series', 'navigate', 'table_set', 'table_check', 'plot_set', 'write_notes', 'create_plot']) assert.ok(calls.includes(n), `expected ${n}`);
     assert.ok(first.some(e => e.type === 'reasoning'), 'reasoning streams to the chat');
     assert.equal(first.filter(e => e.type === 'tool-result' && e.isError).length, 0, JSON.stringify(first.filter(e => e.isError)));
     const approval = first.find(e => e.type === 'approval')!;
@@ -196,6 +213,14 @@ test('Conversation: declining the export, the calculator and the map scenarios a
     assert.ok(select.args.parcel_ids.length > 0);
     assert.ok(t.commands.some(c => c.command === 'set_map_filters' && c.args.state === 'Puebla'));
     assert.deepEqual(map.at(-1), { type: 'done', status: 'finished' });
+    // And plots in the chat: estimate against recorded (one series per state) and the error by state.
+    const plots = await collect(await s.chat({ screenId: t.screen, threadId, message: { text: 'Grafica el rendimiento estimado contra el registrado y el error por estado' } }));
+    const drawn = plots.filter(e => e.type === 'tool-call' && e.name === 'create_plot');
+    assert.deepEqual(drawn.map(e => e.args.kind), ['scatter', 'bar']);
+    assert.equal(drawn[0].args.series.reduce((n: number, x: { points: unknown[] }) => n + x.points.length, 0), 138);
+    assert.deepEqual(drawn[1].args.x.slice().sort(), ['Hidalgo', 'Puebla', 'Tlaxcala']);
+    assert.ok(plots.filter(e => e.type === 'tool-result' && e.name === 'create_plot').every(e => !e.isError && JSON.parse(e.result).ok));
+    assert.match(plots.find(e => e.type === 'answer')!.text, /MAE global es \*\*0[.,]32 t\/ha\*\*/);
     t.close();
   } finally { await s.close(); }
 });

@@ -4,7 +4,9 @@ import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { MapHandle } from '../AtlasMap';
 import { download, parcelCsv, MONTH_NAMES } from '../lib';
 import { submissionCsv } from '../model';
-import type { Atlas, LayerSettings, MapFilters, MapMode, Parcel, Phase } from '../types';
+import type { Atlas, LayerSettings, MapFilters, Parcel, Phase } from '../types';
+import { anyTemporal, LAYERS, updateLayer } from '../layers';
+import type { LayerId, MapLayer } from '../layers';
 import { callWhenReady, peek, useMilliController } from './bridge';
 
 type Left = 'layers' | 'basemap' | 'tabla' | 'filters' | 'settings' | 'scripts' | 'notes' | 'fuentes';
@@ -13,8 +15,6 @@ const LEFT_NAME: Record<Left, string> = { layers: 'capas', basemap: 'mapa_base',
 const MAP_PANELS = new Set<Left>(['layers', 'basemap', 'tabla', 'filters']);
 const GROUP_OF = { all: 'all', reservadas: 'prediction', con_rendimiento: 'training', propias: 'custom' } as const;
 const GROUP_NAME: Record<string, string> = { all: 'todas', prediction: 'reservadas', training: 'con_rendimiento', custom: 'propias' };
-const CLASS_OF = { continua: 'continuous', cuantiles: 'quantile', intervalos: 'equal' } as const;
-const CLASS_NAME: Record<string, string> = { continuous: 'continua', quantile: 'cuantiles', equal: 'intervalos' };
 
 /** One parcel as Milli reads it (tables, selection, the parcel card). */
 export const parcelRow = (p: Parcel) => {
@@ -33,11 +33,11 @@ export function tableSlice(rows: Record<string, unknown>[], { offset = 0, limit 
 export type AppMilli = {
   atlas: Atlas | null; parcels: Parcel[]; visibleParcels: Parcel[]; selected: Parcel | null; selection: string[];
   phase: Phase; dashboard: boolean; economics: boolean; left: Left | null; right: string | null; assistant: boolean; dark: boolean; scheme: string;
-  mode: MapMode; layers: LayerSettings; filters: MapFilters; year: number; month: number; keyDate: string;
+  stack: MapLayer[]; layers: LayerSettings; filters: MapFilters; year: number; month: number; keyDate: string;
   tools: { draftMode: string | null; measureKind: string | null; selectArea: boolean; swipe: number | null; plugins: Record<string, boolean> };
   map: RefObject<MapHandle | null>;
   setDashboard: (v: boolean) => void; setEconomics: (v: boolean) => void; setLeft: Dispatch<SetStateAction<Left | null>>;
-  switchMode: (m: MapMode) => void; setLayers: Dispatch<SetStateAction<LayerSettings>>; setFilters: Dispatch<SetStateAction<MapFilters>>;
+  setStack: Dispatch<SetStateAction<MapLayer[]>>; setLayers: Dispatch<SetStateAction<LayerSettings>>; setFilters: Dispatch<SetStateAction<MapFilters>>;
   setYear: (y: number) => void; setMonth: (m: number) => void;
   chooseParcel: (id: string, locate?: boolean) => void; showSelection: (ids: string[]) => void; exportMap: () => Promise<void>;
 };
@@ -68,9 +68,9 @@ export function useAppMilli(a: AppMilli) {
           panel_derecho: a.right === 'parcel' ? 'ficha_de_parcela' : a.right === 'selection' ? 'resumen_de_seleccion' : a.right === 'export' ? 'exportar' : a.right === 'draft' ? 'delimitacion' : null,
           tema: a.dark ? 'oscuro' : 'claro', esquema: a.scheme, chat_de_milli_abierto: a.assistant },
         mapa: {
-          capa: a.mode === 'parcels' ? (l.yieldField === 'observed' ? 'Rendimiento registrado' : 'Rendimiento estimado') : a.mode === 'ndvi' ? 'Vegetación (NDVI Sentinel-2)' : a.mode,
-          modo: a.mode === 'parcels' ? 'rendimiento' : a.mode === 'ndvi' ? 'vegetacion' : a.mode, campo_rendimiento: l.yieldField === 'observed' ? 'registrado' : 'estimado',
-          clasificacion: CLASS_NAME[l.classification], mapa_de_calor: l.heatmap, opacidad: l.opacity, mapa_base: l.base, limites_estatales: l.states, limites_municipales: l.municipalities,
+          capas: a.stack.map(x => ({ id: x.id, nombre: LAYERS[x.id].name, activa: x.on, opacidad: round(x.opacity, 2), ...(x.threshold != null ? { umbral: x.threshold } : {}) })),
+          capas_activas: a.stack.filter(x => x.on).map(x => LAYERS[x.id].name).join(', ') || 'ninguna (solo parcelas)',
+          mapa_base: l.base,
           filtros: { estado: f.state, conjunto: GROUP_NAME[f.group] ?? f.group, rango_rendimiento: f.yieldBand ?? null, busqueda: f.query || null },
           año: a.year, mes: a.month + 1, mes_nombre: MONTH_NAMES[a.month],
           parcelas_visibles: a.visibleParcels.length, parcelas_totales: a.parcels.length,
@@ -113,13 +113,19 @@ export function useAppMilli(a: AppMilli) {
       },
       set_map_layer: args => {
         a.setDashboard(false);
-        if (args.mode) a.switchMode(args.mode === 'vegetacion' ? 'ndvi' : 'parcels');
-        a.setLayers(l => ({ ...l,
-          ...(args.yield_field ? { yieldField: args.yield_field === 'registrado' ? 'observed' : 'predicted' } : {}),
-          ...(args.classification ? { classification: CLASS_OF[args.classification as keyof typeof CLASS_OF] } : {}),
-          ...(args.heatmap != null ? { heatmap: !!args.heatmap } : {}), ...(args.opacity != null ? { opacity: Number(args.opacity) } : {}),
-          ...(args.basemap ? { base: args.basemap as LayerSettings['base'] } : {}),
-          ...(args.states_overlay != null ? { states: !!args.states_overlay } : {}), ...(args.municipalities_overlay != null ? { municipalities: !!args.municipalities_overlay } : {}) }));
+        a.setStack(stack => {
+          let next = args.all_off ? stack.map(x => ({ ...x, on: false })) : stack;
+          for (const c of (args.layers as { id: LayerId; on?: boolean; opacity?: number; threshold?: number }[] | undefined) ?? []) {
+            const t = LAYERS[c.id].threshold;
+            next = updateLayer(next, c.id, { ...(c.on != null ? { on: c.on } : {}), ...(c.opacity != null ? { opacity: c.opacity } : {}),
+              ...(c.threshold != null && t ? { threshold: Math.min(t.max, Math.max(t.min, c.threshold)) } : {}) });
+          }
+          // Order: the ids given go on top, in that order; the rest keep theirs.
+          const order = args.order as LayerId[] | undefined;
+          if (order?.length) next = [...order.map(id => next.find(x => x.id === id)!).filter(Boolean), ...next.filter(x => !order.includes(x.id))];
+          return next;
+        });
+        if (args.basemap) a.setLayers(l => ({ ...l, base: args.basemap as LayerSettings['base'] }));
         return {};
       },
       set_map_filters: ({ state, group, yield_band, reset }) => {
@@ -129,7 +135,7 @@ export function useAppMilli(a: AppMilli) {
           ...(yield_band !== undefined ? { yieldBand: yield_band as [number, number] | null } : {}) });
         return {};
       },
-      set_time: ({ year, month }) => { a.setYear(Number(year)); a.setMonth(Number(month) - 1); return { nota: a.mode === 'parcels' ? 'La capa de rendimiento no cambia por mes; usa set_map_layer(mode: "vegetacion") para ver el NDVI del mes.' : undefined }; },
+      set_time: ({ year, month }) => { a.setYear(Number(year)); a.setMonth(Number(month) - 1); return { nota: anyTemporal(a.stack) ? undefined : 'Ninguna capa mensual está activa (vegetación, agua, lluvia o temperatura); actívala con set_map_layer para ver el mes.' }; },
       show_notes: async ({ text }) => {
         a.setLeft('notes');
         await callWhenReady('notas', 'show', { text });

@@ -129,10 +129,10 @@ export function createMilliMcp(ctx) {
     { parcel_id: z.string().optional(), bbox: z.array(z.number()).length(4).optional(), all: z.boolean().optional() });
   screenTool('select_parcel', 'Selecciona una parcela en el mapa y abre su ficha.', { parcel_id: z.string() });
   screenTool('map_select_parcels', 'Selecciona varias parcelas en el mapa, las encuadra y muestra el resumen de la selección (superficie, producción).', { parcel_ids: ids });
-  screenTool('set_map_layer', 'Cambia la capa del mapa y su simbología: modo (rendimiento o vegetacion), campo de rendimiento (estimado o registrado), clasificación, mapa de calor, opacidad (0–1), mapa base y límites estatales/municipales.', {
-    mode: z.enum(['rendimiento', 'vegetacion']).optional(), yield_field: z.enum(['estimado', 'registrado']).optional(), classification: z.enum(['continua', 'cuantiles', 'intervalos']).optional(),
-    heatmap: z.boolean().optional(), opacity: z.number().min(0).max(1).optional(), basemap: z.enum(['topo', 'light', 'dark', 'satellite']).optional(),
-    states_overlay: z.boolean().optional(), municipalities_overlay: z.boolean().optional(),
+  const layerId = z.enum(['ndvi', 'water', 'precipitation', 'tmax', 'tmin', 'elevation', 'slope', 'heatmap', 'municipalities']);
+  screenTool('set_map_layer', 'Maneja la pila de capas del mapa. Capas: ndvi (vegetación, umbral NDVI −0.2–0.8, por defecto 0.2), water (agua MNDWI, umbral −0.5–0.5, por defecto 0), precipitation (lluvia CHIRPS del mes), tmax y tmin (temperatura del mes), elevation, slope (pendiente), heatmap (mapa de calor de la producción estimada) y municipalities (un color por municipio). Cada una se enciende o apaga (puede no haber ninguna), con opacidad 0.1–1 y, en ndvi y water, umbral. order pone esas capas arriba en ese orden (la primera se dibuja encima). all_off apaga todas. También cambia el mapa base. Las parcelas siempre se ven como contornos con su t/ha, y los límites estatales y municipales siempre están visibles.', {
+    layers: z.array(z.object({ id: layerId, on: z.boolean().optional(), opacity: z.number().min(0.1).max(1).optional(), threshold: z.number().min(-1).max(1).optional() })).max(9).optional(),
+    order: z.array(layerId).max(9).optional(), all_off: z.boolean().optional(), basemap: z.enum(['topo', 'light', 'dark', 'satellite']).optional(),
   });
   screenTool('set_map_filters', 'Filtra las parcelas visibles en el mapa por estado, conjunto y rango de rendimiento estimado [mín, máx]; reset=true quita todos los filtros.', {
     state: z.enum(['all', 'Hidalgo', 'Puebla', 'Tlaxcala']).optional(), group: z.enum(['all', 'reservadas', 'con_rendimiento', 'propias']).optional(),
@@ -162,6 +162,51 @@ export function createMilliMcp(ctx) {
     return text({ ...result, shown: answer.ok ? answer.result?.shown ?? true : false, ...(answer.ok ? {} : { screen_error: answer.error }) });
   });
   screenTool('region_error_drill', 'En economía, abre el error esperado de un estado (tabla por municipio) o vuelve a la vista por estado (state null).', { state: z.enum(['Hidalgo', 'Puebla', 'Tlaxcala']).nullable() });
+
+  // ── Chat: plots ──────────────────────────────────────────────────────────────────────────────
+  // The chart is drawn in the conversation from these arguments; the server only checks that they
+  // make a coherent chart (one value per category, points for scatter) and numbers it.
+  let plots = 0;
+  const plotSeries = z.object({
+    name: z.string().min(1).max(40).describe('Nombre en la leyenda.'),
+    values: z.array(z.number().nullable()).max(400).optional().describe('line, bar, area: un valor por categoría de x (null si falta).'),
+    points: z.array(z.object({ x: z.number(), y: z.number(), label: z.string().max(60).optional() })).max(1000).optional().describe('scatter: puntos {x, y, label?} (label, p. ej. el id de la parcela, sale en el tooltip).'),
+    type: z.enum(['line', 'bar', 'area']).optional().describe('Para combinar tipos (p. ej. lluvia en barras y NDVI en línea); por defecto, kind.'),
+    axis: z.enum(['left', 'right']).default('left').describe('right usa el segundo eje (y2_label, y2_unit).'),
+    color: z.enum(['verde', 'azul', 'ambar', 'verde_claro', 'gris']).optional().describe('Por defecto, en orden: verde, azul, ámbar, verde claro, gris. Verde = vegetación, azul = lluvia o frío, ámbar = calor.'),
+  });
+  server.registerTool('create_plot', {
+    description: 'Dibuja una gráfica en el chat, dentro de tu respuesta (no cambia la pantalla de la app). Úsala cuando una figura explique mejor que una tabla: series mensuales (line/area), comparaciones y rankings (bar, horizontal=true para muchos nombres), relaciones como estimado contra registrado (scatter, identity_line=true para la recta y = x). Pasa los datos que ya obtuviste de las herramientas de datos, con sus unidades. Hasta 6 series y 2,000 puntos. Puedes crear varias; el usuario las ve en el orden en que las creas, encima de tu respuesta final.',
+    inputSchema: {
+      title: z.string().min(3).max(80), subtitle: z.string().max(120).optional(),
+      kind: z.enum(['line', 'bar', 'area', 'scatter']),
+      x: z.array(z.union([z.string().max(40), z.number()])).max(400).optional().describe('Categorías del eje x para line, bar y area (meses, ids, municipios, años).'),
+      x_label: z.string().max(40).optional(), y_label: z.string().max(40).optional(), y_unit: z.string().max(12).optional(),
+      y2_label: z.string().max(40).optional(), y2_unit: z.string().max(12).optional(),
+      y_min: z.number().optional(), y_max: z.number().optional(),
+      series: z.array(plotSeries).min(1).max(6),
+      stacked: z.boolean().optional().describe('Apila las barras o áreas del mismo eje.'),
+      horizontal: z.boolean().optional().describe('Solo bar: barras horizontales, para rankings con nombres largos.'),
+      identity_line: z.boolean().optional().describe('Solo scatter: dibuja la recta y = x.'),
+      reference_lines: z.array(z.object({ axis: z.enum(['x', 'y']), value: z.union([z.number(), z.string()]), label: z.string().max(40).optional() })).max(5).optional().describe('Líneas de referencia, p. ej. el punto de equilibrio en t/ha.'),
+      note: z.string().max(300).optional().describe('Pie de la gráfica: fuente o cómo leerla.'),
+    },
+  }, async args => {
+    const { kind, x, series: list } = args;
+    if (kind === 'scatter') {
+      const empty = list.find(s => !s.points?.length);
+      if (empty) return fail(`La serie «${empty.name}» no tiene points: en scatter cada serie lleva puntos {x, y}.`);
+    } else {
+      if (!x?.length) return fail(`Una gráfica ${kind} necesita x: las categorías del eje.`);
+      const off = list.find(s => s.values?.length !== x.length);
+      if (off) return fail(`La serie «${off.name}» tiene ${off.values?.length ?? 0} valores y x tiene ${x.length}: deben coincidir.`);
+      if (list.every(s => s.values.every(v => v == null))) return fail('Todas las series están vacías (solo null).');
+    }
+    if (args.horizontal && kind !== 'bar') return fail('horizontal solo aplica a kind bar.');
+    const points = list.reduce((n, s) => n + (s.points?.length ?? s.values?.filter(v => v != null).length ?? 0), 0);
+    if (points > 2000) return fail(`La gráfica tiene ${points} puntos; el máximo es 2,000. Resume o agrupa los datos.`);
+    return text({ ok: true, plot_id: `grafica_${++plots}`, kind, series: list.length, points, shown: 'en el chat' });
+  });
 
   // ── Notes ─────────────────────────────────────────────────────────────────────────────────────
   server.registerTool('write_notes', {

@@ -1,9 +1,5 @@
 /** Phases of the workspace: explore the map, read the estimate on the dashboard page. */
 export type Phase = 'explorar' | 'estimar';
-export type MapMode = 'parcels' | 'ndvi' | 'water' | 'landsat' | 'alphaearth' | 'climate' | 'terrain' | 'error';
-/** What the Rendimiento layer colours: the model estimate or the recorded 2025 yield. */
-export type YieldField = 'predicted' | 'observed';
-export type Classification = 'continuous' | 'quantile' | 'equal';
 export type Geometry = { type: 'Polygon'; coordinates: number[][][] };
 export interface ParcelProperties {
   id: string; municipality: string; state: string; crop: string; area: number;
@@ -30,4 +26,5 @@ export interface Field { id: string; name: string; geometry: Geometry; area: num
 export interface Override { geometry: Geometry; area: number; updatedAt: string }
 export interface Workspace { overrides: Record<string, Override>; fields: Field[] }
 export interface MapFilters { query: string; state: string; group: string; ndviEnabled: boolean; ndviThreshold: number; onlyNdvi: boolean; /** "Parcelas parecidas": estimated yield within this band (t/ha). */ yieldBand?: [number, number] | null }
-export interface LayerSettings { yieldField: YieldField; classification: Classification; heatmap: boolean; precipitation: boolean; tmin: boolean; tmax: boolean; elevation: boolean; slope: boolean; municipalities: boolean; states: boolean; opacity: number; base: 'topo' | 'light' | 'dark' | 'satellite'; waterThreshold?: number; waterOpacity?: number }
+/** The basemap; the data layers are a stack (src/layers.ts). */
+export interface LayerSettings { base: 'topo' | 'light' | 'dark' | 'satellite' }

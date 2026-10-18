@@ -5,7 +5,7 @@
 // map) and Estimar, the dashboard page that the map and its controls fade away for. the Agente de IA Milli lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Calculator, CodeXml, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Calculator, CodeXml, Search, Send, Settings, SquareDashed, Sun, Table2, TriangleAlert, WandSparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -26,7 +26,10 @@ import MapSetup, { createSetupTasks, MapSetupScreen } from './MapSetup';
 import type { SetupTaskId } from './MapSetup';
 import { LoadingState, LoadingValue } from './AgentProgress';
 import type { AgentStep } from './AgentProgress';
-import { BASEMAPS, BasemapPanel, BookmarksPanel, FiltersPanel, LayersPanel, MODES, SectionTitle } from './MapPanels';
+import { BASEMAPS, BasemapPanel, BookmarksPanel, FiltersPanel, SectionTitle } from './MapPanels';
+import LayersPanel from './LayersPanel';
+import { anyTemporal, DEFAULT_STACK, isOn, LAYERS, updateLayer } from './layers';
+import type { LayerId, MapLayer } from './layers';
 import TimeSlider from './TimeSlider';
 import { api, dateKey, download, filterParcels, fmt, IS_DEMO, mergedParcels, MONTH_NAMES, parcelCsv, polygonArea } from './lib';
 import { useAppMilli } from './milli/app-controller';
@@ -50,7 +53,7 @@ import EstimationPanel, { Stat } from './panels/EstimationPanel';
 import EconomicsPanel from './panels/EconomicsPanel';
 import NotesPanel from './panels/NotesPanel';
 import AttributeTable from './panels/AttributeTable';
-import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Override, Parcel, Phase, SegmentationPrompt, SegmentationProposal, User, Workspace } from './types';
+import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSettings, MapFilters, Override, Parcel, Phase, SegmentationPrompt, SegmentationProposal, User, Workspace } from './types';
 import './map.css';
 import './shell/shell.css';
 
@@ -63,7 +66,7 @@ const SCHEMES: { key: Scheme; label: string }[] = [{ key: 'maiz', label: 'Maíz'
 const SHEETS: Sheet[] = ['fuentes', 'tabla'];
 const EMPTY_WORKSPACE: Workspace = { overrides: {}, fields: [] };
 const EMPTY_FILTERS: MapFilters = { query: '', state: 'all', group: 'all', ndviEnabled: true, ndviThreshold: -1, onlyNdvi: false };
-const DEFAULT_LAYERS: LayerSettings = { yieldField: 'predicted', classification: 'continuous', heatmap: false, precipitation: false, tmin: false, tmax: false, elevation: false, slope: false, municipalities: false, states: true, opacity: .8, base: 'topo', waterThreshold: 0, waterOpacity: .75 };
+const DEFAULT_LAYERS: LayerSettings = { base: 'topo' };
 const LEGACY_ROUTES: Record<string, Phase> = { map: 'explorar', parcels: 'estimar', models: 'estimar', technical: 'explorar', avanzado: 'explorar', sources: 'explorar' };
 const routePhase = (): Phase => { const r = window.location.hash.replace('#/', ''); return (PHASES.some(p => p.key === r) ? r : LEGACY_ROUTES[r] ?? 'explorar') as Phase; };
 const PAGE = {
@@ -127,7 +130,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null), [hoverId, setHoverId] = useState<string | null>(null);
   const [identify, setIdentify] = useState<{ id: string; pixel: [number, number] } | null>(null);
   const [year, setYear] = useState(2025), [month, setMonth] = useState(6), [playing, setPlaying] = useState(false), [touring, setTouring] = useState(false);
-  const [mode, setMode] = useState<MapMode>('parcels');
+  const [stack, setStack] = useState<MapLayer[]>(DEFAULT_STACK);
   const [filters, setFilters] = useState<MapFilters>(EMPTY_FILTERS), [layers, setLayers] = useState<LayerSettings>(DEFAULT_LAYERS);
   const [rightPanel, setRightPanel] = useState<'export' | 'selection' | null>(null);
   const [measureKind, setMeasureKind] = useState<MeasureKind | null>(null), [measureValue, setMeasureValue] = useState<string | null>(null);
@@ -146,8 +149,8 @@ export default function App() {
   const toolKeys = useRef<(() => void)[]>([]);
   const viewport = useRef<HTMLDivElement>(null);
   const [statusEl, setStatusEl] = useState<HTMLDivElement | null>(null);
-  const temporal = !['parcels', 'terrain', 'alphaearth', 'error'].includes(mode) && !draftMode;
-  const liveImagery = ['ndvi', 'water'].includes(mode) || draftMode === 'segment';
+  const temporal = anyTemporal(stack) && !draftMode;
+  const liveImagery = isOn(stack, 'ndvi') || isOn(stack, 'water') || draftMode === 'segment';
 
   useEffect(() => { void api<{ user: User | null }>('/api/auth/session').then(d => setUser(current => current === undefined ? d.user : current)).catch(() => setUser(current => current === undefined ? null : current)); }, []);
   const reloadWorkspace = useCallback(async () => { const w = await api<Workspace>('/api/workspace'); setWorkspace(w); return w; }, []);
@@ -188,7 +191,7 @@ export default function App() {
 
   const parcels = useMemo(() => atlas ? mergedParcels(atlas, workspace) : [], [atlas, workspace]);
   const selected = useMemo(() => parcels.find(p => p.properties.id === selectedId) || null, [parcels, selectedId]);
-  const visibleParcels = useMemo(() => atlas ? filterParcels(parcels, { ...filters, onlyNdvi: mode === 'landsat' && filters.onlyNdvi }, atlas, key) : [], [parcels, filters, atlas, key, mode]);
+  const visibleParcels = useMemo(() => atlas ? filterParcels(parcels, filters, atlas, key) : [], [parcels, filters, atlas, key]);
   const tourIndex = useRef(0);
   useEffect(() => {
     if (!touring || !visibleParcels.length) return;
@@ -199,8 +202,8 @@ export default function App() {
   // Agente de IA Milli drives this tab through its live channel (server version only).
   useEffect(() => user && !IS_DEMO ? startLive() : undefined, [user]);
   useAppMilli({ atlas, parcels, visibleParcels, selected, selection, phase, dashboard, economics, left, right: draftMode ? 'draft' : rightPanel ?? (selected ? 'parcel' : null),
-    assistant, dark, scheme, mode, layers, filters, year, month, keyDate: key, tools: { draftMode, measureKind, selectArea, swipe, plugins }, map,
-    setDashboard, setEconomics, setLeft, switchMode, setLayers, setFilters, setYear, setMonth, chooseParcel, showSelection, exportMap });
+    assistant, dark, scheme, stack, layers, filters, year, month, keyDate: key, tools: { draftMode, measureKind, selectArea, swipe, plugins }, map,
+    setDashboard, setEconomics, setLeft, setStack, setLayers, setFilters, setYear, setMonth, chooseParcel, showSelection, exportMap });
 
   // Keyboard: Ctrl/⌘ K launcher, Alt 1–2 phases, Alt D dashboard, 1–9 the map tools in strip
   // order (refreshed every render, so disabled plugins close the gap), C cancels the active map tool,
@@ -223,13 +226,9 @@ export default function App() {
     if (window.location.hash !== '#/' + next) window.history.replaceState(null, '', '#/' + next);
     setPhase(next); setPlaying(false); setTouring(false);
     if (next === 'explorar') setDashboard(false);
-    if (next === 'estimar') { setDashboard(true); switchMode('parcels'); setLayers(l => ({ ...l, yieldField: 'predicted' })); }
+    if (next === 'estimar') setDashboard(true);
   }
   function openLeft(next: Left) { setLeft(current => current === next ? null : next); }
-  function switchMode(next: MapMode) {
-    setMode(next); if (next !== 'alphaearth' && year < 2022) setYear(2025);
-    setLayers(l => ({ ...l, precipitation: next === 'climate', tmin: false, tmax: false, elevation: next === 'terrain', slope: false }));
-  }
   function chooseParcel(id: string, locate = false) { setSelectedId(id); setRightPanel(null); if (locate) { const p = parcels.find(f => f.properties.id === id); if (p) setTimeout(() => map.current?.fitParcel(p), 40); } }
   /** Leaves the dashboard and shows these parcels on the map with the selection summary. */
   function showSelection(ids: string[]) {
@@ -286,15 +285,14 @@ export default function App() {
   async function exportMap() { const blob = await map.current?.exportPng(); if (!blob) { toast('No pudimos exportar la imagen del mapa.'); return; } const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `agrocebada-mapa-${key}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
   function togglePlugin(id: PluginId, on: boolean) {
     setPlugins(p => ({ ...p, [id]: on }));
-    if (!on) { if (id === 'swipe') setSwipe(null); if (id === 'select') setSelectArea(false); if (id === 'heatmap') setLayers(l => ({ ...l, heatmap: false })); if (id === 'identify') setIdentify(null); if ((id === 'measure' && measureKind === 'distance') || (id === 'area' && measureKind === 'area')) toggleMeasure(null); }
+    if (!on) { if (id === 'swipe') setSwipe(null); if (id === 'select') setSelectArea(false); if (id === 'identify') setIdentify(null); if ((id === 'measure' && measureKind === 'distance') || (id === 'area' && measureKind === 'area')) toggleMeasure(null); }
   }
 
   if (!user) return <Login checkingSession={user === undefined} onLogin={u => { setUser(u); setLoadError(''); }}/>;
   if (!atlas) return <MapSetupScreen tasks={setupTasks} error={loadError} onRetry={reload}/>;
 
-  const activeMode = MODES.find(m => m.key === mode);
-  const periodLabel = mode === 'alphaearth' ? `${year}` : ['parcels', 'error'].includes(mode) ? '2025' : mode === 'terrain' ? 'estática' : `${MONTH_NAMES[month].slice(0, 3).toLowerCase()} ${year}`;
-  const modeLabel = mode === 'parcels' ? (layers.yieldField === 'observed' ? 'Rendimiento registrado' : 'Rendimiento estimado') : activeMode?.label ?? '';
+  const periodLabel = temporal ? `${MONTH_NAMES[month].slice(0, 3).toLowerCase()} ${year}` : '2025';
+  const modeLabel = stack.filter(l => l.on).map(l => LAYERS[l.id].name).join(' · ') || 'Parcelas';
   const filtered = filters.state !== 'all' || filters.group !== 'all' || !!filters.yieldBand;
   const right = draftMode ? 'draft' : rightPanel ?? (selected ? 'parcel' : null);
   const isSheet = SHEETS.includes(left as Sheet);
@@ -304,7 +302,7 @@ export default function App() {
   // Milli's chat docks to the right edge on desktop; the map, the dashboard and the right-hand cards make room for it.
   const chatWidth = assistant && !isMobile ? Math.round(Math.min(460, Math.max(380, viewWidth * .3))) : 0;
   const timeWidth = Math.min(520, viewWidth - 66 - leftWidth - (left ? 28 : 0) - 520 - 40 - chatWidth);
-  const showTime = (temporal || (mode === 'alphaearth' && !draftMode)) && !isMobile && timeWidth >= 300;
+  const showTime = temporal && !isMobile && timeWidth >= 300;
   const rightWidth = right && !isMobile ? 372 : 0;
   const openMilli = () => { setAssistant(true); setMilliOpened(true); };
   const identified = identify && plugins.identify ? parcels.find(p => p.properties.id === identify.id) : null;
@@ -326,14 +324,13 @@ export default function App() {
     { id: 'base', title: 'Mapa base', subtitle: 'Topográfico, claro, oscuro o satélite', icon: <Layers3/>, keywords: 'basemap fondo', carousel: 'base' },
     { id: 'esquema', title: 'Esquema de color', subtitle: 'Una paleta por cultivo: maíz, sorgo, trigo, arroz, cebada y mijo', icon: <Palette/>, keywords: 'tema color scheme cultivo', carousel: 'scheme' },
     { id: dark ? 'claro' : 'oscuro', title: dark ? 'Tema claro' : 'Tema oscuro', subtitle: 'Cambia la luminosidad del marco', icon: dark ? <Sun/> : <Moon/>, run: () => setDark(d => !d) },
-    ...MODES.map(m => ({ id: 'capa ' + m.label.toLowerCase(), title: `Capa · ${m.label}`, subtitle: m.detail, icon: <m.icon/>, keywords: m.key, run: () => switchMode(m.key) })),
+    ...(Object.entries(LAYERS) as [LayerId, (typeof LAYERS)[LayerId]][]).map(([id, l]) => ({ id: 'capa ' + l.name.toLowerCase(), title: `Capa · ${l.name}${isOn(stack, id) ? ' · apagar' : ''}`, subtitle: l.subtitle, icon: <l.icon/>, keywords: `capa ${id}`, run: () => setStack(s => updateLayer(s, id, { on: !isOn(s, id) })) })),
     ...(enabledTool('sam') ? [{ id: 'delimitar', title: 'Delimitar con IA', subtitle: 'SAM 2.1 sobre Sentinel-2', icon: <WandSparkles/>, run: startSegment }] : []),
     ...(enabledTool('draw') ? [{ id: 'dibujar', title: 'Dibujar parcela', subtitle: 'Polígono manual', icon: <PenLine/>, run: startDraw }] : []),
     ...(enabledTool('measure') ? [{ id: 'medir', title: 'Medir distancia', subtitle: 'Distancia geodésica', icon: <Ruler/>, run: () => toggleMeasure('distance') }] : []),
     ...(enabledTool('area') ? [{ id: 'area', title: 'Medir área', subtitle: 'Superficie en hectáreas', icon: <SquareDashed/>, run: () => toggleMeasure('area') }] : []),
     ...(enabledTool('swipe') ? [{ id: 'comparar', title: 'Comparar con deslizador', subtitle: 'Capa activa vs mapa base', icon: <Columns2/>, run: () => setSwipe(s => s == null ? .5 : null) }] : []),
     ...(enabledTool('select') ? [{ id: 'seleccionar', title: 'Seleccionar por área', subtitle: 'Arrastra un rectángulo sobre el mapa', icon: <BoxSelect/>, run: toggleSelect }] : []),
-    ...(enabledTool('heatmap') ? [{ id: 'calor', title: 'Mapa de calor', subtitle: 'Producción estimada', icon: <Flame/>, run: () => setLayers(l => ({ ...l, heatmap: !l.heatmap })) }] : []),
     ...(enabledTool('table') ? [{ id: 'tabla', title: 'Tabla de atributos', subtitle: 'Todas las parcelas visibles, enlazadas al mapa', icon: <Table2/>, run: () => setLeft('tabla') }] : []),
     { id: 'entrega', title: 'Descargar entrega del reto', subtitle: 'CSV con ID_POLIGONO y rendimiento de las 59 parcelas', icon: <Send/>, keywords: 'exportar csv submission', run: () => download('agrocebada-entrega-59.csv', submissionCsv(atlas.predictions), 'text/csv') },
     ...(enabledTool('export') ? [{ id: 'exportar', title: 'Exportar', subtitle: 'PNG, GeoJSON y CSV', icon: <Download/>, run: () => setRightPanel('export') }] : []),
@@ -352,16 +349,14 @@ export default function App() {
     { id: 'area', label: 'Medir área', icon: <SquareDashed/>, pressed: measureKind === 'area', run: () => toggleMeasure('area') },
     { id: 'select', label: 'Seleccionar por área', icon: <BoxSelect/>, pressed: selectArea, run: toggleSelect },
     { id: 'swipe', label: 'Comparar con deslizador', icon: <Columns2/>, pressed: swipe != null, run: () => setSwipe(s => s == null ? .5 : null) },
-    { id: 'heatmap', label: 'Mapa de calor', icon: <Flame/>, pressed: layers.heatmap, run: () => setLayers(l => ({ ...l, heatmap: !l.heatmap })) },
     { id: 'identify', label: 'Identificar al pasar', icon: <MousePointerClick/>, pressed: plugins.identify, run: () => togglePlugin('identify', !plugins.identify) },
-    { id: 'labels', label: 'Etiquetas de rendimiento', icon: <Tags/>, pressed: plugins.labels, run: () => togglePlugin('labels', !plugins.labels) },
     { id: 'table', label: 'Tabla de atributos', icon: <Table2/>, pressed: left === 'tabla', run: () => openLeft('tabla') },
     { id: 'export', label: 'Exportar', icon: <Download/>, pressed: rightPanel === 'export', run: () => setRightPanel(p => p === 'export' ? null : 'export') },
     { id: 'locate', label: 'Mi ubicación', icon: <LocateFixed/>, pressed: false, busy: locating, run: locateMe },
   ];
-  // The pill keeps the editing and analysis tools; heat map, labels, identify and the table live in
+  // The pill keeps the editing and analysis tools; identify and the table live in
   // the layers panel, the bar and the launcher, so the strip stays short.
-  const visibleTools = tools.filter(t => plugins[t.id] && !['heatmap', 'labels', 'identify', 'table'].includes(t.id));
+  const visibleTools = tools.filter(t => plugins[t.id] && !['identify', 'table'].includes(t.id));
   toolKeys.current = isMobile ? [] : visibleTools.map(t => t.run);
   const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes', scripts: 'Scripts', notes: 'Notas' } as Record<string, string>)[k];
 
@@ -375,8 +370,8 @@ export default function App() {
         {/* The map and everything that belongs to it fade away for the dashboard page. */}
         <motion.div className="absolute inset-0" inert={dashboard} initial={false} animate={dashboard ? { opacity: 0, scale: .985, filter: 'blur(6px)' } : { opacity: 1, scale: 1, filter: 'blur(0px)' }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }} style={{ pointerEvents: dashboard ? 'none' : undefined }}>
           <div className="shell-viewport absolute inset-0 overflow-hidden bg-tile">
-            <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} mode={mode} year={year} keyDate={key} filters={filters} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'}
-              padding={{ left: leftWidth, right: rightWidth + chatWidth }} statusTarget={isMobile || launcher !== null ? null : statusEl} highlightId={hoverId} swipe={swipe} selectArea={selectArea} labels={plugins.labels}
+            <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} layers={stack} year={year} keyDate={key} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'}
+              padding={{ left: leftWidth, right: rightWidth + chatWidth }} statusTarget={isMobile || launcher !== null ? null : statusEl} highlightId={hoverId} swipe={swipe} selectArea={selectArea}
               onReady={mapReady} onImageryBusy={setImageryBusy} onImageryFailure={() => setPlaying(false)} onMeasure={setMeasureValue} onFullscreen={setFullscreen}
               onHover={(id, pixel) => setIdentify(id && pixel ? { id, pixel } : null)}
               onAreaSelect={ids => { setSelection(ids); setRightPanel('selection'); setSelectArea(false); }}
@@ -439,8 +434,8 @@ export default function App() {
 
           {/* Bottom-left: time. Bottom-centre: launcher. Bottom-right: tools and navigation. */}
           <AnimatePresence mode="wait">
-          {showTime && launcher === null && <Popout key={'time' + mode + (left ? 'l' : '')} edges={left ? 'bottom' : ['bottom', 'left']} className="bottom-0 @container/time" style={{ width: timeWidth, left: left ? leftWidth + 28 : 0 }}>
-            <div className="pt-1 pr-2 pb-0.5"><TimeSlider mode={mode} year={year} month={month} keyDate={key} playing={playing} onPlay={setPlaying} onMonth={setMonth} onYear={setYear} onDate={(y, m) => { setYear(y); setMonth(m); }}/></div>
+          {showTime && launcher === null && <Popout key={'time' + (left ? 'l' : '')} edges={left ? 'bottom' : ['bottom', 'left']} className="bottom-0 @container/time" style={{ width: timeWidth, left: left ? leftWidth + 28 : 0 }}>
+            <div className="pt-1 pr-2 pb-0.5"><TimeSlider year={year} month={month} keyDate={key} playing={playing} onPlay={setPlaying} onMonth={setMonth} onDate={(y, m) => { setYear(y); setMonth(m); }}/></div>
           </Popout>}
           </AnimatePresence>
 
@@ -488,8 +483,8 @@ export default function App() {
             {left !== 'tabla' && <>
               <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
-                {left === 'layers' && <LayersPanel mode={mode} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
-                {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
+                {left === 'layers' && <LayersPanel layers={stack} onChange={setStack}/>}
+                {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))}/>}
                 {left === 'filters' && <div className="grid gap-6">
                   <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
                   <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
