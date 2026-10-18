@@ -17,6 +17,7 @@ test('One account, three phases: no producer or technician roles anywhere', asyn
   await expect(page.getByText(/Productor|Técnico|Análisis Pro/)).toHaveCount(0);
   await bar(page).getByRole('button', { name: 'Panel de control' }).click();
   await page.getByRole('region', { name: 'Panel de control' }).getByRole('tab', { name: 'Estimar' }).click();
+  await expect(bar(page).getByRole('button', { name: 'Volver al mapa' })).toBeVisible();
   await expect(page).toHaveURL(/#\/estimar$/);
   await expect(page.getByRole('heading', { name: 'Estimación de rendimiento' })).toBeVisible();
   await page.keyboard.press('Alt+3');
@@ -35,7 +36,7 @@ test('Technical layers and controls exist only in the advanced phase', async ({ 
   await page.keyboard.press('Alt+3');
   await page.getByRole('tab', { name: 'Capas técnicas' }).click();
   await expect(page.getByRole('slider', { name: 'Umbral de agua MNDWI' })).toBeVisible();
-  await page.getByRole('button', { name: /Error del modelo/ }).first().click();
+  await page.getByRole('tabpanel', { name: 'Indicadores avanzados' }).getByRole('button', { name: /Error del modelo/ }).first().click();
   await expect(page.getByTestId('map')).toHaveAttribute('data-mode', 'error');
   await page.keyboard.press('Alt+1');
   await expect(page.getByTestId('map')).toHaveAttribute('data-mode', 'parcels');
@@ -52,14 +53,15 @@ test('Estimar answers the challenge: real metrics, productive reading, linked ta
   await expect(panel.getByText(/a \$7,000\/t/)).toBeVisible();
   const rows = panel.getByRole('table', { name: 'Estimaciones de rendimiento' }).locator('tbody tr');
   await expect(rows).toHaveCount(59);
-  await rows.first().click();
-  const card = page.getByRole('region', { name: 'Ficha de parcela' });
-  await expect(card.getByText('Rendimiento estimado')).toBeVisible();
-  await expect(card.getByText('Intervalo 80 %')).toBeVisible();
   const download = page.waitForEvent('download');
   await panel.getByRole('button', { name: /Entrega · 59 parcelas/ }).click();
   const lines = (await readFile((await (await download).path())!, 'utf8')).trim().split(/\r\n/);
   expect(lines[0]).toBe('ID_POLIGONO,RENDIMIENTO_T_HA'); expect(lines).toHaveLength(60);
+  // Picking a parcel returns to the map with its card.
+  await rows.first().click();
+  const card = page.getByRole('region', { name: 'Ficha de parcela' });
+  await expect(card.getByText('Rendimiento estimado')).toBeVisible();
+  await expect(card.getByText('Intervalo 80 %')).toBeVisible();
 });
 
 test('Launcher finds parcels, runs ">" commands and recolours the shell from the logo palette', async ({ page }) => {
@@ -76,14 +78,30 @@ test('Launcher finds parcels, runs ">" commands and recolours the shell from the
   await expect(page.locator('html')).toHaveClass(/dark/);
 });
 
-test('Dashboard drops from the top with the model gauges and the cycle cutoff', async ({ page }) => {
+test('Dashboard page replaces the map with the model gauges and the cycle cutoff', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Abrir panel de control (Alt D)' }).click();
+  await bar(page).getByRole('button', { name: 'Panel de control' }).click();
   const dash = page.getByRole('region', { name: 'Panel de control' });
   await dash.getByRole('tab', { name: 'Modelo' }).click();
   await expect(dash.getByRole('figure', { name: /R² · varianza: 0.67/ })).toBeVisible();
   await dash.getByRole('tab', { name: 'Ciclo' }).click();
   await expect(dash.getByText(/Corte de la estimación: 31 de octubre/)).toBeVisible();
+  await expect(page.locator('[inert]').getByRole('toolbar', { name: 'Herramientas del mapa' })).toHaveCount(1);
+  await bar(page).getByRole('button', { name: 'Volver al mapa' }).click();
+  await expect(dash).toHaveCount(0);
+  await expect(bar(page).getByRole('button', { name: 'Capas y simbología' })).toBeVisible();
+});
+
+test('Milli-IA stays in its island on the map and on the dashboard, opening on the Resumen', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Abrir Milli-IA' }).click();
+  const milli = page.getByRole('region', { name: 'Milli-IA' });
+  await expect(milli.getByRole('region', { name: 'Clima del mes' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(milli).toHaveCount(0);
+  await page.keyboard.press('Alt+d');
+  await expect(page.getByRole('region', { name: 'Panel de control' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir Milli-IA' })).toBeVisible();
 });
 
 test('Plugins: swipe compares layers, box selection sums production, disabled tools leave the strip', async ({ page }) => {

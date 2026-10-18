@@ -1,7 +1,8 @@
-// Top dashboard after Caelestia's: tabs with icon-over-label and an underline,
+// Dashboard page after Caelestia's: tabs with icon-over-label and an underline,
 // tonal tiles. Resumen mirrors weather / system / calendar / media; Modelo mirrors
 // the Performance gauges; Ciclo shows what data exists up to the prediction cutoff;
 // Estimar and Avanzado host the phase 2 and 3 panels, passed in by the shell.
+// The map fades out behind it; Milli-IA's island reuses the Resumen tiles.
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -41,10 +42,10 @@ function Tile({ className, children, label }: { className?: string; children: Re
   return <section aria-label={label} className={cn('tile min-w-0 p-3', className)}>{children}</section>;
 }
 
-export default function Dashboard({ atlas, parcels, selected, year, month, touring, tab, panels, onTab, onMonth, onParcel, onTour }: {
-  atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; year: number; month: number; touring: boolean; tab: DashboardTab; panels: Record<'estimar' | 'avanzado', ReactNode>;
-  onTab: (tab: DashboardTab) => void; onMonth: (month: number) => void; onParcel: (direction: number) => void; onTour: (on: boolean) => void;
-}) {
+type SummaryProps = { atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; year: number; month: number; touring: boolean; onMonth: (month: number) => void; onParcel: (direction: number) => void; onTour: (on: boolean) => void };
+
+/** Resumen: weather, atlas totals, the selected parcel, month and production by state. */
+export function Summary({ atlas, parcels, selected, year, month, touring, onMonth, onParcel, onTour }: SummaryProps) {
   const key = dateKey(year, month);
   const summary = useMemo(() => {
     const climate = parcels.map(p => atlas.details[p.properties.id]?.climate[key]).filter(Boolean);
@@ -60,12 +61,58 @@ export default function Dashboard({ atlas, parcels, selected, year, month, touri
     };
   }, [atlas, parcels, key]);
   const maxState = Math.max(1, ...summary.states.map(s => s.production));
-  const m = atlas.predictions.metrics;
   const WeatherIcon = summary.rain != null && summary.rain > 60 ? CloudRain : summary.rain != null && summary.rain > 15 ? CloudSun : Sun;
   const p = selected?.properties;
 
-  const panel = tab === 'estimar' || tab === 'avanzado';
-  return <div className={cn('flex min-h-0 flex-col px-4 pb-4 max-md:w-full', panel ? 'h-[min(680px,calc(100vh-7rem))] w-[min(860px,calc(100vw-7rem))]' : 'w-[min(760px,calc(100vw-7rem))]')}>
+  return <div className="grid grid-cols-[1fr_1.35fr_0.95fr] grid-rows-[auto_auto] gap-2.5 max-sm:grid-cols-2">
+    <Tile label="Clima del mes" className="flex items-center gap-3">
+      <WeatherIcon className="size-10 shrink-0 text-primary" strokeWidth={1.5}/>
+      <div className="grid leading-tight"><span className="text-2xl font-normal tabular-nums text-primary">{fmt(summary.tmax, 0)}°C</span><span className="text-xs text-muted-foreground">{fmt(summary.rain, 0)} mm · mín {fmt(summary.tmin, 0)}°</span></div>
+    </Tile>
+    <Tile label="Atlas" className="flex items-center gap-3">
+      <LogoMark size={44} className="shrink-0"/>
+      <dl className="grid gap-0.5 text-[13px] leading-tight">
+        <div className="flex gap-1.5"><dt className="text-muted-foreground">Parcelas</dt><dd className="font-medium tabular-nums">{parcels.length} · 3 estados</dd></div>
+        <div className="flex gap-1.5"><dt className="text-muted-foreground">Superficie</dt><dd className="font-medium tabular-nums">{fmt(summary.area, 0)} ha</dd></div>
+        <div className="flex gap-1.5"><dt className="text-muted-foreground">Producción est.</dt><dd className="font-medium tabular-nums">{fmt(summary.production, 0)} t</dd></div>
+      </dl>
+    </Tile>
+    <Tile label="Parcela seleccionada" className="row-span-2 flex flex-col items-center gap-2 text-center max-sm:col-span-2 max-sm:row-span-1">
+      <ParcelArt parcel={selected} spinning={touring}/>
+      <div className="grid w-full gap-0.5 leading-tight">
+        <span className="truncate text-sm font-medium">{p ? p.name || p.id : 'Ninguna parcela'}</span>
+        <span className="truncate text-xs text-muted-foreground">{p ? `${p.municipality} · ${p.state}` : 'Usa ▶ para recorrerlas'}</span>
+        <span className="text-sm text-primary tabular-nums">{p?.predictedYield != null ? `${fmt(p.predictedYield)} t/ha` : '—'}</span>
+      </div>
+      <div className="flex items-center gap-1" role="group" aria-label="Recorrido de parcelas">
+        <button type="button" aria-label="Parcela anterior" onClick={() => onParcel(-1)} className="grid size-8 place-items-center rounded-full hover:bg-tile-strong [&_svg]:size-4"><ChevronLeft/></button>
+        <button type="button" aria-label={touring ? 'Pausar recorrido' : 'Recorrer parcelas'} aria-pressed={touring} onClick={() => onTour(!touring)} className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground [&_svg]:size-4 [&_svg]:fill-current">{touring ? <Pause/> : <Play/>}</button>
+        <button type="button" aria-label="Siguiente parcela" onClick={() => onParcel(1)} className="grid size-8 place-items-center rounded-full hover:bg-tile-strong [&_svg]:size-4"><ChevronRight/></button>
+      </div>
+    </Tile>
+    <Tile label="Mes del mapa" className="flex items-center gap-3">
+      <div className="grid justify-items-center leading-none text-primary"><span className="text-3xl font-normal tabular-nums">{String(month + 1).padStart(2, '0')}</span><span className="my-1 flex gap-1" aria-hidden="true">{[0, 1, 2].map(i => <span key={i} className="size-1 rounded-full bg-primary"/>)}</span><span className="text-3xl font-normal tabular-nums">{String(year).slice(2)}</span></div>
+      <div className="grid gap-1 leading-tight"><span className="text-sm font-medium">{MONTH_NAMES[month]}</span><span className="text-xs text-muted-foreground">{year} · {month >= 3 && month <= 9 ? 'dentro del ciclo' : 'fuera del ciclo'}</span></div>
+    </Tile>
+    <Tile label="Calendario y producción estimada por estado" className="grid grid-cols-[1fr_auto] items-end gap-3">
+      <div className="grid grid-cols-4 gap-1 text-center text-[11px]" role="grid" aria-label={`Meses de ${year}`}>
+        {MONTHS.map((label, i) => <button key={label} type="button" aria-pressed={month === i} onClick={() => onMonth(i)}
+          className={cn('rounded-full py-1 tabular-nums text-muted-foreground hover:bg-tile-strong aria-pressed:bg-primary aria-pressed:text-primary-foreground', i >= 3 && i <= 9 && 'text-foreground')}>{label}</button>)}
+      </div>
+      <div className="flex h-full items-end gap-2.5 pl-1" aria-label="Producción estimada por estado">
+        {summary.states.map(s => <div key={s.state} className="grid justify-items-center gap-1" title={`${s.state}: ${fmt(s.production, 0)} t estimadas · ${s.count} parcelas`}>
+          <span className="relative h-20 w-2 overflow-hidden rounded-full bg-primary-container"><span className="absolute inset-x-0 bottom-0 rounded-full bg-primary transition-[height] duration-700" style={{ height: `${Math.max(6, s.production / maxState * 100)}%` }}/></span>
+          <span className="text-[10px] font-medium text-muted-foreground">{s.state[0]}</span>
+        </div>)}
+      </div>
+    </Tile>
+  </div>;
+}
+
+export default function Dashboard({ tab, panels, onTab, ...summary }: SummaryProps & { tab: DashboardTab; panels: Record<'estimar' | 'avanzado', ReactNode>; onTab: (tab: DashboardTab) => void }) {
+  const { atlas, month, onMonth } = summary;
+  const m = atlas.predictions.metrics;
+  return <div className="mx-auto flex h-full w-full max-w-[1120px] min-h-0 flex-col px-4 pt-12 pb-4 max-md:pt-14">
     <div role="tablist" aria-label="Panel de control" className="grid shrink-0 grid-cols-5 border-b">
       {TABS.map(t => <button key={t.key} role="tab" type="button" aria-selected={tab === t.key} onClick={() => onTab(t.key)}
         className="relative grid justify-items-center gap-0.5 pt-2.5 pb-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground aria-selected:text-primary [&_svg]:size-[18px]">
@@ -74,50 +121,8 @@ export default function Dashboard({ atlas, parcels, selected, year, month, touri
       </button>)}
     </div>
 
-    {tab === 'resumen' && <div className="grid grid-cols-[1fr_1.35fr_0.95fr] grid-rows-[auto_auto] gap-2.5 pt-3 max-sm:grid-cols-2" role="tabpanel" aria-label="Resumen">
-      <Tile label="Clima del mes" className="flex items-center gap-3">
-        <WeatherIcon className="size-10 shrink-0 text-primary" strokeWidth={1.5}/>
-        <div className="grid leading-tight"><span className="text-2xl font-normal tabular-nums text-primary">{fmt(summary.tmax, 0)}°C</span><span className="text-xs text-muted-foreground">{fmt(summary.rain, 0)} mm · mín {fmt(summary.tmin, 0)}°</span></div>
-      </Tile>
-      <Tile label="Atlas" className="flex items-center gap-3">
-        <LogoMark size={44} className="shrink-0"/>
-        <dl className="grid gap-0.5 text-[13px] leading-tight">
-          <div className="flex gap-1.5"><dt className="text-muted-foreground">Parcelas</dt><dd className="font-medium tabular-nums">{parcels.length} · 3 estados</dd></div>
-          <div className="flex gap-1.5"><dt className="text-muted-foreground">Superficie</dt><dd className="font-medium tabular-nums">{fmt(summary.area, 0)} ha</dd></div>
-          <div className="flex gap-1.5"><dt className="text-muted-foreground">Producción est.</dt><dd className="font-medium tabular-nums">{fmt(summary.production, 0)} t</dd></div>
-        </dl>
-      </Tile>
-      <Tile label="Parcela seleccionada" className="row-span-2 flex flex-col items-center gap-2 text-center max-sm:col-span-2 max-sm:row-span-1">
-        <ParcelArt parcel={selected} spinning={touring}/>
-        <div className="grid w-full gap-0.5 leading-tight">
-          <span className="truncate text-sm font-medium">{p ? p.name || p.id : 'Ninguna parcela'}</span>
-          <span className="truncate text-xs text-muted-foreground">{p ? `${p.municipality} · ${p.state}` : 'Usa ▶ para recorrerlas'}</span>
-          <span className="text-sm text-primary tabular-nums">{p?.predictedYield != null ? `${fmt(p.predictedYield)} t/ha` : '—'}</span>
-        </div>
-        <div className="flex items-center gap-1" role="group" aria-label="Recorrido de parcelas">
-          <button type="button" aria-label="Parcela anterior" onClick={() => onParcel(-1)} className="grid size-8 place-items-center rounded-full hover:bg-tile-strong [&_svg]:size-4"><ChevronLeft/></button>
-          <button type="button" aria-label={touring ? 'Pausar recorrido' : 'Recorrer parcelas'} aria-pressed={touring} onClick={() => onTour(!touring)} className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground [&_svg]:size-4 [&_svg]:fill-current">{touring ? <Pause/> : <Play/>}</button>
-          <button type="button" aria-label="Siguiente parcela" onClick={() => onParcel(1)} className="grid size-8 place-items-center rounded-full hover:bg-tile-strong [&_svg]:size-4"><ChevronRight/></button>
-        </div>
-      </Tile>
-      <Tile label="Mes del mapa" className="flex items-center gap-3">
-        <div className="grid justify-items-center leading-none text-primary"><span className="text-3xl font-normal tabular-nums">{String(month + 1).padStart(2, '0')}</span><span className="my-1 flex gap-1" aria-hidden="true">{[0, 1, 2].map(i => <span key={i} className="size-1 rounded-full bg-primary"/>)}</span><span className="text-3xl font-normal tabular-nums">{String(year).slice(2)}</span></div>
-        <div className="grid gap-1 leading-tight"><span className="text-sm font-medium">{MONTH_NAMES[month]}</span><span className="text-xs text-muted-foreground">{year} · {month >= 3 && month <= 9 ? 'dentro del ciclo' : 'fuera del ciclo'}</span></div>
-      </Tile>
-      <Tile label="Calendario y producción estimada por estado" className="grid grid-cols-[1fr_auto] items-end gap-3">
-        <div className="grid grid-cols-4 gap-1 text-center text-[11px]" role="grid" aria-label={`Meses de ${year}`}>
-          {MONTHS.map((label, i) => <button key={label} type="button" aria-pressed={month === i} onClick={() => onMonth(i)}
-            className={cn('rounded-full py-1 tabular-nums text-muted-foreground hover:bg-tile-strong aria-pressed:bg-primary aria-pressed:text-primary-foreground', i >= 3 && i <= 9 && 'text-foreground')}>{label}</button>)}
-        </div>
-        <div className="flex h-full items-end gap-2.5 pl-1" aria-label="Producción estimada por estado">
-          {summary.states.map(s => <div key={s.state} className="grid justify-items-center gap-1" title={`${s.state}: ${fmt(s.production, 0)} t estimadas · ${s.count} parcelas`}>
-            <span className="relative h-20 w-2 overflow-hidden rounded-full bg-primary-container"><span className="absolute inset-x-0 bottom-0 rounded-full bg-primary transition-[height] duration-700" style={{ height: `${Math.max(6, s.production / maxState * 100)}%` }}/></span>
-            <span className="text-[10px] font-medium text-muted-foreground">{s.state[0]}</span>
-          </div>)}
-        </div>
-      </Tile>
-    </div>}
-
+    <div className="min-h-0 flex-1 overflow-y-auto">
+    {tab === 'resumen' && <div role="tabpanel" aria-label="Resumen" className="pt-3"><Summary {...summary}/></div>}
     {tab === 'modelo' && <div role="tabpanel" aria-label="Modelo" className="grid gap-3 pt-4">
       <div className="flex flex-wrap items-end justify-around gap-2">
         <Gauge size={124} value={m.mae_t_ha / 1} figure={fmt(m.mae_t_ha)} unit="t/ha" label="MAE" note={`${Math.round(m.mae_t_ha / atlas.predictions.observedMean * 100)} %`} noteLabel="del promedio"/>
@@ -128,7 +133,8 @@ export default function Dashboard({ atlas, parcels, selected, year, month, touri
     </div>}
 
     {tab === 'ciclo' && <CycleTab month={month} onMonth={onMonth} cutoff={atlas.predictions.model.cutoff}/>}
-    {panel && <div role="tabpanel" aria-label={tab === 'estimar' ? 'Estimar' : 'Indicadores avanzados'} className="-mx-4 min-h-0 flex-1 pt-1">{panels[tab]}</div>}
+    {(tab === 'estimar' || tab === 'avanzado') && <div role="tabpanel" aria-label={tab === 'estimar' ? 'Estimar' : 'Indicadores avanzados'} className="-mx-4 h-full pt-1">{panels[tab]}</div>}
+    </div>
   </div>;
 }
 

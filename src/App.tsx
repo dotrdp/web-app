@@ -3,11 +3,12 @@
 // from the top, the launcher rising from the bottom, panels and cards attached
 // to the edges. Three phases replace the old Productor / Técnico roles:
 // Explorar (the map) → Estimar → Indicadores avanzados (the only place technical
-// tools live); the last two open as tabs of the dashboard.
+// tools live); the last two are tabs of the dashboard page, which the map and its
+// controls fade away for. Milli-IA, the assistant, lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
-import { AnimatePresence } from 'motion/react';
+import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, Sparkles, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -37,7 +38,7 @@ import type { PluginId } from './plugins';
 import Popout from './shell/Popout';
 import Bar, { MobileDock, PANEL_ITEMS, PHASES } from './shell/Bar';
 import type { LeftPanel } from './shell/Bar';
-import Dashboard from './shell/Dashboard';
+import Dashboard, { Summary } from './shell/Dashboard';
 import type { DashboardTab } from './shell/Dashboard';
 import Launcher from './shell/Launcher';
 import type { Command } from './shell/Launcher';
@@ -107,6 +108,7 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>(routePhase);
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>('parcela');
+  const [assistant, setAssistant] = useState(false);
   const [dashboard, setDashboard] = useState(() => routePhase() !== 'explorar'), [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const p = routePhase(); return p === 'explorar' ? 'resumen' : p; });
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
@@ -188,16 +190,16 @@ export default function App() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setLauncher(l => l === null ? '' : null); return; }
       if (event.altKey && ['1', '2', '3'].includes(event.key)) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key); return; }
       if (event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); setDashboard(d => !d); return; }
-      if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
+      if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (assistant) setAssistant(false); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
 
-  /** Estimar and Avanzado are dashboard tabs; routes, shortcuts and the launcher open them there. */
+  /** Estimar and Avanzado are dashboard tabs; routes, shortcuts and the launcher open them there. Explorar is the map. */
   function goPhase(next: Phase) {
     if (window.location.hash !== '#/' + next) window.history.replaceState(null, '', '#/' + next);
     setPhase(next); setPlaying(false); setTouring(false);
-    if (next === 'explorar') { if (dashboardTab === 'estimar' || dashboardTab === 'avanzado') { setDashboard(false); setDashboardTab('resumen'); } if (ADVANCED_MODES.includes(mode)) switchMode('parcels'); }
+    if (next === 'explorar') { setDashboard(false); if (ADVANCED_MODES.includes(mode)) switchMode('parcels'); }
     if (next === 'estimar') { setDashboard(true); setDashboardTab('estimar'); switchMode('parcels'); setLayers(l => ({ ...l, yieldField: 'predicted' })); }
     if (next === 'avanzado') { setDashboard(true); setDashboardTab('avanzado'); }
   }
@@ -237,7 +239,7 @@ export default function App() {
     } catch (e) { toast((e as Error).message); } finally { setSaving(false); }
   }
   function exportProposal() { if (!draft || !proposal) return; download('propuesta-parcela.geojson', JSON.stringify({ type: 'Feature', geometry: draft, properties: { ...proposal.provenance, correctedGeometry: draft, saved: false } }, null, 2), 'application/geo+json'); }
-  async function logout() { await api('/api/auth/logout', { method: 'POST' }); setupRevision.current++; cancelDraft(); setUser(null); setAtlas(null); setWorkspace(EMPTY_WORKSPACE); setSelectedId(null); setLauncher(null); setDashboard(false); }
+  async function logout() { await api('/api/auth/logout', { method: 'POST' }); setupRevision.current++; cancelDraft(); setUser(null); setAtlas(null); setWorkspace(EMPTY_WORKSPACE); setSelectedId(null); setLauncher(null); setDashboard(false); setAssistant(false); }
   function toggleMeasure(kind: MeasureKind | null) { const next = kind && kind !== measureKind ? kind : null; if (next) { cancelDraft(); setSelectArea(false); } setMeasureKind(next); setMeasureValue(null); map.current?.measure(next); }
   function toggleSelect() { const next = !selectArea; if (next) { cancelDraft(); if (measureKind) toggleMeasure(null); } setSelectArea(next); }
   function locateMe() {
@@ -325,119 +327,148 @@ export default function App() {
 
     <div className="relative min-h-0 flex-1 p-(--gap) md:pl-0">
       <main ref={viewport} className="relative h-full select-text" aria-label="Atlas AgroCebada" style={{ '--left-w': `${leftWidth}px`, '--right-w': `${rightWidth}px` } as CSSProperties}>
-        <div className="shell-viewport absolute inset-0 overflow-hidden bg-tile">
-          <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} mode={mode} year={year} keyDate={key} filters={filters} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'}
-            padding={{ left: leftWidth, right: rightWidth }} statusTarget={isMobile || launcher !== null ? null : statusEl} highlightId={hoverId} swipe={swipe} selectArea={selectArea} labels={plugins.labels}
-            onReady={mapReady} onImageryBusy={setImageryBusy} onImageryFailure={() => setPlaying(false)} onMeasure={setMeasureValue} onFullscreen={setFullscreen}
-            onHover={(id, pixel) => setIdentify(id && pixel ? { id, pixel } : null)}
-            onAreaSelect={ids => { setSelection(ids); setRightPanel('selection'); setSelectArea(false); }}
-            onSelect={id => { setRightPanel(null); chooseParcel(id); }} onDraft={setDraft} onCancel={() => { cancelDraft(); setMeasureKind(null); }}
-            onMapClick={draftMode === 'segment' && !adjusting ? coords => { if (!segmenting) void infer([...prompts, { coordinates: coords, label: promptLabel }]); } : undefined}/>
-          {swipe != null && <SwipeDivider value={swipe} onChange={setSwipe} container={viewport} label={modeLabel}/>}
-          {identified && <IdentifyCard parcel={identified} pixel={identify!.pixel} atlas={atlas} keyDate={key} container={viewport}/>}
-        </div>
+        {/* The map and everything that belongs to it fade away for the dashboard page. */}
+        <motion.div className="absolute inset-0" inert={dashboard} initial={false} animate={dashboard ? { opacity: 0, scale: .985, filter: 'blur(6px)' } : { opacity: 1, scale: 1, filter: 'blur(0px)' }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }} style={{ pointerEvents: dashboard ? 'none' : undefined }}>
+          <div className="shell-viewport absolute inset-0 overflow-hidden bg-tile">
+            <AtlasMap ref={map} atlas={atlas} parcels={visibleParcels} selected={selected} mode={mode} year={year} keyDate={key} filters={filters} settings={layers} manifest={manifest} imageryVisible={draftMode === 'segment'}
+              padding={{ left: leftWidth, right: rightWidth }} statusTarget={isMobile || launcher !== null ? null : statusEl} highlightId={hoverId} swipe={swipe} selectArea={selectArea} labels={plugins.labels}
+              onReady={mapReady} onImageryBusy={setImageryBusy} onImageryFailure={() => setPlaying(false)} onMeasure={setMeasureValue} onFullscreen={setFullscreen}
+              onHover={(id, pixel) => setIdentify(id && pixel ? { id, pixel } : null)}
+              onAreaSelect={ids => { setSelection(ids); setRightPanel('selection'); setSelectArea(false); }}
+              onSelect={id => { setRightPanel(null); chooseParcel(id); }} onDraft={setDraft} onCancel={() => { cancelDraft(); setMeasureKind(null); }}
+              onMapClick={draftMode === 'segment' && !adjusting ? coords => { if (!segmenting) void infer([...prompts, { coordinates: coords, label: promptLabel }]); } : undefined}/>
+            {swipe != null && <SwipeDivider value={swipe} onChange={setSwipe} container={viewport} label={modeLabel}/>}
+            {identified && <IdentifyCard parcel={identified} pixel={identify!.pixel} atlas={atlas} keyDate={key} container={viewport}/>}
+          </div>
 
-        {/* Transient status, centred in the free map area. */}
-        <div className="pointer-events-none absolute top-14 z-20 flex -translate-x-1/2 flex-col items-center gap-2" style={{ left: freeCenter }}>
-          {liveImagery && (imageryError || !manifest || imageryBusy) && <div role={manifest || imageryError ? 'status' : undefined} className={cn('imagery-caption pointer-events-auto flex w-fit items-center gap-2 rounded-full bg-frame px-3.5 py-1.5 text-xs text-muted-foreground shadow-md', imageryError && 'text-amber-800 dark:text-amber-200')}>
-            {imageryError ? <><TriangleAlert className="size-3.5"/><span>{imageryError}</span><Button size="xs" variant="outline" className="rounded-full" onClick={() => setImageryRevision(v => v + 1)}>Reintentar</Button></> : <LoadingState label={manifest ? 'Preparando imágenes Sentinel-2…' : 'Cargando observaciones Sentinel-2…'}/>}
-          </div>}
-          {measureKind && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><Ruler className="size-4 text-muted-foreground"/><span className="text-muted-foreground">{measureKind === 'area' ? 'Área' : 'Distancia'}</span><span className="font-medium tabular-nums">{measureValue ?? 'Haz clic en el mapa'}</span><Button size="xs" variant="ghost" className="rounded-full" onClick={() => toggleMeasure(null)}>Terminar</Button></div>}
-          {selectArea && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><BoxSelect className="size-4 text-muted-foreground"/>Arrastra un rectángulo sobre las parcelas<Button size="xs" variant="ghost" className="rounded-full" onClick={() => setSelectArea(false)}>Cancelar</Button></div>}
-        </div>
+          {/* Transient status, centred in the free map area. */}
+          <div className="pointer-events-none absolute top-14 z-20 flex -translate-x-1/2 flex-col items-center gap-2" style={{ left: freeCenter }}>
+            {liveImagery && (imageryError || !manifest || imageryBusy) && <div role={manifest || imageryError ? 'status' : undefined} className={cn('imagery-caption pointer-events-auto flex w-fit items-center gap-2 rounded-full bg-frame px-3.5 py-1.5 text-xs text-muted-foreground shadow-md', imageryError && 'text-amber-800 dark:text-amber-200')}>
+              {imageryError ? <><TriangleAlert className="size-3.5"/><span>{imageryError}</span><Button size="xs" variant="outline" className="rounded-full" onClick={() => setImageryRevision(v => v + 1)}>Reintentar</Button></> : <LoadingState label={manifest ? 'Preparando imágenes Sentinel-2…' : 'Cargando observaciones Sentinel-2…'}/>}
+            </div>}
+            {measureKind && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><Ruler className="size-4 text-muted-foreground"/><span className="text-muted-foreground">{measureKind === 'area' ? 'Área' : 'Distancia'}</span><span className="font-medium tabular-nums">{measureValue ?? 'Haz clic en el mapa'}</span><Button size="xs" variant="ghost" className="rounded-full" onClick={() => toggleMeasure(null)}>Terminar</Button></div>}
+            {selectArea && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><BoxSelect className="size-4 text-muted-foreground"/>Arrastra un rectángulo sobre las parcelas<Button size="xs" variant="ghost" className="rounded-full" onClick={() => setSelectArea(false)}>Cancelar</Button></div>}
+          </div>
+
+          {/* Left edge: map panels, settings and the full-height sheets. */}
+          <AnimatePresence mode="wait">
+          {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
+            {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} advanced={advanced} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
+            {left !== 'tabla' && <>
+              <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
+                {left === 'layers' && <LayersPanel mode={mode} advanced={advanced} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
+                {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
+                {left === 'filters' && <div className="grid gap-6">
+                  <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
+                  <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
+                </div>}
+                {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
+                  <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
+                </SettingsPanel>}
+                {left === 'fuentes' && <SourcesPage atlas={atlas}/>}
+              </div>
+            </>}
+          </Popout>}
+          </AnimatePresence>
+
+          {/* Right edge: parcel card, selection summary, export, delineation. */}
+          <AnimatePresence mode="wait">
+          {right && <Popout key={right} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth }}>
+            {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} advanced={advanced} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAdvanced={advanced && dashboard && dashboardTab === 'avanzado' ? undefined : () => { setAdvancedTab('parcela'); goPhase('avanzado'); }} onNext={nextParcel}
+              ranking={parcelRank(selected)} onSimilar={() => { const y = selected.properties.predictedYield; if (y == null) return; setFilters(f => ({ ...f, yieldBand: [y - .25, y + .25] })); setLeft('filters'); setTimeout(() => map.current?.fitAll(), 60); }}/>}
+            {right === 'selection' && <SelectionSummary parcels={selectionParcels} atlas={atlas} keyDate={key} onClose={() => { setRightPanel(null); setSelection([]); }} onPick={id => chooseParcel(id, true)}/>}
+            {right === 'export' && <div className="flex min-h-0 flex-col">
+              <header className="flex items-center gap-1 pt-3 pr-3 pl-5"><h2 className="flex-1 text-base font-medium">Exportar</h2><ShellButton label="Cerrar exportación" side="bottom" onClick={() => setRightPanel(null)}><X/></ShellButton></header>
+              <div className="grid gap-2 overflow-y-auto px-4 pt-1 pb-4">
+                <p className="px-1 text-[13px] text-muted-foreground">{visibleParcels.length} {visibleParcels.length === 1 ? 'parcela visible' : 'parcelas visibles'} · {modeLabel} · {periodLabel}</p>
+                {([[Send, 'Entrega del reto', 'ID_POLIGONO y rendimiento · 59 parcelas', () => download('agrocebada-entrega-59.csv', submissionCsv(atlas.predictions), 'text/csv')], [ImageDown, 'Imagen del mapa', 'PNG de la vista actual', () => void exportMap()], [FileJson, 'Parcelas · GeoJSON', 'Límites, estimaciones y atributos', () => download('parcelas.geojson', JSON.stringify({ type: 'FeatureCollection', features: visibleParcels }), 'application/geo+json')], [FileSpreadsheet, 'Parcelas · CSV', 'Estimado, intervalo 80 % y producción', () => download('parcelas.csv', parcelCsv(visibleParcels, atlas, key), 'text/csv')]] as const).map(([Icon, title, detail, run]) =>
+                  <button key={title} type="button" onClick={run} className="flex items-center gap-3 rounded-2xl bg-tile px-3 py-2.5 text-left hover:bg-tile-strong"><span className="grid size-9 place-items-center rounded-full bg-primary-container text-on-primary-container"><Icon className="size-4"/></span><span className="grid flex-1 leading-tight"><span className="text-sm font-medium">{title}</span><span className="text-xs text-muted-foreground">{detail}</span></span><Download className="size-4 text-muted-foreground"/></button>)}
+              </div>
+            </div>}
+            {right === 'draft' && <section aria-label="Delimitación de parcela" className={cn('delineation-card flex min-h-0 flex-col', compactDelineation && 'compact')}>
+              <header className="flex items-center gap-1 pt-3 pr-3 pl-5">
+                <h2 className="flex-1 truncate text-base font-medium">{draftMode === 'segment' ? 'Delimita tu terreno' : draftMode === 'edit' ? 'Corrige los límites' : 'Dibuja tu parcela'}</h2>
+                <ShellButton label={compactDelineation ? 'Expandir controles de delimitación' : 'Contraer controles de delimitación'} side="bottom" onClick={() => setCompactDelineation(!compactDelineation)}>{compactDelineation ? <ChevronDown/> : <ChevronUp/>}</ShellButton>
+                <ShellButton label="Cancelar delimitación" side="bottom" onClick={cancelDraft}><X/></ShellButton>
+              </header>
+              <div className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto px-5 pt-1 pb-3">
+                <div className="grid gap-1"><span className="w-fit rounded-full bg-primary-container px-2.5 py-0.5 text-xs text-on-primary-container">{draftMode === 'segment' ? 'SAM 2.1 · Sentinel-2 RGB' : draftMode === 'edit' ? 'Edición de límites' : 'Dibujo manual'}</span>
+                  {!compactDelineation && <p className="text-[13px] leading-relaxed text-muted-foreground">{draftMode === 'segment' ? 'Haz clic dentro del terreno. Añade puntos para incluir o excluir áreas y revisa la propuesta antes de guardarla.' : 'Ajusta los vértices. Al dibujar, un doble clic cierra el polígono.'}</p>}</div>
+                {draftMode === 'segment' && <>
+                  <div role="group" aria-label="Tipo de punto" className="grid grid-cols-2 gap-1 rounded-full bg-tile p-1">
+                    {([[1, '+ Incluir', 'bg-emerald-500'], [0, '− Excluir', 'bg-rose-500']] as const).map(([value, label, dot]) => <button key={label} type="button" aria-pressed={promptLabel === value && !adjusting} onClick={() => { setAdjusting(false); map.current?.proposal(draft); setPromptLabel(value); }} className="flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground aria-pressed:bg-frame aria-pressed:text-foreground aria-pressed:shadow-sm"><span className={cn('size-2 rounded-full', dot)}/>{label}</button>)}
+                  </div>
+                  {!compactDelineation && <p className="text-xs text-muted-foreground">{MONTH_NAMES[month]} {year} · límites aproximados de 10 m · {prompts.length} {prompts.length === 1 ? 'punto' : 'puntos'}</p>}
+                  {segmenting && <div className="rounded-2xl bg-tile px-3 py-2 text-sm"><LoadingState label="Buscando límites de la parcela…"/></div>}
+                  {segmentError && <Alert className="rounded-2xl"><TriangleAlert/><AlertDescription>{segmentError}</AlertDescription></Alert>}
+                  {proposal?.warnings.map(w => <p key={w} className="rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">{w}</p>)}
+                  <div className="flex flex-wrap gap-1.5"><Button variant="outline" size="sm" className="rounded-full bg-transparent" disabled={segmenting || !prompts.length} onClick={() => void infer(prompts)}>Reintentar</Button><Button variant="outline" size="sm" className="rounded-full bg-transparent" disabled={!draft || segmenting} onClick={() => { setAdjusting(true); setCompactDelineation(true); map.current?.editDraft(draft!); }}>Ajustar vértices</Button><Button variant="ghost" size="sm" className="rounded-full" onClick={startDraw}><PencilRuler/>Dibujar manualmente</Button></div>
+                </>}
+                {draftMode === 'draw' && <div className="flex flex-wrap gap-1.5"><Button variant="outline" size="sm" className="rounded-full bg-transparent" onClick={() => map.current?.undo()}>Deshacer punto</Button><Button variant="outline" size="sm" className="rounded-full bg-transparent" onClick={() => map.current?.finish()}>Cerrar polígono</Button></div>}
+                <div className="draft-area flex items-baseline justify-between rounded-2xl bg-tile px-3.5 py-2.5"><span className="text-sm text-muted-foreground">Superficie</span>{draft ? <b className="text-2xl font-normal tabular-nums">{fmt(polygonArea(draft))}<span className="ml-1 text-sm text-muted-foreground">ha</span></b> : segmenting ? <LoadingValue label="Calculando superficie de la propuesta" unit="ha"/> : <b className="text-2xl font-normal text-muted-foreground/60">—<span className="ml-1 text-sm">ha</span></b>}</div>
+                {draftMode !== 'edit' && <Field><FieldLabel htmlFor="field-name">Nombre de la parcela</FieldLabel><Input id="field-name" value={fieldName} onChange={e => setFieldName(e.target.value)} className="rounded-full bg-tile"/></Field>}
+              </div>
+              <footer className="flex items-center gap-2 px-4 pb-4"><Button variant="outline" onClick={cancelDraft} className="mr-auto rounded-full bg-transparent">Cancelar</Button>{proposal && <ShellButton label="Exportar propuesta y correcciones" disabled={!draft} onClick={exportProposal}><Download/></ShellButton>}<Button className="rounded-full" disabled={!draft || saving || segmenting} onClick={() => void saveDraft()}>{saving ? <><Spinner/>Guardando…</> : draftMode === 'edit' ? 'Guardar límites' : 'Guardar parcela'}</Button></footer>
+            </section>}
+          </Popout>}
+          </AnimatePresence>
+
+          {/* Bottom-left: time. Bottom-centre: launcher. Bottom-right: tools and navigation. */}
+          <AnimatePresence mode="wait">
+          {showTime && launcher === null && <Popout key={'time' + mode + (left ? 'l' : '')} edges={left ? 'bottom' : ['bottom', 'left']} className="bottom-0 @container/time" style={{ width: timeWidth, left: left ? leftWidth + 28 : 0 }}>
+            <div className="pt-1 pr-2 pb-0.5"><TimeSlider mode={mode} year={year} month={month} keyDate={key} playing={playing} onPlay={setPlaying} onMonth={setMonth} onYear={setYear} onDate={(y, m) => { setYear(y); setMonth(m); }}/></div>
+          </Popout>}
+          </AnimatePresence>
+
+          <AnimatePresence>
+          {launcher === null && !(isMobile && (left || right)) && <Popout key="tools" edges={isMobile ? 'right' : ['bottom', 'right']} label="Herramientas del mapa" animate={false} className={isMobile ? 'top-1/2 right-0 -translate-y-1/2' : 'right-0 bottom-0 max-w-[36rem]'}>
+            <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
+              {!isMobile && <><ShellButton label={`Buscar o ejecutar un comando (${shortcutKey} K)`} onClick={() => setLauncher('')}><Search/></ShellButton><span className="mx-1 h-5 w-px bg-border" aria-hidden="true"/></>}
+              {visibleTools.filter(t => !isMobile || ['sam', 'measure', 'export', 'locate'].includes(t.id)).map(t => <ShellButton key={t.id} label={t.label} side={isMobile ? 'left' : 'top'} pressed={t.pressed} busy={t.busy} onClick={t.run}>{t.icon}</ShellButton>)}
+              <span className={cn('mx-1 h-5 w-px bg-border', isMobile && 'h-px w-5')} aria-hidden="true"/>
+              <ShellButton label="Ver todas las parcelas" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.fitAll()}><Home/></ShellButton>
+              <ShellButton label="Alejar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(-1)}><Minus/></ShellButton>
+              <ShellButton label="Acercar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(1)}><Plus/></ShellButton>
+              {!isMobile && <ShellButton label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} pressed={fullscreen} onClick={() => void map.current?.toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ShellButton>}
+            </div>
+            {!isMobile && <div ref={setStatusEl} className="px-3.5 pt-1 pb-2"/>}
+          </Popout>}
+          </AnimatePresence>
+        </motion.div>
 
         {setupVisible && <div className="absolute inset-0 z-50 grid place-items-center overflow-y-auto rounded-(--view-r) bg-frame/60 p-4 backdrop-blur-sm"><MapSetup tasks={setupTasks} error={loadError} onRetry={reload}/></div>}
 
-        {/* Top: dashboard handle, or the dashboard itself. */}
-        {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
-
-        <AnimatePresence mode="wait">
-        {(dashboard || !isMobile && freeWidth >= 360) && (dashboard
-          ? <Popout key="dash" edges="top" label="Panel de control" className={isMobile ? 'inset-x-0 top-0 z-40' : 'top-0 -translate-x-1/2'} style={isMobile ? undefined : { left: freeCenter }}>
-              <Dashboard atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} tab={dashboardTab} onTab={t => t === 'estimar' || t === 'avanzado' ? goPhase(t) : setDashboardTab(t)} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}
-                panels={{
-                  estimar: <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setDashboard(false)}/>,
+        <AnimatePresence>
+        {dashboard && <motion.section key="dashboard" aria-label="Panel de control" className="dashboard-canvas absolute inset-0 z-20 overflow-hidden rounded-(--view-r)"
+          initial={{ opacity: 0, scale: 1.015 }} animate={{ opacity: 1, scale: 1, transition: { duration: .36, delay: .12, ease: [.2, 0, 0, 1] } }} exit={{ opacity: 0, scale: 1.015, transition: { duration: .22 } }}>
+          <Dashboard atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} tab={dashboardTab} onTab={t => t === 'estimar' || t === 'avanzado' ? goPhase(t) : setDashboardTab(t)} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}
+            panels={{
+                  estimar: <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => { chooseParcel(id, true); setDashboard(false); }} onHover={setHoverId} onClose={() => setDashboard(false)}/>,
                   avanzado: <AdvancedPanel atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} keyDate={key} mode={mode} filters={filters} layers={layers} manifest={manifest} tab={advancedTab} onTab={setAdvancedTab}
-                    onSelect={id => chooseParcel(id, true)} onLocate={() => selected && map.current?.fitParcel(selected)} onMode={switchMode} setFilters={setFilters} setLayers={setLayers} onClose={() => setDashboard(false)}/>,
+                    onSelect={id => chooseParcel(id, true)} onLocate={() => { if (!selected) return; setDashboard(false); setTimeout(() => map.current?.fitParcel(selected), 40); }} onMode={next => { switchMode(next); setDashboard(false); }} setFilters={setFilters} setLayers={setLayers} onClose={() => setDashboard(false)}/>,
                 }}/>
-              <button type="button" onClick={() => setDashboard(false)} aria-label="Cerrar panel de control" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
+        </motion.section>}
+        </AnimatePresence>
+
+                {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
+
+
+        {/* Top: Milli-IA, the assistant, always present on the map and the dashboard. For now its island opens on the Resumen tiles. */}
+        <AnimatePresence mode="wait">
+        {assistant
+          ? <Popout key="assistant" edges="top" label="Milli-IA" className={isMobile ? 'inset-x-0 top-0 z-40' : 'top-0 z-40 -translate-x-1/2'} style={isMobile ? undefined : { left: dashboard || isMobile ? '50%' : freeCenter }}>
+              <div className="w-[min(760px,calc(100vw-7rem))] px-4 pt-3 pb-3 max-md:w-full">
+                <header className="flex items-center gap-2 pb-3 text-sm"><Sparkles className="size-4 text-primary"/><h2 className="font-medium">Milli-IA</h2><span className="text-xs text-muted-foreground">· asistente</span></header>
+                <Summary atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
+              </div>
+              <button type="button" onClick={() => setAssistant(false)} aria-label="Cerrar Milli-IA" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
             </Popout>
-          : <Popout key="handle" edges="top" radius={14} className="top-0 -translate-x-1/2" style={{ left: freeCenter }} animate={false}>
-              <button type="button" onClick={() => setDashboard(true)} aria-label="Abrir panel de control (Alt D)" className="flex h-8 items-center gap-2 px-4 text-xs text-muted-foreground hover:text-foreground">
-                <span className="size-1.5 rounded-full bg-primary"/><span className="font-medium text-foreground">{modeLabel}</span><span>· {periodLabel}</span><ChevronDown className="size-3.5"/>
+          : <Popout key="island" edges="top" radius={14} className="top-0 z-30 -translate-x-1/2" style={{ left: dashboard || isMobile ? '50%' : freeCenter }} animate={false}>
+              <button type="button" onClick={() => setAssistant(true)} aria-label="Abrir Milli-IA" className="flex h-8 items-center gap-2 px-4 text-xs text-muted-foreground hover:text-foreground">
+                <Sparkles className="size-3.5 text-primary"/><span className="font-medium text-foreground">Milli-IA</span><ChevronDown className="size-3.5"/>
               </button>
-            </Popout>)}
-        </AnimatePresence>
-
-        {/* Left edge: map panels, settings and the full-height sheets. */}
-        <AnimatePresence mode="wait">
-        {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
-          {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} advanced={advanced} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
-          {left !== 'tabla' && <>
-            <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
-              {left === 'layers' && <LayersPanel mode={mode} advanced={advanced} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
-              {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
-              {left === 'filters' && <div className="grid gap-6">
-                <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
-                <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
-              </div>}
-              {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
-                <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
-              </SettingsPanel>}
-              {left === 'fuentes' && <SourcesPage atlas={atlas}/>}
-            </div>
-          </>}
-        </Popout>}
-        </AnimatePresence>
-
-        {/* Right edge: parcel card, selection summary, export, delineation. */}
-        <AnimatePresence mode="wait">
-        {right && <Popout key={right} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth }}>
-          {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} advanced={advanced} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAdvanced={advanced && dashboard && dashboardTab === 'avanzado' ? undefined : () => { setAdvancedTab('parcela'); goPhase('avanzado'); }} onNext={nextParcel}
-            ranking={parcelRank(selected)} onSimilar={() => { const y = selected.properties.predictedYield; if (y == null) return; setFilters(f => ({ ...f, yieldBand: [y - .25, y + .25] })); setLeft('filters'); setTimeout(() => map.current?.fitAll(), 60); }}/>}
-          {right === 'selection' && <SelectionSummary parcels={selectionParcels} atlas={atlas} keyDate={key} onClose={() => { setRightPanel(null); setSelection([]); }} onPick={id => chooseParcel(id, true)}/>}
-          {right === 'export' && <div className="flex min-h-0 flex-col">
-            <header className="flex items-center gap-1 pt-3 pr-3 pl-5"><h2 className="flex-1 text-base font-medium">Exportar</h2><ShellButton label="Cerrar exportación" side="bottom" onClick={() => setRightPanel(null)}><X/></ShellButton></header>
-            <div className="grid gap-2 overflow-y-auto px-4 pt-1 pb-4">
-              <p className="px-1 text-[13px] text-muted-foreground">{visibleParcels.length} {visibleParcels.length === 1 ? 'parcela visible' : 'parcelas visibles'} · {modeLabel} · {periodLabel}</p>
-              {([[Send, 'Entrega del reto', 'ID_POLIGONO y rendimiento · 59 parcelas', () => download('agrocebada-entrega-59.csv', submissionCsv(atlas.predictions), 'text/csv')], [ImageDown, 'Imagen del mapa', 'PNG de la vista actual', () => void exportMap()], [FileJson, 'Parcelas · GeoJSON', 'Límites, estimaciones y atributos', () => download('parcelas.geojson', JSON.stringify({ type: 'FeatureCollection', features: visibleParcels }), 'application/geo+json')], [FileSpreadsheet, 'Parcelas · CSV', 'Estimado, intervalo 80 % y producción', () => download('parcelas.csv', parcelCsv(visibleParcels, atlas, key), 'text/csv')]] as const).map(([Icon, title, detail, run]) =>
-                <button key={title} type="button" onClick={run} className="flex items-center gap-3 rounded-2xl bg-tile px-3 py-2.5 text-left hover:bg-tile-strong"><span className="grid size-9 place-items-center rounded-full bg-primary-container text-on-primary-container"><Icon className="size-4"/></span><span className="grid flex-1 leading-tight"><span className="text-sm font-medium">{title}</span><span className="text-xs text-muted-foreground">{detail}</span></span><Download className="size-4 text-muted-foreground"/></button>)}
-            </div>
-          </div>}
-          {right === 'draft' && <section aria-label="Delimitación de parcela" className={cn('delineation-card flex min-h-0 flex-col', compactDelineation && 'compact')}>
-            <header className="flex items-center gap-1 pt-3 pr-3 pl-5">
-              <h2 className="flex-1 truncate text-base font-medium">{draftMode === 'segment' ? 'Delimita tu terreno' : draftMode === 'edit' ? 'Corrige los límites' : 'Dibuja tu parcela'}</h2>
-              <ShellButton label={compactDelineation ? 'Expandir controles de delimitación' : 'Contraer controles de delimitación'} side="bottom" onClick={() => setCompactDelineation(!compactDelineation)}>{compactDelineation ? <ChevronDown/> : <ChevronUp/>}</ShellButton>
-              <ShellButton label="Cancelar delimitación" side="bottom" onClick={cancelDraft}><X/></ShellButton>
-            </header>
-            <div className="grid min-h-0 flex-1 gap-3.5 overflow-y-auto px-5 pt-1 pb-3">
-              <div className="grid gap-1"><span className="w-fit rounded-full bg-primary-container px-2.5 py-0.5 text-xs text-on-primary-container">{draftMode === 'segment' ? 'SAM 2.1 · Sentinel-2 RGB' : draftMode === 'edit' ? 'Edición de límites' : 'Dibujo manual'}</span>
-                {!compactDelineation && <p className="text-[13px] leading-relaxed text-muted-foreground">{draftMode === 'segment' ? 'Haz clic dentro del terreno. Añade puntos para incluir o excluir áreas y revisa la propuesta antes de guardarla.' : 'Ajusta los vértices. Al dibujar, un doble clic cierra el polígono.'}</p>}</div>
-              {draftMode === 'segment' && <>
-                <div role="group" aria-label="Tipo de punto" className="grid grid-cols-2 gap-1 rounded-full bg-tile p-1">
-                  {([[1, '+ Incluir', 'bg-emerald-500'], [0, '− Excluir', 'bg-rose-500']] as const).map(([value, label, dot]) => <button key={label} type="button" aria-pressed={promptLabel === value && !adjusting} onClick={() => { setAdjusting(false); map.current?.proposal(draft); setPromptLabel(value); }} className="flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground aria-pressed:bg-frame aria-pressed:text-foreground aria-pressed:shadow-sm"><span className={cn('size-2 rounded-full', dot)}/>{label}</button>)}
-                </div>
-                {!compactDelineation && <p className="text-xs text-muted-foreground">{MONTH_NAMES[month]} {year} · límites aproximados de 10 m · {prompts.length} {prompts.length === 1 ? 'punto' : 'puntos'}</p>}
-                {segmenting && <div className="rounded-2xl bg-tile px-3 py-2 text-sm"><LoadingState label="Buscando límites de la parcela…"/></div>}
-                {segmentError && <Alert className="rounded-2xl"><TriangleAlert/><AlertDescription>{segmentError}</AlertDescription></Alert>}
-                {proposal?.warnings.map(w => <p key={w} className="rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">{w}</p>)}
-                <div className="flex flex-wrap gap-1.5"><Button variant="outline" size="sm" className="rounded-full bg-transparent" disabled={segmenting || !prompts.length} onClick={() => void infer(prompts)}>Reintentar</Button><Button variant="outline" size="sm" className="rounded-full bg-transparent" disabled={!draft || segmenting} onClick={() => { setAdjusting(true); setCompactDelineation(true); map.current?.editDraft(draft!); }}>Ajustar vértices</Button><Button variant="ghost" size="sm" className="rounded-full" onClick={startDraw}><PencilRuler/>Dibujar manualmente</Button></div>
-              </>}
-              {draftMode === 'draw' && <div className="flex flex-wrap gap-1.5"><Button variant="outline" size="sm" className="rounded-full bg-transparent" onClick={() => map.current?.undo()}>Deshacer punto</Button><Button variant="outline" size="sm" className="rounded-full bg-transparent" onClick={() => map.current?.finish()}>Cerrar polígono</Button></div>}
-              <div className="draft-area flex items-baseline justify-between rounded-2xl bg-tile px-3.5 py-2.5"><span className="text-sm text-muted-foreground">Superficie</span>{draft ? <b className="text-2xl font-normal tabular-nums">{fmt(polygonArea(draft))}<span className="ml-1 text-sm text-muted-foreground">ha</span></b> : segmenting ? <LoadingValue label="Calculando superficie de la propuesta" unit="ha"/> : <b className="text-2xl font-normal text-muted-foreground/60">—<span className="ml-1 text-sm">ha</span></b>}</div>
-              {draftMode !== 'edit' && <Field><FieldLabel htmlFor="field-name">Nombre de la parcela</FieldLabel><Input id="field-name" value={fieldName} onChange={e => setFieldName(e.target.value)} className="rounded-full bg-tile"/></Field>}
-            </div>
-            <footer className="flex items-center gap-2 px-4 pb-4"><Button variant="outline" onClick={cancelDraft} className="mr-auto rounded-full bg-transparent">Cancelar</Button>{proposal && <ShellButton label="Exportar propuesta y correcciones" disabled={!draft} onClick={exportProposal}><Download/></ShellButton>}<Button className="rounded-full" disabled={!draft || saving || segmenting} onClick={() => void saveDraft()}>{saving ? <><Spinner/>Guardando…</> : draftMode === 'edit' ? 'Guardar límites' : 'Guardar parcela'}</Button></footer>
-          </section>}
-        </Popout>}
-        </AnimatePresence>
-
-        {/* Bottom-left: time. Bottom-centre: launcher. Bottom-right: tools and navigation. */}
-        <AnimatePresence mode="wait">
-        {showTime && launcher === null && <Popout key={'time' + mode + (left ? 'l' : '')} edges={left ? 'bottom' : ['bottom', 'left']} className="bottom-0 @container/time" style={{ width: timeWidth, left: left ? leftWidth + 28 : 0 }}>
-          <div className="pt-1 pr-2 pb-0.5"><TimeSlider mode={mode} year={year} month={month} keyDate={key} playing={playing} onPlay={setPlaying} onMonth={setMonth} onYear={setYear} onDate={(y, m) => { setYear(y); setMonth(m); }}/></div>
-        </Popout>}
+            </Popout>}
         </AnimatePresence>
 
         <AnimatePresence>
@@ -448,21 +479,6 @@ export default function App() {
                 onClose={() => setLauncher(null)} onParcel={id => chooseParcel(id, true)} onPlace={coords => { map.current?.locate(coords); }} onMunicipality={(name, geometry) => { map.current?.fitGeometry(geometry); toast(name); }}/>
             </Popout>
           : null}
-        </AnimatePresence>
-
-        <AnimatePresence>
-        {launcher === null && !(isMobile && (left || right)) && <Popout key="tools" edges={isMobile ? 'right' : ['bottom', 'right']} label="Herramientas del mapa" animate={false} className={isMobile ? 'top-1/2 right-0 -translate-y-1/2' : 'right-0 bottom-0 max-w-[36rem]'}>
-          <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
-            {!isMobile && <><ShellButton label={`Buscar o ejecutar un comando (${shortcutKey} K)`} onClick={() => setLauncher('')}><Search/></ShellButton><span className="mx-1 h-5 w-px bg-border" aria-hidden="true"/></>}
-            {visibleTools.filter(t => !isMobile || ['sam', 'measure', 'export', 'locate'].includes(t.id)).map(t => <ShellButton key={t.id} label={t.label} side={isMobile ? 'left' : 'top'} pressed={t.pressed} busy={t.busy} onClick={t.run}>{t.icon}</ShellButton>)}
-            <span className={cn('mx-1 h-5 w-px bg-border', isMobile && 'h-px w-5')} aria-hidden="true"/>
-            <ShellButton label="Ver todas las parcelas" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.fitAll()}><Home/></ShellButton>
-            <ShellButton label="Alejar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(-1)}><Minus/></ShellButton>
-            <ShellButton label="Acercar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(1)}><Plus/></ShellButton>
-            {!isMobile && <ShellButton label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} pressed={fullscreen} onClick={() => void map.current?.toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ShellButton>}
-          </div>
-          {!isMobile && <div ref={setStatusEl} className="px-3.5 pt-1 pb-2"/>}
-        </Popout>}
         </AnimatePresence>
       </main>
     </div>

@@ -5,6 +5,8 @@
 @layer components {
 .shell { --bar: 56px; --gap: 10px; --view-r: 22px; background: var(--frame); color: var(--foreground); }
 .shell-viewport { border-radius: var(--view-r); }
+/* The dashboard page takes the map's place: the same curved canvas, a tone between frame and tile. */
+.dashboard-canvas { background: color-mix(in oklch, var(--tile) 45%, var(--frame)); }
 
 .popout { --r: 20px; position: absolute; display: flex; flex-direction: column; background: var(--frame); color: var(--foreground); z-index: 30; }
 .popout > .fillet { position: absolute; width: var(--r); height: var(--r); pointer-events: none; }
