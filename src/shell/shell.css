@@ -48,11 +48,12 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .popout-body > * { animation: none !important; }
+  .milli-sparkle { display: none; }
 }
 
 /* The mark grows grain by grain while the atlas loads. */
 @keyframes grain-in { 0%, 15% { opacity: .15; transform: scale(.6); } 45%, 100% { opacity: 1; transform: none; } }
-.logo-grow ellipse { transform-box: fill-box; transform-origin: center; animation: grain-in 1.6s cubic-bezier(.2, .9, .25, 1) calc(var(--i) * 110ms) infinite alternate; }
-@media (prefers-reduced-motion: reduce) { .logo-grow ellipse { animation: none; } }
+.logo-grow .grain { transform-box: fill-box; transform-origin: center; animation: grain-in 1.6s cubic-bezier(.2, .9, .25, 1) calc(var(--i) * 110ms) infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .logo-grow .grain { animation: none; } }
 
 }

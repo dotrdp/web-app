@@ -7,7 +7,7 @@
 // controls fade away for. Milli-IA, the assistant, lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, Sparkles, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -41,6 +41,7 @@ import type { LeftPanel } from './shell/Bar';
 import Dashboard, { Summary } from './shell/Dashboard';
 import type { DashboardTab } from './shell/Dashboard';
 import Launcher from './shell/Launcher';
+import { MilliAvatar, MilliName } from './shell/Milli';
 import type { Command } from './shell/Launcher';
 import ShellButton from './shell/ShellButton';
 import { LogoMark } from './Logo';
@@ -108,7 +109,7 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>(routePhase);
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>('parcela');
-  const [assistant, setAssistant] = useState(false);
+  const [assistant, setAssistant] = useState(false), [milliNews, setMilliNews] = useState(0), [milliUnread, setMilliUnread] = useState(false);
   const [dashboard, setDashboard] = useState(() => routePhase() !== 'explorar'), [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const p = routePhase(); return p === 'explorar' ? 'resumen' : p; });
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
@@ -183,6 +184,15 @@ export default function App() {
     const step = () => { tourIndex.current = (tourIndex.current + 1) % visibleParcels.length; chooseParcel(visibleParcels[tourIndex.current].properties.id, true); };
     step(); const timer = window.setInterval(step, 4200); return () => clearInterval(timer);
   }, [touring, visibleParcels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Milli twinkles when the parcel it summarises changes behind its back; opening it reads the news.
+  const milliParcel = useRef(selectedId);
+  useEffect(() => {
+    if (milliParcel.current === selectedId) return;
+    milliParcel.current = selectedId;
+    if (selectedId && !assistant) { setMilliNews(n => n + 1); setMilliUnread(true); }
+  }, [selectedId, assistant]);
+  useEffect(() => { if (assistant) setMilliUnread(false); }, [assistant]);
 
   // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, Escape closes the top layer.
   useEffect(() => {
@@ -461,14 +471,14 @@ export default function App() {
           {assistant
             ? <Popout key="assistant" edges="top" label="Milli-IA" className="relative">
                 <div className="w-[min(760px,calc(100vw-7rem))] px-4 pt-3 pb-3 max-md:w-[calc(100vw-1.5rem)]">
-                  <header className="flex items-center gap-2 pb-3 text-sm"><Sparkles className="size-4 text-primary"/><h2 className="font-medium">Milli-IA</h2><span className="text-xs text-muted-foreground">· asistente</span></header>
+                  <header className="flex items-center gap-2.5 pb-3"><MilliAvatar size={28}/><h2 className="text-base"><MilliName/></h2><span className="text-xs text-muted-foreground">· asistente</span></header>
                   <Summary atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
                 </div>
                 <button type="button" onClick={() => setAssistant(false)} aria-label="Cerrar Milli-IA" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
               </Popout>
-            : <Popout key="island" edges="top" radius={14} className="relative" animate={false}>
-                <button type="button" onClick={() => setAssistant(true)} aria-label="Abrir Milli-IA" className="flex h-8 items-center gap-2 px-4 text-xs text-muted-foreground hover:text-foreground">
-                  <Sparkles className="size-3.5 text-primary"/><span className="font-semibold text-foreground">Milli-IA</span><ChevronDown className="size-3.5"/>
+            : <Popout key="island" edges="top" radius={16} className="relative" animate={false}>
+                <button type="button" onClick={() => setAssistant(true)} aria-label={milliUnread ? 'Abrir Milli-IA · hay novedades' : 'Abrir Milli-IA'} className="flex h-10 items-center gap-2.5 pr-3.5 pl-2.5 text-sm text-muted-foreground hover:text-foreground">
+                  <MilliAvatar size={26} twinkle={milliNews} unread={milliUnread}/><MilliName className="text-foreground"/><ChevronDown className="size-4"/>
                 </button>
               </Popout>}
           </AnimatePresence>
