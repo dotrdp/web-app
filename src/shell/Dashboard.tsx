@@ -2,7 +2,7 @@
 // tonal tiles. Resumen mirrors weather / system / calendar / media; Modelo mirrors
 // the Performance gauges; Ciclo shows what data exists up to the prediction cutoff;
 // Estimar and Avanzado host the phase 2 and 3 panels, passed in by the shell.
-// The map fades out behind it; Milli-IA's island reuses the Resumen tiles.
+// The map fades out behind it; the Agente de IA Milli's island reuses the Resumen tiles.
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';

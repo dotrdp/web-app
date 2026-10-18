@@ -92,16 +92,21 @@ test('Dashboard page replaces the map with the model gauges and the cycle cutoff
   await expect(bar(page).getByRole('button', { name: 'Capas y simbología' })).toBeVisible();
 });
 
-test('Milli-IA stays in its island on the map and on the dashboard, opening on the Resumen', async ({ page }) => {
+test('Agente de IA Milli stays in its island on the map and on the dashboard, opening on the Resumen', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Abrir Milli-IA' }).click();
-  const milli = page.getByRole('region', { name: 'Milli-IA' });
+  await page.getByRole('button', { name: 'Abrir Agente de IA Milli' }).click();
+  const milli = page.getByRole('region', { name: 'Agente de IA Milli' });
   await expect(milli.getByRole('region', { name: 'Clima del mes' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(milli).toHaveCount(0);
   await page.keyboard.press('Alt+d');
   await expect(page.getByRole('region', { name: 'Panel de control' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Abrir Milli-IA' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir Agente de IA Milli' })).toBeVisible();
+  // Settings open over the dashboard; map panels stay hidden with the map.
+  await bar(page).getByRole('button', { name: 'Ajustes' }).click();
+  await expect(page.getByRole('region', { name: 'Ajustes' }).getByRole('button', { name: 'Oscuro' })).toBeVisible();
+  await page.getByRole('region', { name: 'Ajustes' }).getByRole('button', { name: 'Oscuro' }).click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
 });
 
 test('Plugins: swipe compares layers, box selection sums production, disabled tools leave the strip', async ({ page }) => {

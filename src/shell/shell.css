@@ -48,7 +48,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .popout-body > * { animation: none !important; }
-  .milli-sparkle { display: none; }
 }
 
 /* The mark grows grain by grain while the atlas loads. */

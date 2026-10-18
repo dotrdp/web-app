@@ -4,7 +4,7 @@
 // to the edges. Three phases replace the old Productor / Técnico roles:
 // Explorar (the map) → Estimar → Indicadores avanzados (the only place technical
 // tools live); the last two are tabs of the dashboard page, which the map and its
-// controls fade away for. Milli-IA, the assistant, lives in the top island.
+// controls fade away for. the Agente de IA Milli lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
@@ -41,7 +41,7 @@ import type { LeftPanel } from './shell/Bar';
 import Dashboard, { Summary } from './shell/Dashboard';
 import type { DashboardTab } from './shell/Dashboard';
 import Launcher from './shell/Launcher';
-import { MilliAvatar, MilliName } from './shell/Milli';
+import { MILLI, MilliAvatar, MilliName } from './shell/Milli';
 import type { Command } from './shell/Launcher';
 import ShellButton from './shell/ShellButton';
 import { LogoMark } from './Logo';
@@ -109,7 +109,7 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>(routePhase);
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>('parcela');
-  const [assistant, setAssistant] = useState(false), [milliNews, setMilliNews] = useState(0), [milliUnread, setMilliUnread] = useState(false);
+  const [assistant, setAssistant] = useState(false);
   const [dashboard, setDashboard] = useState(() => routePhase() !== 'explorar'), [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const p = routePhase(); return p === 'explorar' ? 'resumen' : p; });
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
@@ -184,15 +184,6 @@ export default function App() {
     const step = () => { tourIndex.current = (tourIndex.current + 1) % visibleParcels.length; chooseParcel(visibleParcels[tourIndex.current].properties.id, true); };
     step(); const timer = window.setInterval(step, 4200); return () => clearInterval(timer);
   }, [touring, visibleParcels]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Milli twinkles when the parcel it summarises changes behind its back; opening it reads the news.
-  const milliParcel = useRef(selectedId);
-  useEffect(() => {
-    if (milliParcel.current === selectedId) return;
-    milliParcel.current = selectedId;
-    if (selectedId && !assistant) { setMilliNews(n => n + 1); setMilliUnread(true); }
-  }, [selectedId, assistant]);
-  useEffect(() => { if (assistant) setMilliUnread(false); }, [assistant]);
 
   // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, Escape closes the top layer.
   useEffect(() => {
@@ -283,6 +274,7 @@ export default function App() {
   const parcelRank = (p: Parcel) => p.properties.predictedYield == null ? null : { percentile: Math.round(estimates.filter(v => v < p.properties.predictedYield!).length / Math.max(1, estimates.length - 1) * 100), of: estimates.length };
   const selectionParcels = parcels.filter(p => selection.includes(p.properties.id));
   const freeWidth = viewWidth - 66 - leftWidth - rightWidth;
+  const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes');
   const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth}px) / 2)`;
 
   const basemapPreview = (k: string) => <span className="block size-full bg-cover bg-center" style={{ backgroundImage: `url('/basemaps/${k}.png')` }}/>;
@@ -359,28 +351,6 @@ export default function App() {
             {measureKind && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><Ruler className="size-4 text-muted-foreground"/><span className="text-muted-foreground">{measureKind === 'area' ? 'Área' : 'Distancia'}</span><span className="font-medium tabular-nums">{measureValue ?? 'Haz clic en el mapa'}</span><Button size="xs" variant="ghost" className="rounded-full" onClick={() => toggleMeasure(null)}>Terminar</Button></div>}
             {selectArea && <div role="status" className="pointer-events-auto flex items-center gap-2 rounded-full bg-frame py-1 pr-1 pl-3.5 text-sm shadow-md"><BoxSelect className="size-4 text-muted-foreground"/>Arrastra un rectángulo sobre las parcelas<Button size="xs" variant="ghost" className="rounded-full" onClick={() => setSelectArea(false)}>Cancelar</Button></div>}
           </div>
-
-          {/* Left edge: map panels, settings and the full-height sheets. */}
-          <AnimatePresence mode="wait">
-          {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
-            {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} advanced={advanced} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
-            {left !== 'tabla' && <>
-              <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
-                {left === 'layers' && <LayersPanel mode={mode} advanced={advanced} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
-                {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
-                {left === 'filters' && <div className="grid gap-6">
-                  <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
-                  <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
-                </div>}
-                {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
-                  <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
-                </SettingsPanel>}
-                {left === 'fuentes' && <SourcesPage atlas={atlas}/>}
-              </div>
-            </>}
-          </Popout>}
-          </AnimatePresence>
 
           {/* Right edge: parcel card, selection summary, export, delineation. */}
           <AnimatePresence mode="wait">
@@ -461,24 +431,50 @@ export default function App() {
         </motion.section>}
         </AnimatePresence>
 
-                {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
+        {/* Left edge: map panels, settings and the full-height sheets. Kept out of the map layer so
+            Ajustes and Datos y fuentes also open over the dashboard; map panels fade with the map. */}
+        <motion.div className="pointer-events-none absolute inset-0 z-30 *:pointer-events-auto" inert={mapPanelHidden} initial={false}
+          animate={mapPanelHidden ? { opacity: 0, filter: 'blur(6px)' } : { opacity: 1, filter: 'blur(0px)' }} transition={{ duration: .38, ease: [.4, 0, .2, 1] }}>
+          <AnimatePresence mode="wait">
+          {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
+            {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} advanced={advanced} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
+            {left !== 'tabla' && <>
+              <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
+                {left === 'layers' && <LayersPanel mode={mode} advanced={advanced} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
+                {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
+                {left === 'filters' && <div className="grid gap-6">
+                  <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
+                  <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
+                </div>}
+                {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
+                  <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
+                </SettingsPanel>}
+                {left === 'fuentes' && <SourcesPage atlas={atlas}/>}
+              </div>
+            </>}
+          </Popout>}
+          </AnimatePresence>
+        </motion.div>
+
+        {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
 
 
-        {/* Top: Milli-IA (milli is Náhuatl for crop), the assistant. Pinned to the centre above
+        {/* Top: the Agente de IA Milli (milli is Náhuatl for crop). Pinned to the centre above
             every other layer, on the map and the dashboard; for now it opens on the Resumen tiles. */}
         <div className="absolute top-0 left-1/2 z-[60] -translate-x-1/2">
           <AnimatePresence mode="wait">
           {assistant
-            ? <Popout key="assistant" edges="top" label="Milli-IA" className="relative">
+            ? <Popout key="assistant" edges="top" label={MILLI} className="relative">
                 <div className="w-[min(760px,calc(100vw-7rem))] px-4 pt-3 pb-3 max-md:w-[calc(100vw-1.5rem)]">
-                  <header className="flex items-center gap-2.5 pb-3"><MilliAvatar size={28}/><h2 className="text-base"><MilliName/></h2><span className="text-xs text-muted-foreground">· asistente</span></header>
+                  <header className="flex items-center gap-2.5 pb-3"><MilliAvatar size={28}/><h2 className="text-base"><MilliName/></h2><span className="text-sm text-muted-foreground">¿Qué quieres que haga Milli?</span></header>
                   <Summary atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
                 </div>
-                <button type="button" onClick={() => setAssistant(false)} aria-label="Cerrar Milli-IA" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
+                <button type="button" onClick={() => setAssistant(false)} aria-label={`Cerrar ${MILLI}`} className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
               </Popout>
             : <Popout key="island" edges="top" radius={16} className="relative" animate={false}>
-                <button type="button" onClick={() => setAssistant(true)} aria-label={milliUnread ? 'Abrir Milli-IA · hay novedades' : 'Abrir Milli-IA'} className="flex h-10 items-center gap-2.5 pr-3.5 pl-2.5 text-sm text-muted-foreground hover:text-foreground">
-                  <MilliAvatar size={26} twinkle={milliNews} unread={milliUnread}/><MilliName className="text-foreground"/><ChevronDown className="size-4"/>
+                <button type="button" onClick={() => setAssistant(true)} aria-label={`Abrir ${MILLI}`} className="flex h-10 items-center gap-2.5 pr-3.5 pl-2.5 text-sm text-muted-foreground hover:text-foreground">
+                  <MilliAvatar size={26}/><MilliName className="text-foreground"/>
                 </button>
               </Popout>}
           </AnimatePresence>
