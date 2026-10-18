@@ -25,7 +25,8 @@ const chartConfig = { mean: { label: 'NDVI medio', color: 'var(--primary)' }, ra
 const YEARS = [2022, 2023, 2024, 2025];
 const CYCLE = [3, 4, 5, 6, 7, 8, 9]; // April to the October cutoff
 type SeasonMonth = { month: string; name: string; mean: number | null; range: [number, number] | null; rain: number | null; scenes: number };
-// Shared table setup: Spanish strings, no pager (every row in one scrolling surface), search and
+// Shared table setup: Spanish strings, no pager (every row in one scrolling surface that grows to the
+// canvas height, so scrolled into view the table fills the page), search and
 // per-column filters in popovers, no density or full-screen toggles.
 const TABLE_OPTIONS = { localization: TABLE_ES, enablePagination: false, enableDensityToggle: false, enableFullscreenToggle: false, columnFilterDisplayMode: 'popover', defaultDensity: 'compact', enableColumnActions: false } as const;
 
@@ -186,8 +187,8 @@ export default function EstimationPanel({ atlas, parcels, keyDate, onSelect, onL
         </Button>
       </div>
       {set === 'municipio'
-        ? <DataTable table={municipalityTable} surfaceClassName="max-h-[min(560px,calc(100dvh-14rem))] rounded-2xl"/>
-        : <DataTable table={parcelTable} surfaceClassName="max-h-[min(560px,calc(100dvh-14rem))] rounded-2xl"/>}
+        ? <DataTable table={municipalityTable} surfaceClassName="max-h-[calc(100dvh-11rem)] rounded-2xl"/>
+        : <DataTable table={parcelTable} surfaceClassName="max-h-[calc(100dvh-11rem)] rounded-2xl"/>}
       <p className="text-[11px] text-muted-foreground">{set === 'municipio' && 'El ± suma el error típico por hectárea de cada parcela; es una cota conservadora porque los errores se compensan en parte. '}VC: estimación fuera de partición para las 138 parcelas con rendimiento (el modelo no vio esa parcela). Las 59 reservadas usan el promedio de los cinco modelos de partición.</p>
     </section>
 
