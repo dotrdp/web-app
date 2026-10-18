@@ -16,9 +16,6 @@
 .popout-body > * { animation: popout-fade .3s ease-out .12s both; }
 .popout[data-animate="false"] .popout-body > * { animation: none; }
 
-/* Vertical text, as in the bar's active-window title. */
-.bar-vertical { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
-
 /* Tonal tiles inside popouts. */
 .tile { background: var(--tile); border-radius: 16px; }
 
@@ -26,8 +23,6 @@
 .gauge-track { stroke: var(--primary-container); }
 .gauge-value { stroke: var(--primary); transition: stroke-dashoffset .8s cubic-bezier(.2, .9, .25, 1); }
 
-/* Workspaces-style phase pills with a sliding indicator. */
-.phase-indicator { transition: transform .35s cubic-bezier(.2, .9, .25, 1), height .35s cubic-bezier(.2, .9, .25, 1); }
 
 /* The launcher's basemap / scheme carousel: the centred item grows. */
 .carousel-item { transition: transform .3s cubic-bezier(.2, .9, .25, 1), opacity .3s; }

@@ -38,7 +38,7 @@ export const BASEMAPS: { key: Base; label: string; hint: string }[] = [
   { key: 'satellite', label: 'Satélite', hint: 'Esri World Imagery' },
 ];
 
-const SectionTitle = ({ children }: { children: string }) => <h3 className="px-1 text-xs font-medium text-muted-foreground">{children}</h3>;
+export const SectionTitle = ({ children }: { children: string }) => <h3 className="px-1 text-xs font-medium text-muted-foreground">{children}</h3>;
 
 const CLASSES: [Classification, string][] = [['continuous', 'Continua'], ['quantile', 'Cuantiles (5)'], ['equal', 'Intervalos iguales (5)']];
 export function LayersPanel({ mode, advanced, settings, year, parcels, onMode, onOpacity, onSettings }: { mode: MapMode; advanced: boolean; settings: LayerSettings; year: number; parcels: Parcel[]; onMode: (mode: MapMode) => void; onOpacity: (opacity: number) => void; onSettings: (next: Partial<LayerSettings>) => void }) {

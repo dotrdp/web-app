@@ -1,20 +1,24 @@
 // Top dashboard after Caelestia's: tabs with icon-over-label and an underline,
 // tonal tiles. Resumen mirrors weather / system / calendar / media; Modelo mirrors
-// the Performance gauges; Ciclo shows what data exists up to the prediction cutoff.
+// the Performance gauges; Ciclo shows what data exists up to the prediction cutoff;
+// Estimar and Avanzado host the phase 2 and 3 panels, passed in by the shell.
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { CalendarRange, ChevronLeft, ChevronRight, CloudRain, CloudSun, Gauge as GaugeIcon, LayoutDashboard, MapPin, Pause, Play, Sun } from 'lucide-react';
+import { CalendarRange, ChartSpline, ChevronLeft, ChevronRight, CloudRain, CloudSun, FlaskConical, Gauge as GaugeIcon, LayoutDashboard, MapPin, Pause, Play, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Gauge from './Gauge';
 import { LogoMark } from '../Logo';
 import { dateKey, fmt, MONTHS, MONTH_NAMES } from '../lib';
 import type { Atlas, Parcel } from '../types';
 
-export type DashboardTab = 'resumen' | 'modelo' | 'ciclo';
+export type DashboardTab = 'resumen' | 'modelo' | 'ciclo' | 'estimar' | 'avanzado';
 const TABS: { key: DashboardTab; label: string; icon: LucideIcon }[] = [
   { key: 'resumen', label: 'Resumen', icon: LayoutDashboard },
   { key: 'modelo', label: 'Modelo', icon: GaugeIcon },
   { key: 'ciclo', label: 'Ciclo', icon: CalendarRange },
+  { key: 'estimar', label: 'Estimar', icon: ChartSpline },
+  { key: 'avanzado', label: 'Avanzado', icon: FlaskConical },
 ];
 
 /** Parcel outline as a disc, standing in for album art. */
@@ -37,8 +41,8 @@ function Tile({ className, children, label }: { className?: string; children: Re
   return <section aria-label={label} className={cn('tile min-w-0 p-3', className)}>{children}</section>;
 }
 
-export default function Dashboard({ atlas, parcels, selected, year, month, touring, tab, onTab, onMonth, onParcel, onTour }: {
-  atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; year: number; month: number; touring: boolean; tab: DashboardTab;
+export default function Dashboard({ atlas, parcels, selected, year, month, touring, tab, panels, onTab, onMonth, onParcel, onTour }: {
+  atlas: Atlas; parcels: Parcel[]; selected: Parcel | null; year: number; month: number; touring: boolean; tab: DashboardTab; panels: Record<'estimar' | 'avanzado', ReactNode>;
   onTab: (tab: DashboardTab) => void; onMonth: (month: number) => void; onParcel: (direction: number) => void; onTour: (on: boolean) => void;
 }) {
   const key = dateKey(year, month);
@@ -60,8 +64,9 @@ export default function Dashboard({ atlas, parcels, selected, year, month, touri
   const WeatherIcon = summary.rain != null && summary.rain > 60 ? CloudRain : summary.rain != null && summary.rain > 15 ? CloudSun : Sun;
   const p = selected?.properties;
 
-  return <div className="flex w-[min(760px,calc(100vw-7rem))] flex-col px-4 pb-4">
-    <div role="tablist" aria-label="Panel de control" className="grid grid-cols-3 border-b">
+  const panel = tab === 'estimar' || tab === 'avanzado';
+  return <div className={cn('flex min-h-0 flex-col px-4 pb-4 max-md:w-full', panel ? 'h-[min(680px,calc(100vh-7rem))] w-[min(860px,calc(100vw-7rem))]' : 'w-[min(760px,calc(100vw-7rem))]')}>
+    <div role="tablist" aria-label="Panel de control" className="grid shrink-0 grid-cols-5 border-b">
       {TABS.map(t => <button key={t.key} role="tab" type="button" aria-selected={tab === t.key} onClick={() => onTab(t.key)}
         className="relative grid justify-items-center gap-0.5 pt-2.5 pb-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground aria-selected:text-primary [&_svg]:size-[18px]">
         <t.icon/>{t.label}
@@ -123,6 +128,7 @@ export default function Dashboard({ atlas, parcels, selected, year, month, touri
     </div>}
 
     {tab === 'ciclo' && <CycleTab month={month} onMonth={onMonth} cutoff={atlas.predictions.model.cutoff}/>}
+    {panel && <div role="tabpanel" aria-label={tab === 'estimar' ? 'Estimar' : 'Indicadores avanzados'} className="-mx-4 min-h-0 flex-1 pt-1">{panels[tab]}</div>}
   </div>;
 }
 

@@ -2,10 +2,11 @@
 // one frame (Caelestia / Noctalia): the bar on the left, the dashboard dropping
 // from the top, the launcher rising from the bottom, panels and cards attached
 // to the edges. Three phases replace the old Productor / Técnico roles:
-// Explorar → Estimar → Indicadores avanzados (the only place technical tools live).
+// Explorar (the map) → Estimar → Indicadores avanzados (the only place technical
+// tools live); the last two open as tabs of the dashboard.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, FlaskConical, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Puzzle, Ruler, Search, Send, SquareDashed, Sun, Table2, Tags, Telescope, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -26,7 +27,7 @@ import MapSetup, { createSetupTasks, MapSetupScreen } from './MapSetup';
 import type { SetupTaskId } from './MapSetup';
 import { LoadingState, LoadingValue } from './AgentProgress';
 import type { AgentStep } from './AgentProgress';
-import { BASEMAPS, BasemapPanel, BookmarksPanel, FiltersPanel, LayersPanel, MODES } from './MapPanels';
+import { BASEMAPS, BasemapPanel, BookmarksPanel, FiltersPanel, LayersPanel, MODES, SectionTitle } from './MapPanels';
 import TimeSlider from './TimeSlider';
 import { api, dateKey, download, filterParcels, fmt, mergedParcels, MONTH_NAMES, parcelCsv, polygonArea } from './lib';
 import { submissionCsv } from './model';
@@ -50,12 +51,12 @@ import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSe
 import './map.css';
 import './shell/shell.css';
 
-type Sheet = 'estimar' | 'avanzado' | 'fuentes' | 'tabla';
+type Sheet = 'fuentes' | 'tabla';
 const PANEL_KEYS: string[] = PANEL_ITEMS.map(p => p.key);
 type Left = LeftPanel | Sheet;
 type Scheme = 'cebada' | 'trigo' | 'tierra' | 'noche' | 'laguna';
 const SCHEMES: { key: Scheme; label: string }[] = [{ key: 'cebada', label: 'Cebada' }, { key: 'trigo', label: 'Trigo' }, { key: 'tierra', label: 'Tierra' }, { key: 'noche', label: 'Noche' }, { key: 'laguna', label: 'Laguna' }];
-const SHEETS: Sheet[] = ['estimar', 'avanzado', 'fuentes', 'tabla'];
+const SHEETS: Sheet[] = ['fuentes', 'tabla'];
 const EMPTY_WORKSPACE: Workspace = { overrides: {}, fields: [] };
 const EMPTY_FILTERS: MapFilters = { query: '', state: 'all', group: 'all', ndviEnabled: true, ndviThreshold: -1, onlyNdvi: false };
 const DEFAULT_LAYERS: LayerSettings = { yieldField: 'predicted', classification: 'continuous', heatmap: false, precipitation: false, tmin: false, tmax: false, elevation: false, slope: false, municipalities: false, states: true, opacity: .8, base: 'topo', waterThreshold: 0, waterOpacity: .75 };
@@ -104,9 +105,9 @@ export default function App() {
   const setupRevision = useRef(0);
 
   const [phase, setPhase] = useState<Phase>(routePhase);
-  const [left, setLeft] = useState<Left | null>(() => { const p = routePhase(); return p === 'explorar' ? (window.innerWidth > 1100 ? 'layers' : null) : p; });
+  const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>('parcela');
-  const [dashboard, setDashboard] = useState(false), [dashboardTab, setDashboardTab] = useState<DashboardTab>('resumen');
+  const [dashboard, setDashboard] = useState(() => routePhase() !== 'explorar'), [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const p = routePhase(); return p === 'explorar' ? 'resumen' : p; });
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
   const [selectedId, setSelectedId] = useState<string | null>(null), [hoverId, setHoverId] = useState<string | null>(null);
@@ -151,7 +152,7 @@ export default function App() {
   }, []);
   const mapReady = useCallback(() => { if (setupTasks.map.status !== 'running') return; setSetupTasks(tasks => ({ ...tasks, map: { ...tasks.map, status: 'success', completedAt: performance.now() } })); setSetupVisible(false); }, [setupTasks.map.status]);
   useEffect(() => { if (user) reload(); }, [user, reload]);
-  useEffect(() => { const onRoute = () => goPhase(routePhase(), { toggle: false }); window.addEventListener('hashchange', onRoute); return () => window.removeEventListener('hashchange', onRoute); });
+  useEffect(() => { const onRoute = () => goPhase(routePhase()); window.addEventListener('hashchange', onRoute); return () => window.removeEventListener('hashchange', onRoute); });
   useEffect(() => { if (!temporal) setPlaying(false); }, [temporal]);
   useEffect(() => { if (!playing || !temporal || liveImagery && imageryBusy) return; const timer = window.setInterval(() => setMonth(m => m >= 9 || m < 3 ? 3 : m + 1), 2200); return () => clearInterval(timer); }, [playing, temporal, liveImagery, imageryBusy]);
   useEffect(() => {
@@ -185,21 +186,20 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setLauncher(l => l === null ? '' : null); return; }
-      if (event.altKey && ['1', '2', '3'].includes(event.key)) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key, { toggle: false }); return; }
+      if (event.altKey && ['1', '2', '3'].includes(event.key)) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key); return; }
       if (event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); setDashboard(d => !d); return; }
       if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
 
-  /** Clicking the active phase pill folds its sheet away; routes and shortcuts always open it. */
-  function goPhase(next: Phase, { toggle = true } = {}) {
+  /** Estimar and Avanzado are dashboard tabs; routes, shortcuts and the launcher open them there. */
+  function goPhase(next: Phase) {
     if (window.location.hash !== '#/' + next) window.history.replaceState(null, '', '#/' + next);
-    if (next === phase && left === next) { if (toggle) setLeft(null); return; }
     setPhase(next); setPlaying(false); setTouring(false);
-    if (next === 'explorar') { setLeft(l => SHEETS.includes(l as Sheet) ? null : l); if (ADVANCED_MODES.includes(mode)) switchMode('parcels'); }
-    if (next === 'estimar') { setLeft('estimar'); switchMode('parcels'); setLayers(l => ({ ...l, yieldField: 'predicted' })); }
-    if (next === 'avanzado') setLeft('avanzado');
+    if (next === 'explorar') { if (dashboardTab === 'estimar' || dashboardTab === 'avanzado') { setDashboard(false); setDashboardTab('resumen'); } if (ADVANCED_MODES.includes(mode)) switchMode('parcels'); }
+    if (next === 'estimar') { setDashboard(true); setDashboardTab('estimar'); switchMode('parcels'); setLayers(l => ({ ...l, yieldField: 'predicted' })); }
+    if (next === 'avanzado') { setDashboard(true); setDashboardTab('avanzado'); }
   }
   function openLeft(next: Left) { setLeft(current => current === next ? null : next); }
   function switchMode(next: MapMode) {
@@ -266,7 +266,6 @@ export default function App() {
   const timeWidth = Math.min(520, viewWidth - 66 - leftWidth - (left ? 28 : 0) - 520 - 40);
   const showTime = (temporal || (mode === 'alphaearth' && !draftMode)) && !isMobile && timeWidth >= 300;
   const rightWidth = right && !isMobile ? 372 : 0;
-  const service: 'ok' | 'busy' | 'error' | 'idle' = imageryError ? 'error' : imageryBusy ? 'busy' : manifest ? 'ok' : 'idle';
   const identified = identify && plugins.identify ? parcels.find(p => p.properties.id === identify.id) : null;
   const estimates = parcels.map(p => p.properties.predictedYield).filter((v): v is number => v != null).sort((a, b) => a - b);
   const parcelRank = (p: Parcel) => p.properties.predictedYield == null ? null : { percentile: Math.round(estimates.filter(v => v < p.properties.predictedYield!).length / Math.max(1, estimates.length - 1) * 100), of: estimates.length };
@@ -295,7 +294,7 @@ export default function App() {
     { id: 'entrega', title: 'Descargar entrega del reto', subtitle: 'CSV con ID_POLIGONO y rendimiento de las 59 parcelas', icon: <Send/>, keywords: 'exportar csv submission', run: () => download('agrocebada-entrega-59.csv', submissionCsv(atlas.predictions), 'text/csv') },
     ...(enabledTool('export') ? [{ id: 'exportar', title: 'Exportar', subtitle: 'PNG, GeoJSON y CSV', icon: <Download/>, run: () => setRightPanel('export') }] : []),
     ...(enabledTool('locate') ? [{ id: 'ubicacion', title: 'Mi ubicación', subtitle: 'GPS del navegador', icon: <LocateFixed/>, run: locateMe }] : []),
-    { id: 'complementos', title: 'Complementos', subtitle: 'Activa o desactiva herramientas', icon: <Puzzle/>, keywords: 'plugins', run: () => setLeft('plugins') },
+    { id: 'ajustes', title: 'Ajustes', subtitle: 'Tema, esquema de color, complementos y fuentes', icon: <Settings/>, keywords: 'configuración plugins complementos', run: () => setLeft('settings') },
     { id: 'fuentes', title: 'Datos y fuentes', subtitle: 'Procedencia, periodos y descargas', icon: <Database/>, run: () => setLeft('fuentes') },
     { id: 'salir', title: 'Cerrar sesión', subtitle: 'Vuelve a la pantalla de acceso', icon: <LogOut/>, run: () => void logout() },
   ];
@@ -317,12 +316,12 @@ export default function App() {
   // The pill keeps the editing and analysis tools; heat map, labels, identify and the table live in
   // the layers panel, the bar and the launcher, so the strip stays short.
   const visibleTools = tools.filter(t => plugins[t.id] && !['heatmap', 'labels', 'identify', 'table'].includes(t.id));
-  const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? { fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', estimar: 'Estimar', avanzado: 'Indicadores avanzados' }[k as Sheet];
+  const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes' } as Record<string, string>)[k];
 
   return <TooltipProvider delayDuration={300}>
   <div className="shell fixed inset-0 flex select-none max-md:flex-col" data-phase={phase}>
-    <Bar phase={phase} panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} context={modeLabel} dark={dark} filtered={filtered} service={service}
-      onLogo={() => setLauncher(l => l === null ? '' : null)} onPhase={next => goPhase(next)} onPanel={openLeft} onTheme={() => setDark(d => !d)} onScheme={() => setLauncher('>esquema ')} onSources={() => openLeft('fuentes')} onLogout={() => void logout()}/>
+    <Bar panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} dashboard={dashboard} filtered={filtered}
+      onDashboard={() => setDashboard(d => !d)} onPanel={openLeft} onLogout={() => void logout()}/>
 
     <div className="relative min-h-0 flex-1 p-(--gap) md:pl-0">
       <main ref={viewport} className="relative h-full select-text" aria-label="Atlas AgroCebada" style={{ '--left-w': `${leftWidth}px`, '--right-w': `${rightWidth}px` } as CSSProperties}>
@@ -353,9 +352,14 @@ export default function App() {
         {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
 
         <AnimatePresence mode="wait">
-        {!isMobile && (dashboard || freeWidth >= 360) && (dashboard
-          ? <Popout key="dash" edges="top" label="Panel de control" className="top-0 -translate-x-1/2" style={{ left: freeCenter }}>
-              <Dashboard atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} tab={dashboardTab} onTab={setDashboardTab} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
+        {(dashboard || !isMobile && freeWidth >= 360) && (dashboard
+          ? <Popout key="dash" edges="top" label="Panel de control" className={isMobile ? 'inset-x-0 top-0 z-40' : 'top-0 -translate-x-1/2'} style={isMobile ? undefined : { left: freeCenter }}>
+              <Dashboard atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} tab={dashboardTab} onTab={t => t === 'estimar' || t === 'avanzado' ? goPhase(t) : setDashboardTab(t)} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}
+                panels={{
+                  estimar: <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setDashboard(false)}/>,
+                  avanzado: <AdvancedPanel atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} keyDate={key} mode={mode} filters={filters} layers={layers} manifest={manifest} tab={advancedTab} onTab={setAdvancedTab}
+                    onSelect={id => chooseParcel(id, true)} onLocate={() => selected && map.current?.fitParcel(selected)} onMode={switchMode} setFilters={setFilters} setLayers={setLayers} onClose={() => setDashboard(false)}/>,
+                }}/>
               <button type="button" onClick={() => setDashboard(false)} aria-label="Cerrar panel de control" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
             </Popout>
           : <Popout key="handle" edges="top" radius={14} className="top-0 -translate-x-1/2" style={{ left: freeCenter }} animate={false}>
@@ -365,21 +369,22 @@ export default function App() {
             </Popout>)}
         </AnimatePresence>
 
-        {/* Left edge: map panels and the phase sheets. */}
+        {/* Left edge: map panels, settings and the full-height sheets. */}
         <AnimatePresence mode="wait">
         {left && <Popout key={left} edges={isMobile ? 'bottom' : isSheet ? ['left', 'top', 'bottom'] : ['left', 'top']} label={panelTitle(left)} className={isMobile ? 'inset-x-0 bottom-0 max-h-[72%]' : isSheet ? 'top-0 bottom-0 left-0' : 'top-0 left-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? { height: isSheet ? '72%' : undefined } : { width: leftWidth }}>
-          {left === 'estimar' && <EstimationPanel atlas={atlas} parcels={parcels} selected={selected} keyDate={key} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
-          {left === 'avanzado' && <AdvancedPanel atlas={atlas} parcels={parcels} selected={selected} year={year} month={month} keyDate={key} mode={mode} filters={filters} layers={layers} manifest={manifest} tab={advancedTab} onTab={setAdvancedTab}
-            onSelect={id => chooseParcel(id, true)} onLocate={() => selected && map.current?.fitParcel(selected)} onMode={switchMode} setFilters={setFilters} setLayers={setLayers} onClose={() => setLeft(null)}/>}
           {left === 'tabla' && <AttributeTable atlas={atlas} parcels={visibleParcels} selectedId={selectedId} keyDate={key} advanced={advanced} onSelect={id => chooseParcel(id, true)} onHover={setHoverId} onClose={() => setLeft(null)}/>}
-          {!['estimar', 'avanzado', 'tabla'].includes(left) && <>
+          {left !== 'tabla' && <>
             <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
               {left === 'layers' && <LayersPanel mode={mode} advanced={advanced} settings={layers} year={year} parcels={visibleParcels} onMode={switchMode} onOpacity={opacity => setLayers(l => ({ ...l, opacity }))} onSettings={next => setLayers(l => ({ ...l, ...next }))}/>}
               {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))} onOverlay={(overlay, visible) => setLayers(l => ({ ...l, [overlay]: visible }))}/>}
-              {left === 'filters' && <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>}
-              {left === 'bookmarks' && <BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/>}
-              {left === 'plugins' && <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>}
+              {left === 'filters' && <div className="grid gap-6">
+                <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
+                <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
+              </div>}
+              {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
+                <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
+              </SettingsPanel>}
               {left === 'fuentes' && <SourcesPage atlas={atlas}/>}
             </div>
           </>}
@@ -389,7 +394,7 @@ export default function App() {
         {/* Right edge: parcel card, selection summary, export, delineation. */}
         <AnimatePresence mode="wait">
         {right && <Popout key={right} edges={isMobile ? 'bottom' : ['right', 'top']} label={right === 'parcel' ? 'Ficha de parcela' : undefined} className={isMobile ? 'inset-x-0 bottom-0 max-h-[70%]' : 'top-0 right-0 max-h-[calc(100%-4.5rem)]'} style={isMobile ? undefined : { width: rightWidth }}>
-          {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} advanced={advanced} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAdvanced={advanced && left === 'avanzado' ? undefined : () => { setAdvancedTab('parcela'); goPhase('avanzado'); }} onNext={nextParcel}
+          {right === 'parcel' && selected && <ParcelPanel parcel={selected} atlas={atlas} year={year} month={month} advanced={advanced} onClose={() => { setSelectedId(null); setTouring(false); }} onLocate={() => map.current?.fitParcel(selected)} onEdit={startEdit} onAdvanced={advanced && dashboard && dashboardTab === 'avanzado' ? undefined : () => { setAdvancedTab('parcela'); goPhase('avanzado'); }} onNext={nextParcel}
             ranking={parcelRank(selected)} onSimilar={() => { const y = selected.properties.predictedYield; if (y == null) return; setFilters(f => ({ ...f, yieldBand: [y - .25, y + .25] })); setLeft('filters'); setTimeout(() => map.current?.fitAll(), 60); }}/>}
           {right === 'selection' && <SelectionSummary parcels={selectionParcels} atlas={atlas} keyDate={key} onClose={() => { setRightPanel(null); setSelection([]); }} onPick={id => chooseParcel(id, true)}/>}
           {right === 'export' && <div className="flex min-h-0 flex-col">
@@ -461,10 +466,32 @@ export default function App() {
         </AnimatePresence>
       </main>
     </div>
-    <MobileDock phase={phase} panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} onLogo={() => setLauncher('')} onPhase={next => goPhase(next)} onPanel={openLeft}/>
+    <MobileDock panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} dashboard={dashboard} onLogo={() => setLauncher('')} onDashboard={() => setDashboard(d => !d)} onPanel={openLeft}/>
   </div>
   <Toaster position="top-right"/>
   </TooltipProvider>;
+}
+
+/** Appearance, plugins and the data sources, gathered off the bar. */
+function SettingsPanel({ dark, scheme, preview, onDark, onScheme, onSources, children }: { dark: boolean; scheme: Scheme; preview: (k: Scheme) => ReactNode; onDark: (dark: boolean) => void; onScheme: (s: Scheme) => void; onSources: () => void; children: ReactNode }) {
+  return <div className="grid gap-6">
+    <section className="grid gap-2"><SectionTitle>Tema</SectionTitle>
+      <div role="group" aria-label="Tema" className="grid grid-cols-2 gap-1 rounded-full bg-tile p-1">
+        {([[false, 'Claro', Sun], [true, 'Oscuro', Moon]] as const).map(([value, label, Icon]) => <button key={label} type="button" aria-pressed={dark === value} onClick={() => onDark(value)} className="flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground aria-pressed:bg-frame aria-pressed:text-foreground aria-pressed:shadow-sm [&_svg]:size-4"><Icon/>{label}</button>)}
+      </div>
+    </section>
+    <section className="grid gap-2"><SectionTitle>Esquema de color</SectionTitle>
+      <div role="group" aria-label="Esquema de color" className="grid grid-cols-2 gap-2">
+        {SCHEMES.map(s => <button key={s.key} type="button" aria-pressed={scheme === s.key} onClick={() => onScheme(s.key)} className="grid gap-1.5 rounded-2xl bg-tile p-1.5 pb-2 text-sm text-muted-foreground outline-none hover:bg-tile-strong focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-primary-container aria-pressed:text-on-primary-container">
+          <span className="block h-16 overflow-hidden rounded-xl">{preview(s.key)}</span>{s.label}
+        </button>)}
+      </div>
+    </section>
+    <section className="grid gap-2"><SectionTitle>Complementos</SectionTitle>{children}</section>
+    <section className="grid gap-2"><SectionTitle>Datos</SectionTitle>
+      <button type="button" onClick={onSources} className="flex items-center gap-3 rounded-2xl bg-tile px-3 py-2.5 text-left hover:bg-tile-strong"><span className="grid size-9 place-items-center rounded-full bg-primary-container text-on-primary-container"><Database className="size-4"/></span><span className="grid flex-1 leading-tight"><span className="text-sm font-medium">Datos y fuentes</span><span className="text-xs text-muted-foreground">Procedencia, periodos y descargas</span></span></button>
+    </section>
+  </div>;
 }
 
 /** ArcGIS-style swipe: drag the divider; data layers show to its left, the basemap to its right. */

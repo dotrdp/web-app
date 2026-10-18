@@ -14,10 +14,9 @@ test('One account, three phases: no producer or technician roles anywhere', asyn
   await page.goto('/');
   await expect(page.getByText(/Productor|Técnico|Entrar con otro rol/)).toHaveCount(0);
   await signIn(page);
-  const phases = bar(page).getByRole('group', { name: 'Fases' });
-  await expect(phases.getByRole('button')).toHaveCount(3);
   await expect(page.getByText(/Productor|Técnico|Análisis Pro/)).toHaveCount(0);
-  await phases.getByRole('button', { name: /2 · Estimar/ }).click();
+  await bar(page).getByRole('button', { name: 'Panel de control' }).click();
+  await page.getByRole('region', { name: 'Panel de control' }).getByRole('tab', { name: 'Estimar' }).click();
   await expect(page).toHaveURL(/#\/estimar$/);
   await expect(page.getByRole('heading', { name: 'Estimación de rendimiento' })).toBeVisible();
   await page.keyboard.press('Alt+3');
@@ -44,7 +43,7 @@ test('Technical layers and controls exist only in the advanced phase', async ({ 
 
 test('Estimar answers the challenge: real metrics, productive reading, linked table and the 59-row submission', async ({ page }) => {
   await signIn(page, '#/estimar');
-  const panel = page.getByRole('region', { name: 'Estimar' });
+  const panel = page.getByRole('tabpanel', { name: 'Estimar' });
   await expect(panel.getByText('MAE · error típico')).toBeVisible();
   await expect(panel.getByText(/^0\.32\s*t\/ha$/).first()).toBeVisible();
   await expect(panel.getByText('4.2', { exact: true })).toHaveCount(0);
@@ -69,7 +68,7 @@ test('Launcher finds parcels, runs ">" commands and recolours the shell from the
   const input = page.getByRole('combobox', { name: 'Buscar parcela, municipio, coordenadas o comando' });
   await input.fill('AGC_001'); await input.press('Enter');
   await expect(page.getByRole('region', { name: 'Ficha de parcela' }).getByRole('heading', { name: 'AGC_001' })).toBeVisible();
-  await bar(page).getByRole('button', { name: 'Abrir el lanzador (Ctrl K)' }).click();
+  await page.getByRole('button', { name: 'Buscar o ejecutar un comando (Ctrl K)' }).click();
   await input.fill('>esquema ');
   await page.getByRole('option', { name: 'Noche' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-scheme', 'noche');
@@ -99,7 +98,7 @@ test('Plugins: swipe compares layers, box selection sums production, disabled to
   await page.mouse.move(box.x + box.width * .95, box.y + box.height * .9, { steps: 8 }); await page.mouse.up();
   await expect(page.getByRole('heading', { name: 'Selección' })).toBeVisible();
   await expect(page.getByRole('region').filter({ has: page.getByRole('heading', { name: 'Selección' }) }).getByText('Producción estimada', { exact: true })).toBeVisible();
-  await bar(page).getByRole('button', { name: 'Complementos' }).click();
+  await bar(page).getByRole('button', { name: 'Ajustes' }).click();
   await page.getByRole('switch', { name: 'Desactivar Comparar con deslizador' }).click();
   await expect(tools.getByRole('button', { name: 'Comparar con deslizador' })).toHaveCount(0);
 });
@@ -107,7 +106,26 @@ test('Plugins: swipe compares layers, box selection sums production, disabled to
 test('Mobile keeps the dock, sheets and launcher inside the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
-  await page.getByRole('navigation', { name: 'Barra de AgroCebada' }).getByRole('button', { name: 'Estimar' }).click();
+  await page.getByRole('navigation', { name: 'Barra de AgroCebada' }).getByRole('button', { name: 'Panel de control' }).click();
+  await page.getByRole('tab', { name: 'Estimar' }).click();
   await expect(page.getByRole('heading', { name: 'Estimación de rendimiento' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('Bar: settings gather theme, colour scheme, plugins and sources; filters and bookmarks share a panel', async ({ page }) => {
+  await signIn(page);
+  await expect(bar(page).getByRole('button')).toHaveCount(7);
+  await bar(page).getByRole('button', { name: 'Ajustes' }).click();
+  const settings = page.getByRole('region', { name: 'Ajustes' });
+  await settings.getByRole('button', { name: 'Oscuro' }).click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await settings.getByRole('button', { name: 'Laguna' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-scheme', 'laguna');
+  await expect(settings.getByRole('switch').first()).toBeVisible();
+  await settings.getByRole('button', { name: /Datos y fuentes/ }).click();
+  await expect(page.getByRole('region', { name: 'Datos y fuentes' })).toBeVisible();
+  await bar(page).getByRole('button', { name: 'Filtros y marcadores' }).click();
+  const filters = page.getByRole('region', { name: 'Filtros y marcadores' });
+  await expect(filters.getByRole('group', { name: 'Filtrar por estado' })).toBeVisible();
+  await expect(filters.getByRole('list', { name: 'Marcadores' })).toBeVisible();
 });
