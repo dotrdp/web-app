@@ -40,8 +40,10 @@ test('The layers panel offers only the Explorar layers', async ({ page }) => {
 test('Estimar answers the challenge: the plot, productive reading, the table and the 59-row submission', async ({ page }) => {
   await signIn(page, '#/estimar');
   const panel = page.getByRole('region', { name: 'Panel de control' });
-  await expect(panel.getByRole('figure', { name: /Estimado vs registrado/ })).toBeVisible();
-  await expect(panel.getByText(/MAE 0\.32 t\/ha · R² 0\.67/)).toBeVisible();
+  const season = panel.getByRole('figure').filter({ hasText: 'NDVI y lluvia por mes' });
+  await expect(season.getByText(/^Parcelas mostradas · promedio de 59 ·/)).toBeVisible();
+  await season.getByRole('button', { name: '2023' }).click();
+  await expect(season.getByRole('button', { name: '2023' })).toHaveAttribute('aria-pressed', 'true');
   await expect(panel.getByText(/equivale a ±1\.\d+ t de grano/)).toBeVisible();
   await panel.getByRole('spinbutton', { name: 'Precio supuesto en pesos por tonelada' }).fill('7000');
   await expect(panel.getByText(/a \$7,000\/t/)).toBeVisible();
@@ -61,10 +63,24 @@ test('Estimar answers the challenge: the plot, productive reading, the table and
   await expect(panel.getByText('59 seleccionadas')).toBeVisible();
   await panel.getByRole('button', { name: 'Quitar selección' }).click();
   await rows.nth(0).getByRole('checkbox').click(); await rows.nth(1).getByRole('checkbox').click();
+  // The plot follows the table: the shown parcels, or only the checked ones.
+  await expect(season.getByText(/^Seleccionadas · promedio de 2 ·/)).toBeVisible();
+  await rows.nth(1).getByRole('checkbox').click();
+  await expect(season.getByText(/^AGC_003 · Sentinel-2/)).toBeVisible();
+  await rows.nth(1).getByRole('checkbox').click();
   await panel.getByRole('button', { name: 'Ver en el mapa · 2' }).click();
   await expect(page.getByRole('heading', { name: 'Selección' })).toBeVisible();
-  // The last column flies to one parcel and opens its card.
+  // "Por municipio" has checkboxes too; a municipality selects all its parcels.
   await page.keyboard.press('Alt+2');
+  await panel.getByRole('tab', { name: 'Por municipio' }).click();
+  const groups = panel.getByRole('table', { name: 'Estimaciones por municipio' }).locator('tbody tr');
+  await expect(groups.first().getByRole('checkbox')).toBeVisible();
+  await groups.first().getByRole('checkbox').click();
+  await expect(panel.getByText(/^\d+ seleccionadas?$/)).toBeVisible();
+  await expect(season.getByText(/^(Seleccionadas · promedio de \d+|AGC_\d+) · Sentinel-2/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Quitar selección' }).click();
+  await panel.getByRole('tab', { name: 'Reservadas · 59' }).click();
+  // The last column flies to one parcel and opens its card.
   await panel.getByRole('button', { name: 'Ver AGC_011 en el mapa' }).click();
   await expect(panel).toHaveCount(0);
   const card = page.getByRole('region', { name: 'Ficha de parcela' });

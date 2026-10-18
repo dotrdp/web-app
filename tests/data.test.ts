@@ -89,3 +89,14 @@ test('Merged parcels carry the model estimate; CSV names its kind; overrides lea
   const merged = mergedParcels(atlas, { fields: [], overrides: { [original.properties.id]: { geometry, area: 99, updatedAt: new Date().toISOString() } } });
   assert.equal(merged[0].properties.area, 99); assert.notEqual(atlas.parcels.features[0].properties.area, 99); assert.equal(merged[0].properties.edited, true);
 });
+
+test('Monthly NDVI from FIRA keeps a minimum and a maximum around every mean', () => {
+  let months = 0;
+  for (const parcel of Object.values(atlas.details)) for (const series of Object.values(parcel.ndvi)) for (const r of Object.values(series)) {
+    months++;
+    assert.ok(r.min != null && r.max != null, 'every month has min and max');
+    assert.ok(r.min <= r.mean && r.mean <= r.max, `${r.min} ≤ ${r.mean} ≤ ${r.max}`);
+    assert.ok(r.observations > 0);
+  }
+  assert.ok(months > 10000);
+});

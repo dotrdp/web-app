@@ -1,17 +1,18 @@
 // Phase 2 · Estimar, the dashboard page. Answers the organisers' questions in one place:
-// how the estimate compares with what was recorded, what an error in t/ha means in
+// the season behind the estimate (FIRA's monthly NDVI mean, minimum and maximum against
+// CHIRPS rain), what an error in t/ha means in
 // tonnes and pesos on a real parcel and how often it holds, every estimate per
 // ID_POLIGONO linked to the map (shadcn-react-table), and the 59-parcel submission file.
 import { useMemo, useRef, useState } from 'react';
 import { CircleHelp, Download, FileSpreadsheet, MapPin, Send } from 'lucide-react';
 import type { ColumnDef, RowSelectionState } from '@tanstack/react-table';
-import { CartesianGrid, ReferenceLine, Scatter, ScatterChart, XAxis, YAxis, ZAxis } from 'recharts';
+import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceArea, XAxis, YAxis } from 'recharts';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { DataTable, useDataTable } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
-import { download, fmt, parcelCsv } from '../lib';
+import { dateKey, download, fmt, MONTH_NAMES, MONTHS, parcelCsv } from '../lib';
 import { COVERAGE_LABEL, DEFAULT_PRICE_MXN_T, interval, money, productiveError, submissionCsv } from '../model';
 import type { Coverage } from '../model';
 import { TABLE_ES } from './table-es';
@@ -20,7 +21,9 @@ import type { Atlas, Parcel } from '../types';
 type SetFilter = 'all' | 'prediction' | 'training' | 'municipio';
 const SETS: [SetFilter, string][] = [['all', 'Todas'], ['prediction', 'Reservadas · 59'], ['training', 'Con rendimiento · 138'], ['municipio', 'Por municipio']];
 type Municipality = { name: string; state: string; count: number; ha: number; production: number; estHa: number; band: number };
-const chartConfig = { predicted: { label: 'Estimado', color: 'var(--primary)' } } satisfies ChartConfig;
+const chartConfig = { mean: { label: 'NDVI medio', color: 'var(--primary)' }, range: { label: 'NDVI mín–máx', color: 'var(--primary)' }, rain: { label: 'Lluvia', color: 'var(--chart-4)' } } satisfies ChartConfig;
+const YEARS = [2022, 2023, 2024, 2025];
+type SeasonMonth = { month: string; name: string; mean: number | null; range: [number, number] | null; rain: number | null; scenes: number };
 // Shared table setup: Spanish strings, no pager (every row in one scrolling surface), search and
 // per-column filters in popovers, no density or full-screen toggles.
 const TABLE_OPTIONS = { localization: TABLE_ES, enablePagination: false, enableDensityToggle: false, enableFullscreenToggle: false, columnFilterDisplayMode: 'popover', defaultDensity: 'compact', enableColumnActions: false } as const;
@@ -57,8 +60,7 @@ export default function EstimationPanel({ atlas, parcels, selected, keyDate, onS
     return [...groups.values()].sort((a, b) => b.production - a.production);
   }, [rows, m.mae_t_ha]);
 
-  const points = useMemo(() => parcels.filter(p => p.properties.observedYield != null && p.properties.predictedYield != null).map(p => ({ id: p.properties.id, observed: p.properties.observedYield!, predicted: p.properties.predictedYield! })), [parcels]);
-  const [lo, hi] = [Math.floor(model.observedRange[0]), Math.ceil(model.observedRange[1])];
+  const [seasonYear, setSeasonYear] = useState(2025);
 
   const parcelColumns = useMemo<ColumnDef<Parcel>[]>(() => [
     { id: 'id', accessorFn: p => p.properties.name || p.properties.id, header: 'ID_POLIGONO', cell: ({ getValue }) => <span className="font-mono text-xs">{String(getValue())}</span> },
@@ -82,33 +84,62 @@ export default function EstimationPanel({ atlas, parcels, selected, keyDate, onS
     { id: 'production', accessorKey: 'production', header: 'Producción t', cell: ({ getValue }) => <span className="font-medium">{fmt(getValue<number>(), 0)}</span>, meta: { align: 'right' } },
     { id: 'band', accessorKey: 'band', header: '± error típico t', cell: ({ getValue }) => <span className="text-muted-foreground">±{fmt(getValue<number>(), 0)}</span>, meta: { align: 'right' } },
   ], []);
-  // Checked rows (select one, several or all): exports narrow to them and they can be shown on the map.
+  // Checked rows (one, several or all parcels, or whole municipalities in "Por municipio"): the plot,
+  // the exports and "Ver en el mapa" narrow to them.
   const [checked, setChecked] = useState<RowSelectionState>({});
-  const picked = useMemo(() => rows.filter(p => checked[p.properties.id]), [rows, checked]);
-  const exported = picked.length ? picked : rows;
+  const [checkedGroups, setCheckedGroups] = useState<RowSelectionState>({});
+  const groupKey = (p: Parcel) => `${p.properties.state}/${p.properties.municipality}`;
+  const picked = useMemo(() => set === 'municipio' ? rows.filter(p => checkedGroups[`${p.properties.state}/${p.properties.municipality}`]) : rows.filter(p => checked[p.properties.id]), [rows, set, checked, checkedGroups]);
+  const clearChecks = () => { setChecked({}); setCheckedGroups({}); };
   // The set filter sits in the table's own toolbar, left of its search.
   const setTabs = () => <div role="tablist" aria-label="Conjunto" className="flex w-fit flex-wrap gap-1 rounded-full bg-tile p-1 text-xs">
     {SETS.map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={set === key} onClick={() => setSet(key)} className="rounded-full px-3 py-1 text-muted-foreground aria-selected:bg-frame aria-selected:text-foreground aria-selected:shadow-sm">{label}</button>)}
   </div>;
   const parcelTable = useDataTable<Parcel>({ ...TABLE_OPTIONS, data: rows, columns: parcelColumns, getRowId: p => p.properties.id, initialState: { sorting: [{ id: 'id', desc: false }] }, enableRowSelection: true, selectAllMode: 'all', positionToolbarAlertBanner: 'none', state: { rowSelection: checked }, onRowSelectionChange: setChecked,
     onRowClick: ({ row }) => onSelect(row.original.properties.id), renderToolbarActions: setTabs, renderCaption: () => <span className="sr-only">Estimaciones de rendimiento</span> });
-  const municipalityTable = useDataTable<Municipality>({ ...TABLE_OPTIONS, data: municipalities, columns: municipalityColumns, getRowId: g => `${g.state}/${g.name}`, renderToolbarActions: setTabs, renderCaption: () => <span className="sr-only">Estimaciones por municipio</span> });
+  const municipalityTable = useDataTable<Municipality>({ ...TABLE_OPTIONS, data: municipalities, columns: municipalityColumns, getRowId: g => `${g.state}/${g.name}`, enableRowSelection: true, selectAllMode: 'all', positionToolbarAlertBanner: 'none', state: { rowSelection: checkedGroups }, onRowSelectionChange: setCheckedGroups, renderToolbarActions: setTabs, renderCaption: () => <span className="sr-only">Estimaciones por municipio</span> });
+
+  // Parcels the table shows right now (set filter, search and column filters), or only the checked ones.
+  const shownGroups = new Set(municipalityTable.getRowModel().rows.map(r => r.id));
+  const shown = set === 'municipio' ? rows.filter(p => shownGroups.has(groupKey(p))) : parcelTable.getRowModel().rows.map(r => r.original);
+  const scope = picked.length ? picked : shown;
+  // The season behind the estimate: FIRA's Sentinel-2 NDVI per month (mean of the scene means, lowest
+  // scene minimum, highest scene maximum; ≤30 % cloud) and CHIRPS rain, averaged over the scope.
+  const avg = (xs: (number | null | undefined)[]) => { const v = xs.filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const season: SeasonMonth[] = MONTHS.map((month, i) => {
+    const key = dateKey(seasonYear, i), recs = scope.map(p => atlas.details[p.properties.id]?.ndvi['Sentinel-2']?.[key]).filter(r => r != null);
+    const lo = avg(recs.map(r => r.min)), hi = avg(recs.map(r => r.max));
+    return { month, name: MONTH_NAMES[i], mean: avg(recs.map(r => r.mean)), range: lo != null && hi != null ? [lo, hi] : null, rain: avg(scope.map(p => atlas.details[p.properties.id]?.climate[key]?.precipitation)), scenes: recs.reduce((t, r) => t + r.observations, 0) };
+  });
+  const scopeLabel = scope.length === 1 ? scope[0].properties.name || scope[0].properties.id : `${picked.length ? 'Seleccionadas' : 'Parcelas mostradas'} · promedio de ${scope.length}`;
+  // NDVI can dip below zero (bare or wet soil); the axis follows it down in tenths.
+  const ndviFloor = Math.min(0, Math.floor(Math.min(...season.map(d => d.range?.[0] ?? 0)) * 10) / 10);
 
   return <div className="@container/est grid min-w-0 gap-3 *:min-w-0">
     <div className="grid gap-3 *:min-w-0 @3xl/est:grid-cols-[1.25fr_1fr]">
       <figure className="tile grid content-start gap-1 rounded-[20px] p-3">
-        <figcaption className="px-1 text-sm font-medium">Estimado vs registrado<span className="block text-xs font-normal text-muted-foreground">{m.n} parcelas · validación cruzada · línea 1:1 · MAE {fmt(m.mae_t_ha)} t/ha · R² {fmt(m.r2)}</span></figcaption>
+        <div className="flex flex-wrap items-start gap-2 px-1">
+          <figcaption className="mr-auto text-sm font-medium">NDVI y lluvia por mes<span className="block text-xs font-normal text-muted-foreground">{scopeLabel} · Sentinel-2 (FIRA, ≤30 % nubes) · CHIRPS</span></figcaption>
+          <div role="group" aria-label="Año" className="flex rounded-full bg-frame/70 p-0.5 text-xs">
+            {YEARS.map(y => <button key={y} type="button" aria-pressed={seasonYear === y} onClick={() => setSeasonYear(y)} className="rounded-full px-2.5 py-1 tabular-nums text-muted-foreground aria-pressed:bg-primary aria-pressed:text-primary-foreground">{y}</button>)}
+          </div>
+        </div>
         <ChartContainer config={chartConfig} className="aspect-auto h-[260px] w-full">
-          <ScatterChart margin={{ top: 10, right: 12, bottom: 4, left: -8 }}>
-            <CartesianGrid strokeDasharray="3 3"/>
-            <XAxis type="number" dataKey="observed" domain={[lo, hi]} tickCount={hi - lo + 1} name="Registrado" unit=" t/ha" tickLine={false} axisLine={false} fontSize={11}/>
-            <YAxis type="number" dataKey="predicted" domain={[lo, hi]} tickCount={hi - lo + 1} name="Estimado" tickLine={false} axisLine={false} fontSize={11}/>
-            <ZAxis range={[30, 30]}/>
-            <ReferenceLine segment={[{ x: lo, y: lo }, { x: hi, y: hi }]} stroke="var(--muted-foreground)" strokeDasharray="4 4"/>
-            <ChartTooltip cursor={false} content={<ChartTooltipContent hideIndicator labelFormatter={(_, payload) => String((payload?.[0]?.payload as { id?: string })?.id ?? '')} formatter={(_v, _n, item) => { const d = item.payload as { observed: number; predicted: number }; return <span className="tabular-nums">Registrado {fmt(d.observed)} · estimado {fmt(d.predicted)} t/ha</span>; }}/>}/>
-            <Scatter data={points} fill="var(--primary)" fillOpacity={.7} className="cursor-pointer" onClick={point => { const d = point as unknown as { id?: string; payload?: { id?: string } }; const id = d.payload?.id ?? d.id; if (id) onSelect(id); }}/>
-          </ScatterChart>
+          <ComposedChart data={season} margin={{ top: 10, right: 0, bottom: 0, left: -12 }}>
+            <CartesianGrid vertical={false}/>
+            {/* Growing cycle, April to the October cutoff. */}
+            <ReferenceArea yAxisId="ndvi" x1="Abr" x2="Oct" fill="var(--primary)" fillOpacity={.05} ifOverflow="hidden"/>
+            <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
+            <YAxis yAxisId="ndvi" interval={0} domain={[ndviFloor, 1]} ticks={[...(ndviFloor < 0 ? [ndviFloor] : []), 0, .25, .5, .75, 1]} tickLine={false} axisLine={false} fontSize={11}/>
+            <YAxis yAxisId="rain" orientation="right" tickLine={false} axisLine={false} fontSize={11} unit=" mm" width={64}/>
+            <ChartTooltip cursor={false} content={<ChartTooltipContent labelFormatter={(_, payload) => { const d = payload?.[0]?.payload as SeasonMonth | undefined; return d ? `${d.name} ${seasonYear}${d.scenes ? ` · ${d.scenes} escenas` : ''}` : ''; }}
+              formatter={(value, name) => <span className="flex w-full justify-between gap-3 tabular-nums"><span className="text-muted-foreground">{chartConfig[name as keyof typeof chartConfig]?.label}</span><span>{name === 'range' && Array.isArray(value) ? `${fmt(value[0])}–${fmt(value[1])}` : name === 'rain' ? `${fmt(value as number, 0)} mm` : fmt(value as number)}</span></span>}/>}/>
+            <Bar yAxisId="rain" dataKey="rain" fill="var(--color-rain)" fillOpacity={.45} radius={[4, 4, 0, 0]} barSize={14}/>
+            <Area yAxisId="ndvi" dataKey="range" stroke="none" fill="var(--color-range)" fillOpacity={.18} connectNulls/>
+            <Line yAxisId="ndvi" dataKey="mean" stroke="var(--color-mean)" strokeWidth={2} dot={{ r: 2.5 }} connectNulls/>
+          </ComposedChart>
         </ChartContainer>
+        <p className="px-1 text-[11px] text-pretty text-muted-foreground">Línea: NDVI medio del mes. Banda: del valor mínimo al máximo dentro de la parcela{scope.length === 1 ? '' : ', promediado entre parcelas'}. Barras: lluvia acumulada. El área sombreada es el ciclo (abril–octubre).</p>
       </figure>
 
       <section aria-labelledby="productive-title" className="grid content-start gap-2.5 rounded-[20px] bg-primary-container/60 p-4 text-on-primary-container">
@@ -138,13 +169,13 @@ export default function EstimationPanel({ atlas, parcels, selected, keyDate, onS
       <div className="flex flex-wrap items-center gap-2">
         <h3 id="table-title" className="mr-auto text-sm font-medium">Estimaciones por ID_POLIGONO</h3>
         <Button size="sm" className="rounded-full" onClick={() => download('agrocebada-entrega-59.csv', submissionCsv(model), 'text/csv')}><Send/>Entrega · 59 parcelas</Button>
-        {picked.length > 0 && set !== 'municipio' && <>
+        {picked.length > 0 && <>
           <span className="text-xs text-muted-foreground tabular-nums">{picked.length} {picked.length === 1 ? 'seleccionada' : 'seleccionadas'}</span>
-          <Button size="sm" variant="ghost" className="rounded-full" onClick={() => setChecked({})}>Quitar selección</Button>
+          <Button size="sm" variant="ghost" className="rounded-full" onClick={clearChecks}>Quitar selección</Button>
           <Button size="sm" variant="outline" className="rounded-full bg-transparent" onClick={() => onShowSelection(picked.map(p => p.properties.id))}><MapPin/>Ver en el mapa · {picked.length}</Button>
         </>}
-        <Button size="sm" variant="outline" className="rounded-full bg-transparent" onClick={() => download('agrocebada-estimaciones.csv', parcelCsv(exported, atlas, keyDate), 'text/csv')}><FileSpreadsheet/>Tabla CSV{picked.length > 0 && ` · ${picked.length}`}</Button>
-        <Button size="sm" variant="ghost" className="rounded-full" aria-label="Descargar GeoJSON con estimaciones" onClick={() => download('agrocebada-estimaciones.geojson', JSON.stringify({ type: 'FeatureCollection', features: exported }), 'application/geo+json')}><Download/>GeoJSON{picked.length > 0 && ` · ${picked.length}`}</Button>
+        <Button size="sm" variant="outline" className="rounded-full bg-transparent" onClick={() => download('agrocebada-estimaciones.csv', parcelCsv(scope, atlas, keyDate), 'text/csv')}><FileSpreadsheet/>Tabla CSV{picked.length > 0 && ` · ${picked.length}`}</Button>
+        <Button size="sm" variant="ghost" className="rounded-full" aria-label="Descargar GeoJSON con estimaciones" onClick={() => download('agrocebada-estimaciones.geojson', JSON.stringify({ type: 'FeatureCollection', features: scope }), 'application/geo+json')}><Download/>GeoJSON{picked.length > 0 && ` · ${picked.length}`}</Button>
       </div>
       {set === 'municipio'
         ? <DataTable table={municipalityTable} surfaceClassName="max-h-[min(560px,calc(100dvh-14rem))] rounded-2xl"/>

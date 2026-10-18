@@ -42,6 +42,44 @@ def write(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False))
 
 
+def monthly_ndvi(original):
+    """Monthly NDVI per parcel and sensor from FIRA's scenes with at most 30 % cloud: the mean of
+    the scene means, the lowest scene minimum, the highest scene maximum and the scene count."""
+    aggregate = defaultdict(list)
+    counts = defaultdict(int)
+    for path, sensor_default in [(original / 'Conjunto_datos_BASICO_AgroCebada2026.csv', None), (original / 'Conjunto_datos_PRO_AgroCebada.csv', 'Planet')]:
+        with open(path, encoding='utf-8-sig', newline='') as f:
+            for r in csv.DictReader(f):
+                sensor = r.get('sensor', sensor_default) or sensor_default
+                value = number(r.get('ndvi_promedio'))
+                cloud = number(r.get('porcentaje_nubosidad'))
+                if value is None or not -1 <= value <= 1 or cloud is None or cloud > 30:
+                    continue
+                date_parts = r['fecha_captura'].split('/')
+                date = f'{date_parts[2]}-{date_parts[1].zfill(2)}'
+                aggregate[(r['ID_POLIGONO'], sensor, date)].append((value, number(r.get('ndvi_min')), number(r.get('ndvi_max'))))
+                counts[sensor] += 1
+    records = {}
+    for key, scenes in aggregate.items():
+        lows = [lo for _, lo, _ in scenes if lo is not None and -1 <= lo <= 1]
+        highs = [hi for _, _, hi in scenes if hi is not None and -1 <= hi <= 1]
+        records[key] = {'mean': round(float(np.mean([v for v, _, _ in scenes])), 4), 'min': round(min(lows), 4) if lows else None,
+                        'max': round(max(highs), 4) if highs else None, 'observations': len(scenes)}
+    return records, counts
+
+
+def export_ndvi(source):
+    """Refresh only the monthly NDVI in parcel-data.json, leaving every other export untouched."""
+    data = json.loads((OUT / 'data/parcel-data.json').read_text())
+    ndvi, _ = monthly_ndvi(source / 'dataset' / 'DATASET_RETO_AGRO_2026')
+    for parcel in data.values():
+        parcel['ndvi'] = {}
+    for (pid, sensor, date), record in ndvi.items():
+        if pid in data:
+            data[pid]['ndvi'].setdefault(sensor, {})[date] = record
+    write(OUT / 'data/parcel-data.json', data)
+
+
 def export(source):
     dataset = source / 'dataset'
     original = dataset / 'DATASET_RETO_AGRO_2026'
@@ -85,24 +123,10 @@ def export(source):
                 for m in range(1, 13):
                     date = f'{y}-{m:02d}'
                     parcels[pid]['climate'][date] = {key: vals.get(f'raster__{col}__{date}__mean') for key, col in [('precipitation', 'precip_mm_month'), ('tmin', 'tmin_c_month'), ('tmax', 'tmax_c_month')]}
-    aggregate = defaultdict(list)
-    counts = defaultdict(int)
-    for path, sensor_default in [(original / 'Conjunto_datos_BASICO_AgroCebada2026.csv', None), (original / 'Conjunto_datos_PRO_AgroCebada.csv', 'Planet')]:
-        with open(path, encoding='utf-8-sig', newline='') as f:
-            for r in csv.DictReader(f):
-                sensor = r.get('sensor', sensor_default) or sensor_default
-                value = number(r.get('ndvi_promedio'))
-                cloud = number(r.get('porcentaje_nubosidad'))
-                if value is None or not -1 <= value <= 1 or cloud is None or cloud > 30:
-                    continue
-                date_parts = r['fecha_captura'].split('/')
-                date = f'{date_parts[2]}-{date_parts[1].zfill(2)}'
-                key = (r['ID_POLIGONO'], sensor, date)
-                aggregate[key].append(value)
-                counts[sensor] += 1
-    for (pid, sensor, date), values in aggregate.items():
+    ndvi, counts = monthly_ndvi(original)
+    for (pid, sensor, date), record in ndvi.items():
         if pid in parcels:
-            parcels[pid]['ndvi'].setdefault(sensor, {})[date] = {'mean': round(float(np.mean(values)), 4), 'observations': len(values)}
+            parcels[pid]['ndvi'].setdefault(sensor, {})[date] = record
     write(OUT / 'data/parcels.geojson', {'type': 'FeatureCollection', 'features': features})
     write(OUT / 'data/parcel-data.json', parcels)
     write(OUT / 'data/model.json', {'status': 'placeholder', 'exampleYield': 4.2, 'unit': 't/ha', 'metrics': {'rmse': None, 'mae': None, 'r2': None}, 'explanation': None})
@@ -199,7 +223,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', type=Path, default=SOURCE)
     parser.add_argument('--embeddings-only', action='store_true')
+    parser.add_argument('--ndvi-only', action='store_true', help='only refresh the monthly NDVI (mean, min, max) in parcel-data.json')
     args = parser.parse_args()
+    if args.ndvi_only:
+        export_ndvi(args.source)
+        raise SystemExit
     if not args.embeddings_only:
         export(args.source)
     export_embeddings(args.source, range(2017, 2026))

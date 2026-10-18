@@ -15,7 +15,7 @@ export interface Parcel { type: 'Feature'; properties: ParcelProperties; geometr
 export interface FeatureCollection { type: 'FeatureCollection'; features: Parcel[] }
 export interface Climate { precipitation: number | null; tmin: number | null; tmax: number | null }
 export interface Raster { url: string; extent: number[]; projection: string }
-export interface ParcelData { climate: Record<string, Climate>; ndvi: Record<string, Record<string, { mean: number; observations: number }>>; embedding: Record<string, Raster & { values: number[] }> }
+export interface ParcelData { climate: Record<string, Climate>; ndvi: Record<string, Record<string, { mean: number; min?: number | null; max?: number | null; observations: number }>>; embedding: Record<string, Raster & { values: number[] }> }
 export interface LandsatStats { mean: number | null; min: number | null; max: number | null; validPixels: number; totalPixels: number; coverage: number }
 export interface LandsatMonth extends Raster { date: string; parcels: Record<string, LandsatStats>; scenes: { id: string; date: string; cloudCover: number; stacUrl: string }[]; nativeResolution: number; validAreaFraction: number }
 export interface Atlas { predictions: import('./model').Predictions; parcels: FeatureCollection; details: Record<string, ParcelData>; rasters: Record<string, Raster>; landsat: Record<string, LandsatMonth>; provenance: { parcelCount: number; trainingCount: number; predictionCount: number; totalArea: number; satelliteRetained: Record<string, number>; modelStatus: string } }
