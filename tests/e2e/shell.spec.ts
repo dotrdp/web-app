@@ -152,3 +152,39 @@ test('Bar: settings gather theme, colour scheme, plugins and sources; filters an
   await expect(filters.getByRole('group', { name: 'Filtrar por estado' })).toBeVisible();
   await expect(filters.getByRole('list', { name: 'Marcadores' })).toBeVisible();
 });
+
+test('Toggles morph into an X while active, and C cancels the running map tool but not the comparison slider', async ({ page }) => {
+  await signIn(page);
+  const tools = page.getByRole('toolbar', { name: 'Herramientas del mapa' });
+  const measure = tools.getByRole('button', { name: 'Medir distancia' });
+  await measure.click();
+  await expect(measure).toHaveAttribute('aria-pressed', 'true');
+  await expect(measure.locator('svg.lucide-x')).toHaveCount(1);
+  await expect(page.getByText('Presiona C para cancelar')).toBeVisible();
+  await page.keyboard.press('c');
+  await expect(page.getByText('Presiona C para cancelar')).toHaveCount(0);
+  await expect(measure).toHaveAttribute('aria-pressed', 'false');
+  await expect(measure.locator('svg.lucide-x')).toHaveCount(0);
+  const swipe = tools.getByRole('button', { name: 'Comparar con deslizador' });
+  await swipe.click();
+  await expect(page.getByRole('slider', { name: 'Posición del comparador' })).toBeVisible();
+  // The comparison slider keeps its icon and survives C: it works on top of the other tools.
+  await expect(swipe).toHaveAttribute('aria-pressed', 'true');
+  await expect(swipe.locator('svg.lucide-x')).toHaveCount(0);
+  await measure.click();
+  await page.keyboard.press('c');
+  await expect(measure).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('slider', { name: 'Posición del comparador' })).toBeVisible();
+  await swipe.click();
+  await expect(page.getByRole('slider', { name: 'Posición del comparador' })).toHaveCount(0);
+  // Typing a "c" in a field does not cancel anything.
+  await tools.getByRole('button', { name: 'Medir distancia' }).click();
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox', { name: /Buscar parcela/ }).fill('c');
+  await page.keyboard.press('Escape');
+  await expect(measure).toHaveAttribute('aria-pressed', 'true');
+  const layers = bar(page).getByRole('button', { name: 'Capas y simbología' });
+  await expect(layers.locator('svg.lucide-x')).toHaveCount(1);
+  await layers.click();
+  await expect(layers.locator('svg.lucide-x')).toHaveCount(0);
+});

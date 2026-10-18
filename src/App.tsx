@@ -7,7 +7,7 @@
 // controls fade away for. the Agente de IA Milli lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minimize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -186,12 +186,15 @@ export default function App() {
     step(); const timer = window.setInterval(step, 4200); return () => clearInterval(timer);
   }, [touring, visibleParcels]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, Escape closes the top layer.
+  // Keyboard: Ctrl/⌘ K launcher, Alt 1–3 phases, Alt D dashboard, C cancels the active map tool,
+  // Escape closes the top layer.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setLauncher(l => l === null ? '' : null); return; }
       if (event.altKey && ['1', '2', '3'].includes(event.key)) { event.preventDefault(); goPhase(PHASES[Number(event.key) - 1].key); return; }
       if (event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); setDashboard(d => !d); return; }
+      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || (event.target as HTMLElement | null)?.isContentEditable;
+      if (event.key.toLowerCase() === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey && !typing && launcher === null) { if (cancelTools()) event.preventDefault(); return; }
       if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (assistant) setAssistant(false); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
@@ -242,6 +245,15 @@ export default function App() {
   }
   function exportProposal() { if (!draft || !proposal) return; download('propuesta-parcela.geojson', JSON.stringify({ type: 'Feature', geometry: draft, properties: { ...proposal.provenance, correctedGeometry: draft, saved: false } }, null, 2), 'application/geo+json'); }
   async function logout() { await api('/api/auth/logout', { method: 'POST' }); setupRevision.current++; cancelDraft(); setUser(null); setAtlas(null); setWorkspace(EMPTY_WORKSPACE); setSelectedId(null); setLauncher(null); setDashboard(false); setAssistant(false); }
+  /** Cancels whichever map tool is running; false when none was. The comparison slider is left
+   *  alone: it layers over the other tools rather than being one. */
+  function cancelTools() {
+    const active = !!draftMode || !!measureKind || selectArea || rightPanel === 'export';
+    if (draftMode) cancelDraft();
+    if (measureKind) toggleMeasure(null);
+    setSelectArea(false); setRightPanel(p => p === 'export' ? null : p);
+    return active;
+  }
   function toggleMeasure(kind: MeasureKind | null) { const next = kind && kind !== measureKind ? kind : null; if (next) { cancelDraft(); setSelectArea(false); } setMeasureKind(next); setMeasureValue(null); map.current?.measure(next); }
   function toggleSelect() { const next = !selectArea; if (next) { cancelDraft(); if (measureKind) toggleMeasure(null); } setSelectArea(next); }
   function locateMe() {
@@ -276,6 +288,7 @@ export default function App() {
   const selectionParcels = parcels.filter(p => selection.includes(p.properties.id));
   const freeWidth = viewWidth - 66 - leftWidth - rightWidth;
   const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes');
+  const cancellable = !!draftMode || !!measureKind || selectArea || rightPanel === 'export';
   const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth}px) / 2)`;
 
   const basemapPreview = (k: string) => <span className="block size-full bg-cover bg-center" style={{ backgroundImage: `url('/basemaps/${k}.png')` }}/>;
@@ -304,6 +317,8 @@ export default function App() {
     { id: 'salir', title: 'Cerrar sesión', subtitle: 'Vuelve a la pantalla de acceso', icon: <LogOut/>, run: () => void logout() },
   ];
 
+  // Every pressed tool's icon morphs into an X and C cancels it, except the comparison slider,
+  // which keeps its icon and stays on: it works on top of the other tools.
   const tools: { id: PluginId; label: string; icon: ReactNode; pressed: boolean; run: () => void; busy?: boolean }[] = [
     { id: 'sam', label: 'Delimitar con IA', icon: <WandSparkles/>, pressed: draftMode === 'segment', run: startSegment },
     { id: 'draw', label: 'Dibujar parcela', icon: <PenLine/>, pressed: draftMode === 'draw', run: startDraw },
@@ -404,14 +419,16 @@ export default function App() {
 
           <AnimatePresence>
           {launcher === null && !(isMobile && (left || right)) && <Popout key="tools" edges={isMobile ? 'right' : ['bottom', 'right']} label="Herramientas del mapa" animate={false} className={isMobile ? 'top-1/2 right-0 -translate-y-1/2' : 'right-0 bottom-0 max-w-[36rem]'}>
-            <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
+            <AnimatePresence>{cancellable && !isMobile && <motion.p key="cancel-hint" aria-live="polite" className="pointer-events-none absolute right-4 bottom-full mb-1.5 text-xs whitespace-nowrap text-foreground [text-shadow:0_0_2px_var(--frame),0_0_4px_var(--frame),0_0_8px_var(--frame)]"
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: .2 }}>Presiona <kbd className="font-sans font-semibold">C</kbd> para cancelar</motion.p>}</AnimatePresence>
+          <div role="toolbar" aria-label="Herramientas del mapa" className={cn('flex items-center gap-0.5 px-1.5 pt-1.5', isMobile && 'flex-col pb-1.5')}>
               {!isMobile && <><ShellButton label={`Buscar o ejecutar un comando (${shortcutKey} K)`} onClick={() => setLauncher('')}><Search/></ShellButton><span className="mx-1 h-5 w-px bg-border" aria-hidden="true"/></>}
-              {visibleTools.filter(t => !isMobile || ['sam', 'measure', 'export', 'locate'].includes(t.id)).map(t => <ShellButton key={t.id} label={t.label} side={isMobile ? 'left' : 'top'} pressed={t.pressed} busy={t.busy} onClick={t.run}>{t.icon}</ShellButton>)}
+              {visibleTools.filter(t => !isMobile || ['sam', 'measure', 'export', 'locate'].includes(t.id)).map(t => <ShellButton key={t.id} label={t.label} side={isMobile ? 'left' : 'top'} pressed={t.pressed} busy={t.busy} morph={t.id !== 'swipe'} onClick={t.run}>{t.icon}</ShellButton>)}
               <span className={cn('mx-1 h-5 w-px bg-border', isMobile && 'h-px w-5')} aria-hidden="true"/>
               <ShellButton label="Ver todas las parcelas" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.fitAll()}><Home/></ShellButton>
               <ShellButton label="Alejar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(-1)}><Minus/></ShellButton>
               <ShellButton label="Acercar mapa" side={isMobile ? 'left' : 'top'} onClick={() => map.current?.zoomBy(1)}><Plus/></ShellButton>
-              {!isMobile && <ShellButton label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} pressed={fullscreen} onClick={() => void map.current?.toggleFullscreen()}>{fullscreen ? <Minimize/> : <Maximize/>}</ShellButton>}
+              {!isMobile && <ShellButton label={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} pressed={fullscreen} onClick={() => void map.current?.toggleFullscreen()}><Maximize/></ShellButton>}
             </div>
             {!isMobile && <div ref={setStatusEl} className="px-3.5 pt-1 pb-2"/>}
           </Popout>}
