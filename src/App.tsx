@@ -5,8 +5,8 @@
 // map) and Estimar, the dashboard page that the map and its controls fade away for. the Agente de IA Milli lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Flame, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Calculator, CodeXml, Search, Send, Settings, SquareDashed, Sun, Table2, Tags, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -44,13 +44,15 @@ import ShellButton from './shell/ShellButton';
 import { CropMark } from './CropMarks';
 import type { Crop } from './CropMarks';
 import EstimationPanel, { Stat } from './panels/EstimationPanel';
+import EconomicsPanel from './panels/EconomicsPanel';
 import AttributeTable from './panels/AttributeTable';
 import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSettings, MapFilters, MapMode, Override, Parcel, Phase, SegmentationPrompt, SegmentationProposal, User, Workspace } from './types';
 import './map.css';
 import './shell/shell.css';
 
 type Sheet = 'fuentes' | 'tabla';
-const PANEL_KEYS: string[] = PANEL_ITEMS.map(p => p.key);
+// Everything the bar can show as open: the map panels plus Ajustes and the dashboard's Scripts menu.
+const PANEL_KEYS: string[] = [...PANEL_ITEMS.map(p => p.key), 'settings', 'scripts'];
 type Left = LeftPanel | Sheet;
 type Scheme = Crop;
 const SCHEMES: { key: Scheme; label: string }[] = [{ key: 'maiz', label: 'Maíz' }, { key: 'sorgo', label: 'Sorgo' }, { key: 'trigo', label: 'Trigo' }, { key: 'arroz', label: 'Arroz' }, { key: 'cebada', label: 'Cebada' }, { key: 'mijo', label: 'Mijo' }];
@@ -60,6 +62,14 @@ const EMPTY_FILTERS: MapFilters = { query: '', state: 'all', group: 'all', ndviE
 const DEFAULT_LAYERS: LayerSettings = { yieldField: 'predicted', classification: 'continuous', heatmap: false, precipitation: false, tmin: false, tmax: false, elevation: false, slope: false, municipalities: false, states: true, opacity: .8, base: 'topo', waterThreshold: 0, waterOpacity: .75 };
 const LEGACY_ROUTES: Record<string, Phase> = { map: 'explorar', parcels: 'estimar', models: 'estimar', technical: 'explorar', avanzado: 'explorar', sources: 'explorar' };
 const routePhase = (): Phase => { const r = window.location.hash.replace('#/', ''); return (PHASES.some(p => p.key === r) ? r : LEGACY_ROUTES[r] ?? 'explorar') as Phase; };
+const PAGE = {
+  enter: { opacity: 0, scale: 1.015, filter: 'blur(0px)' },
+  shown: { opacity: 1, scale: 1, filter: 'blur(0px)', transition: { duration: .36, delay: .12, ease: [.2, 0, 0, 1] } },
+  // `stillOpen`: another dashboard page replaces this one, so leave the way the map does.
+  leave: (stillOpen: boolean) => stillOpen
+    ? { opacity: 0, scale: .985, filter: 'blur(6px)', transition: { duration: .38, ease: [.4, 0, .2, 1] } }
+    : { opacity: 0, scale: 1.015, filter: 'blur(0px)', transition: { duration: .22 } },
+} satisfies Variants;
 const shortcutKey = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
 type SetupProgress = (id: SetupTaskId, update: Partial<AgentStep>) => void;
@@ -105,6 +115,9 @@ export default function App() {
   const [left, setLeft] = useState<Left | null>(() => window.innerWidth > 1100 ? 'layers' : null);
   const [assistant, setAssistant] = useState(false);
   const [dashboard, setDashboard] = useState(() => routePhase() === 'estimar');
+  // Second dashboard page (the calculator) and the Scripts menu exist only while the dashboard is open.
+  const [economics, setEconomics] = useState(false);
+  useEffect(() => { if (!dashboard) { setEconomics(false); setLeft(l => l === 'scripts' ? null : l); } }, [dashboard]);
   const [launcher, setLauncher] = useState<string | null>(null);
   const [plugins, setPlugins] = useState(DEFAULT_PLUGINS);
   const [selectedId, setSelectedId] = useState<string | null>(null), [hoverId, setHoverId] = useState<string | null>(null);
@@ -190,7 +203,7 @@ export default function App() {
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || (event.target as HTMLElement | null)?.isContentEditable;
       if (/^[1-9]$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing && launcher === null && !dashboard) { const run = toolKeys.current[Number(event.key) - 1]; if (run) { event.preventDefault(); run(); } return; }
       if (event.key.toLowerCase() === 'c' && !event.metaKey && !event.ctrlKey && !event.altKey && !typing && launcher === null) { if (cancelTools()) event.preventDefault(); return; }
-      if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (assistant) setAssistant(false); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
+      if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) { if (launcher !== null) setLauncher(null); else if (assistant) setAssistant(false); else if (economics) setEconomics(false); else if (dashboard) setDashboard(false); else if (swipe != null) setSwipe(null); else if (selectArea) setSelectArea(false); }
     };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   });
@@ -280,7 +293,7 @@ export default function App() {
   const parcelRank = (p: Parcel) => p.properties.predictedYield == null ? null : { percentile: Math.round(estimates.filter(v => v < p.properties.predictedYield!).length / Math.max(1, estimates.length - 1) * 100), of: estimates.length };
   const selectionParcels = parcels.filter(p => selection.includes(p.properties.id));
   const freeWidth = viewWidth - 66 - leftWidth - rightWidth;
-  const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes');
+  const mapPanelHidden = dashboard && !(left === 'settings' || left === 'fuentes' || left === 'scripts');
   const cancellable = !!draftMode || !!measureKind || selectArea || rightPanel === 'export';
   const freeCenter = `calc(${leftWidth}px + (100% - ${leftWidth + rightWidth}px) / 2)`;
 
@@ -290,6 +303,7 @@ export default function App() {
   const commands: Command[] = [
     ...PHASES.map((p, i) => ({ id: `fase${i + 1}`, title: `Fase ${i + 1} · ${p.label}`, subtitle: p.detail, icon: <p.icon/>, keywords: p.key, run: () => goPhase(p.key) })),
     { id: 'tablero', title: 'Panel de control', subtitle: 'Estimado vs registrado, error en toneladas y pesos, tabla por ID_POLIGONO (Alt D)', icon: <ChartSpline/>, keywords: 'dashboard estimar tabla', run: () => setDashboard(true) },
+    { id: 'economia', title: 'Economía del productor', subtitle: 'Ingreso, margen y punto de equilibrio con precio y costo editables', icon: <Calculator/>, keywords: 'calculadora costo precio margen', run: () => { setDashboard(true); setEconomics(true); } },
     { id: 'base', title: 'Mapa base', subtitle: 'Topográfico, claro, oscuro o satélite', icon: <Layers3/>, keywords: 'basemap fondo', carousel: 'base' },
     { id: 'esquema', title: 'Esquema de color', subtitle: 'Una paleta por cultivo: maíz, sorgo, trigo, arroz, cebada y mijo', icon: <Palette/>, keywords: 'tema color scheme cultivo', carousel: 'scheme' },
     { id: dark ? 'claro' : 'oscuro', title: dark ? 'Tema claro' : 'Tema oscuro', subtitle: 'Cambia la luminosidad del marco', icon: dark ? <Sun/> : <Moon/>, run: () => setDark(d => !d) },
@@ -330,12 +344,12 @@ export default function App() {
   // the layers panel, the bar and the launcher, so the strip stays short.
   const visibleTools = tools.filter(t => plugins[t.id] && !['heatmap', 'labels', 'identify', 'table'].includes(t.id));
   toolKeys.current = isMobile ? [] : visibleTools.map(t => t.run);
-  const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes' } as Record<string, string>)[k];
+  const panelTitle = (k: Left) => PANEL_ITEMS.find(p => p.key === k)?.label ?? ({ fuentes: 'Datos y fuentes', tabla: 'Tabla de atributos', settings: 'Ajustes', scripts: 'Scripts' } as Record<string, string>)[k];
 
   return <TooltipProvider delayDuration={300}>
   <div className="shell fixed inset-0 flex select-none max-md:flex-col" data-phase={phase}>
-    <Bar panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} dashboard={dashboard} filtered={filtered}
-      onDashboard={() => setDashboard(d => !d)} onPanel={openLeft} onLogout={() => void logout()}/>
+    <Bar panel={left && PANEL_KEYS.includes(left) ? left as LeftPanel : null} dashboard={dashboard} economics={economics} filtered={filtered}
+      onDashboard={() => setDashboard(d => !d)} onEconomics={setEconomics} onPanel={openLeft} onLogout={() => void logout()}/>
 
     <div className="relative min-h-0 flex-1 p-(--gap) md:pl-0">
       <main ref={viewport} className="relative h-full select-text" aria-label="Atlas AgroCebada" style={{ '--left-w': `${leftWidth}px`, '--right-w': `${rightWidth}px` } as CSSProperties}>
@@ -431,17 +445,20 @@ export default function App() {
 
         {setupVisible && <div className="absolute inset-0 z-50 grid place-items-center overflow-y-auto rounded-(--view-r) bg-frame/60 p-4 backdrop-blur-sm"><MapSetup tasks={setupTasks} error={loadError} onRetry={reload}/></div>}
 
-        <AnimatePresence>
-        {dashboard && <motion.section key="dashboard" aria-label="Panel de control" className="dashboard-canvas absolute inset-0 z-20 overflow-hidden rounded-(--view-r)"
-          initial={{ opacity: 0, scale: 1.015 }} animate={{ opacity: 1, scale: 1, transition: { duration: .36, delay: .12, ease: [.2, 0, 0, 1] } }} exit={{ opacity: 0, scale: 1.015, transition: { duration: .22 } }}>
+        {/* Dashboard pages. Switching page plays the map → dashboard transition: the outgoing page shrinks,
+            blurs and fades like the map does while the new one fades in; closing the dashboard keeps its quick exit. */}
+        <AnimatePresence custom={dashboard}>
+        {dashboard && <motion.section key={economics ? 'economics' : 'dashboard'} aria-label={economics ? 'Economía del productor' : 'Panel de control'} className="dashboard-canvas absolute inset-0 z-20 overflow-hidden rounded-(--view-r)"
+          variants={PAGE} initial="enter" animate="shown" exit="leave">
           <div className="h-full overflow-y-auto"><div className="w-full px-4 pt-14 pb-4">
-            <EstimationPanel atlas={atlas} parcels={parcels} keyDate={key} onSelect={id => chooseParcel(id)}
+            {economics ? <EconomicsPanel atlas={atlas} parcels={parcels} selected={selected} onLocate={id => { setDashboard(false); chooseParcel(id, true); }}/>
+            : <EstimationPanel atlas={atlas} parcels={parcels} keyDate={key} onSelect={id => chooseParcel(id)}
               onLocate={id => { setDashboard(false); chooseParcel(id, true); }}
               onShowSelection={ids => {
                 const chosen = parcels.filter(p => ids.includes(p.properties.id)); if (!chosen.length) return;
                 const bounds = chosen.reduce((b, p) => [Math.min(b[0], p.properties.bounds[0]), Math.min(b[1], p.properties.bounds[1]), Math.max(b[2], p.properties.bounds[2]), Math.max(b[3], p.properties.bounds[3])], [Infinity, Infinity, -Infinity, -Infinity]);
                 setDashboard(false); setSelection(ids); setRightPanel('selection'); setTimeout(() => map.current?.fitBounds(bounds), 60);
-              }}/>
+              }}/>}
           </div></div>
         </motion.section>}
         </AnimatePresence>
@@ -462,6 +479,7 @@ export default function App() {
                   <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
                   <section className="grid gap-2"><SectionTitle>Marcadores</SectionTitle><BookmarksPanel parcels={parcels} onAll={() => map.current?.fitAll()} onFit={bounds => map.current?.fitBounds(bounds)}/></section>
                 </div>}
+                {left === 'scripts' && <ScriptsPanel/>}
                 {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
                   <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
                 </SettingsPanel>}
@@ -510,6 +528,15 @@ export default function App() {
   </div>
   <Toaster position="top-right"/>
   </TooltipProvider>;
+}
+
+/** Scripts (dashboard only), after ArcGIS's script tools. A placeholder until we settle how scripts run. */
+function ScriptsPanel() {
+  return <div className="grid justify-items-center gap-3 px-2 py-10 text-center">
+    <span className="grid size-12 place-items-center rounded-full bg-primary-container text-on-primary-container"><CodeXml className="size-5"/></span>
+    <p className="text-sm font-medium">Scripts</p>
+    <p className="max-w-64 text-xs text-pretty text-muted-foreground">Aquí podrás crear y ejecutar scripts sobre las parcelas y sus estimaciones, como las herramientas de script de ArcGIS. Pronto definiremos cómo funcionarán.</p>
+  </div>;
 }
 
 /** Appearance, plugins and the data sources, gathered off the bar. */

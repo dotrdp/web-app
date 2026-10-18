@@ -15,7 +15,7 @@ import { DataTable, useDataTable } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
 import { dateKey, download, fmt, MONTH_NAMES, MONTHS, parcelCsv } from '../lib';
 import { COVERAGE_LABEL, interval } from '../model';
-import { TABLE_ES } from './table-es';
+import { TABLE_OPTIONS } from './table-es';
 import type { Atlas, Parcel } from '../types';
 
 type SetFilter = 'all' | 'prediction' | 'training' | 'municipio';
@@ -25,10 +25,6 @@ const chartConfig = { mean: { label: 'NDVI medio', color: 'var(--primary)' }, ra
 const YEARS = [2022, 2023, 2024, 2025];
 const CYCLE = [3, 4, 5, 6, 7, 8, 9]; // April to the October cutoff
 type SeasonMonth = { month: string; name: string; mean: number | null; range: [number, number] | null; rain: number | null; scenes: number };
-// Shared table setup: Spanish strings, no pager (every row in one scrolling surface that grows to the
-// canvas height, so scrolled into view the table fills the page), search and
-// per-column filters in popovers, no density or full-screen toggles.
-const TABLE_OPTIONS = { localization: TABLE_ES, enablePagination: false, enableDensityToggle: false, enableFullscreenToggle: false, columnFilterDisplayMode: 'popover', defaultDensity: 'compact', enableColumnActions: false } as const;
 
 export function Stat({ label, value, unit, hint, className }: { label: string; value: string; unit?: string; hint?: string; className?: string }) {
   return <div className={cn('tile grid gap-0.5 px-3.5 py-3', className)}>

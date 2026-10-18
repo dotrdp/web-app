@@ -1,5 +1,5 @@
-// Spanish strings for shadcn-react-table, covering the features the estimates tables use
-// (sorting, search, column filters and visibility, row selection, empty state).
+// Spanish strings and shared setup for shadcn-react-table, covering the features the dashboard
+// tables use (sorting, search, column filters and visibility, row selection, empty state).
 import type { DataTableLocalization } from '@/components/ui/data-table';
 
 export const TABLE_ES: Partial<DataTableLocalization> = {
@@ -38,3 +38,8 @@ export const TABLE_ES: Partial<DataTableLocalization> = {
   noRecordsToDisplay: 'No hay parcelas que mostrar',
   loading: 'Cargando…',
 };
+
+// Shared table setup: Spanish strings, no pager (every row in one scrolling surface that grows to the
+// canvas height, so scrolled into view the table fills the page), search and
+// per-column filters in popovers, no density or full-screen toggles.
+export const TABLE_OPTIONS = { localization: TABLE_ES, enablePagination: false, enableDensityToggle: false, enableFullscreenToggle: false, columnFilterDisplayMode: 'popover', defaultDensity: 'compact', enableColumnActions: false } as const;

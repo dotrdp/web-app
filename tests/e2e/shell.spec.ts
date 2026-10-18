@@ -229,3 +229,28 @@ test('Number keys toggle the map tools in strip order', async ({ page }) => {
   await page.keyboard.press('6');
   await expect(page.getByRole('slider', { name: 'Posición del comparador' })).toBeVisible();
 });
+
+test('Dashboard tools: main page, the producer economics calculator and the Scripts menu exist only on the dashboard', async ({ page }) => {
+  await signIn(page);
+  const tools = bar(page).getByRole('group', { name: 'Herramientas del panel' });
+  await expect(tools).toHaveCount(0);
+  await page.keyboard.press('Alt+d');
+  await expect(tools.getByRole('button')).toHaveCount(3);
+  await expect(tools.getByRole('button', { name: 'Panel principal' })).toHaveAttribute('aria-pressed', 'true');
+  await tools.getByRole('button', { name: 'Economía del productor' }).click();
+  const econ = page.getByRole('region', { name: 'Economía del productor' });
+  await expect(econ.getByRole('heading', { name: 'Economía del productor' })).toBeVisible();
+  // Margin and break-even stay empty until the producer enters a cost.
+  await expect(econ.getByText('Escribe tu costo por hectárea para calcularlo')).toBeVisible();
+  await econ.getByRole('spinbutton', { name: 'Costo de producción en pesos por hectárea' }).fill('14000');
+  await expect(econ.getByText(/de \d+ parcelas lo superan/)).toBeVisible();
+  await expect(econ.getByRole('table', { name: 'Economía por parcela' }).locator('tbody tr').first()).toBeVisible();
+  await tools.getByRole('button', { name: 'Scripts' }).click();
+  await expect(page.getByRole('region', { name: 'Scripts' })).toBeVisible();
+  await tools.getByRole('button', { name: 'Panel principal' }).click();
+  await expect(page.getByRole('region', { name: 'Panel de control' })).toBeVisible();
+  // Leaving the dashboard takes its tools and the Scripts menu with it.
+  await page.keyboard.press('Alt+d');
+  await expect(tools).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Scripts' })).toHaveCount(0);
+});
