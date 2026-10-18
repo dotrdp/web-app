@@ -2,15 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* AgroCebada on shadcn/ui (radix-nova). Rubik: SIL OFL via @fontsource-variable/rubik. Geist fonts: SIL OFL, /licenses/geist-OFL.txt. */
-@import "@fontsource-variable/rubik";
+/* AgroCebada on shadcn/ui (radix-nova). Geist fonts: SIL OFL, /licenses/geist-OFL.txt. */
 @font-face { font-family: 'Geist'; src: url('./fonts/Geist-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: 'Geist Mono'; src: url('./fonts/GeistMono-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: 'Rubik Variable', 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);

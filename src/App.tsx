@@ -454,22 +454,25 @@ export default function App() {
                 {launcher !== null && <div aria-hidden="true" onClick={() => setLauncher(null)} className="absolute inset-0 z-[35] rounded-(--view-r) bg-frame/60 backdrop-blur-[2px]"/>}
 
 
-        {/* Top: Milli-IA, the assistant, always present on the map and the dashboard. For now its island opens on the Resumen tiles. */}
-        <AnimatePresence mode="wait">
-        {assistant
-          ? <Popout key="assistant" edges="top" label="Milli-IA" className={isMobile ? 'inset-x-0 top-0 z-40' : 'top-0 z-40 -translate-x-1/2'} style={isMobile ? undefined : { left: dashboard || isMobile ? '50%' : freeCenter }}>
-              <div className="w-[min(760px,calc(100vw-7rem))] px-4 pt-3 pb-3 max-md:w-full">
-                <header className="flex items-center gap-2 pb-3 text-sm"><Sparkles className="size-4 text-primary"/><h2 className="font-medium">Milli-IA</h2><span className="text-xs text-muted-foreground">· asistente</span></header>
-                <Summary atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
-              </div>
-              <button type="button" onClick={() => setAssistant(false)} aria-label="Cerrar Milli-IA" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
-            </Popout>
-          : <Popout key="island" edges="top" radius={14} className="top-0 z-30 -translate-x-1/2" style={{ left: dashboard || isMobile ? '50%' : freeCenter }} animate={false}>
-              <button type="button" onClick={() => setAssistant(true)} aria-label="Abrir Milli-IA" className="flex h-8 items-center gap-2 px-4 text-xs text-muted-foreground hover:text-foreground">
-                <Sparkles className="size-3.5 text-primary"/><span className="font-medium text-foreground">Milli-IA</span><ChevronDown className="size-3.5"/>
-              </button>
-            </Popout>}
-        </AnimatePresence>
+        {/* Top: Milli-IA (milli is Náhuatl for crop), the assistant. Pinned to the centre above
+            every other layer, on the map and the dashboard; for now it opens on the Resumen tiles. */}
+        <div className="absolute top-0 left-1/2 z-[60] -translate-x-1/2">
+          <AnimatePresence mode="wait">
+          {assistant
+            ? <Popout key="assistant" edges="top" label="Milli-IA" className="relative">
+                <div className="w-[min(760px,calc(100vw-7rem))] px-4 pt-3 pb-3 max-md:w-[calc(100vw-1.5rem)]">
+                  <header className="flex items-center gap-2 pb-3 text-sm"><Sparkles className="size-4 text-primary"/><h2 className="font-medium">Milli-IA</h2><span className="text-xs text-muted-foreground">· asistente</span></header>
+                  <Summary atlas={atlas} parcels={visibleParcels} selected={selected} year={year} month={month} touring={touring} onMonth={m => setMonth(m)} onParcel={nextParcel} onTour={setTouring}/>
+                </div>
+                <button type="button" onClick={() => setAssistant(false)} aria-label="Cerrar Milli-IA" className="mx-auto mb-1.5 grid h-4 w-16 place-items-center rounded-full text-muted-foreground hover:bg-tile"><ChevronUp className="size-3.5"/></button>
+              </Popout>
+            : <Popout key="island" edges="top" radius={14} className="relative" animate={false}>
+                <button type="button" onClick={() => setAssistant(true)} aria-label="Abrir Milli-IA" className="flex h-8 items-center gap-2 px-4 text-xs text-muted-foreground hover:text-foreground">
+                  <Sparkles className="size-3.5 text-primary"/><span className="font-semibold text-foreground">Milli-IA</span><ChevronDown className="size-3.5"/>
+                </button>
+              </Popout>}
+          </AnimatePresence>
+        </div>
 
         <AnimatePresence>
         {launcher !== null
