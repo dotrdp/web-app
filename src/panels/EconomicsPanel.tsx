@@ -4,8 +4,8 @@
 // thousand-kernel weight) or by the bulto (m² one bulto sows), plus other costs): income with its range, margin and break-even yield, for all
 // parcels, a set, or the selected parcel, plus the same reading per parcel in a table.
 import { useMemo, useRef, useState } from 'react';
-import { MapPin, Sprout } from 'lucide-react';
-import type { ColumnDef } from '@tanstack/react-table';
+import { MapPin, Sprout, X } from 'lucide-react';
+import type { ColumnDef, RowSelectionState } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable, useDataTable } from '@/components/ui/data-table';
 import { fmt } from '../lib';
@@ -53,6 +53,7 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
   const [coverage, setCoverage] = useState<Coverage>('0.8');
   const [scope, setScope] = useState<Scope>(selected ? 'selected' : 'all');
   const locate = useRef(onLocate); locate.current = onLocate;
+  const [checked, setChecked] = useState<RowSelectionState>({});
   const scopes: [Scope, string][] = [['all', 'Todas'], ['prediction', 'Reservadas · 59'], ['training', 'Con rendimiento · 138'], ...(selected ? [['selected', selected.properties.name || selected.properties.id] as [Scope, string]] : [])];
   const current = scope === 'selected' && !selected ? 'all' : scope;
 
@@ -64,13 +65,6 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
       return { parcel: p, estimate, production, income, band: model.absErrorQuantiles[coverage] * area * price, cost, margin: cost == null ? null : income - cost };
     }), [parcels, current, selected, price, costHa, coverage, model]);
 
-  const totals = useMemo(() => {
-    const sum = (f: (r: Row) => number) => rows.reduce((t, r) => t + f(r), 0);
-    const area = sum(r => r.parcel.properties.area), production = sum(r => r.production), income = sum(r => r.income);
-    const breakEven = costHa == null || price <= 0 ? null : costHa / price;
-    return { area, production, income, band: sum(r => r.band), cost: costHa == null ? null : costHa * area, margin: costHa == null ? null : income - costHa * area,
-      breakEven, above: breakEven == null ? null : rows.filter(r => r.estimate >= breakEven).length };
-  }, [rows, costHa, price]);
 
   // What the typical error means on one parcel: the selected one, or the median-sized parcel.
   const medianArea = useMemo(() => { const a = parcels.map(p => p.properties.area).sort((x, y) => x - y); return a[Math.floor(a.length / 2)] ?? 0; }, [parcels]);
@@ -92,12 +86,35 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
       cell: ({ row }) => { const f = row.original.parcel.properties; return <Button size="icon-sm" variant="ghost" className="rounded-full" aria-label={`Ver ${f.name || f.id} en el mapa`} title="Ver en el mapa" onClick={() => locate.current(f.id)}><MapPin/></Button>; } },
   ], [coverage]);
   const table = useDataTable<Row>({ ...TABLE_OPTIONS, data: rows, columns, getRowId: r => r.parcel.properties.id, initialState: { sorting: [{ id: 'income', desc: true }] },
+    enableRowSelection: true, selectAllMode: 'all', positionToolbarAlertBanner: 'none', state: { rowSelection: checked }, onRowSelectionChange: setChecked,
     renderCaption: () => <span className="sr-only">Economía por parcela</span> });
+  // Everything above the table works on the checked rows or, with none checked, every row the table
+  // shows (parcel set, search and column filters).
+  const shown = table.getRowModel().rows.map(r => r.original);
+  const picked = shown.filter(r => checked[r.parcel.properties.id]);
+  const calc = picked.length ? picked : shown;
+  const pick = (ids: string[], on: boolean) => setChecked(c => { const n = { ...c }; for (const id of ids) { if (on) n[id] = true; else delete n[id]; } return n; });
+  const totals = (() => {
+    const sum = (f: (r: Row) => number) => calc.reduce((t, r) => t + f(r), 0);
+    const area = sum(r => r.parcel.properties.area), production = sum(r => r.production), income = sum(r => r.income);
+    const breakEven = costHa == null || price <= 0 ? null : costHa / price;
+    return { area, production, income, band: sum(r => r.band), cost: costHa == null ? null : costHa * area, margin: costHa == null ? null : income - costHa * area,
+      breakEven, above: breakEven == null ? null : calc.filter(r => r.estimate >= breakEven).length };
+  })();
+
 
   return <div className="@container/econ grid min-w-0 gap-3 *:min-w-0">
+    {/* The title says what the page is calculating for: every shown parcel, or the checked ones. */}
     <header className="grid gap-0.5">
-      <h2 className="text-xl font-medium tracking-tight">Economía del productor</h2>
-      <p className="text-xs text-pretty text-muted-foreground">Ingreso, margen y riesgo a partir del rendimiento estimado y su error fuera de partición. El precio y el costo son supuestos editables, no cotizaciones.</p>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-xl font-medium tracking-tight" aria-live="polite">{picked.length
+          ? <>Calculado para <span className="tabular-nums">{picked.length}</span> {picked.length === 1 ? 'parcela seleccionada' : 'parcelas seleccionadas'}</>
+          : <>Calculado para todas las parcelas mostradas · <span className="tabular-nums">{shown.length}</span></>}</h2>
+        {picked.length > 0
+          ? <button type="button" onClick={() => setChecked({})} className="flex items-center gap-1 self-center rounded-full px-2 py-1 text-xs text-muted-foreground hover:bg-tile hover:text-foreground [&_svg]:size-3.5"><X/>Quitar selección</button>
+          : <span className="text-xs text-muted-foreground">Marca parcelas en la tabla de abajo para calcular solo esas.</span>}
+      </div>
+      <p className="text-xs text-muted-foreground">Cotizaciones - calculadora</p>
     </header>
 
     <div className="grid gap-3 *:min-w-0 @4xl/econ:grid-cols-[minmax(18rem,1fr)_2.4fr]">
@@ -145,14 +162,14 @@ export default function EconomicsPanel({ atlas, parcels, selected, onLocate }: {
 
       <div className="grid content-start gap-3">
         <section aria-label="Resultado" className="grid content-start gap-2 @2xl/econ:grid-cols-3">
-          <Stat label="Producción estimada" value={fmt(totals.production, 0)} unit="t" hint={`${rows.length} ${rows.length === 1 ? 'parcela' : 'parcelas'} · ${fmt(totals.area, 1)} ha`}/>
+          <Stat label="Producción estimada" value={fmt(totals.production, 0)} unit="t" hint={`${calc.length} ${calc.length === 1 ? 'parcela' : 'parcelas'} · ${fmt(totals.area, 1)} ha`}/>
           <Stat label="Ingreso estimado" value={money(totals.income)} hint={`± ${money(totals.band)} con ${COVERAGE_LABEL[coverage]} de cobertura (suma por parcela, cota conservadora)`}/>
           <Stat label="Ingreso por hectárea" value={totals.area ? money(totals.income / totals.area) : '—'} hint={`a ${money(price)}/t`}/>
           <Stat label="Costo total" value={totals.cost == null ? '—' : money(totals.cost)} hint={costHa == null ? 'Escribe tu costo por hectárea para calcularlo' : `${money(costHa)}/ha`}/>
           <Stat label="Margen estimado" value={totals.margin == null ? '—' : money(totals.margin)} className={totals.margin != null && totals.margin < 0 ? 'text-destructive' : undefined} hint={totals.margin == null ? 'Ingreso menos costo' : `${money(totals.margin / Math.max(totals.area, 1e-9))}/ha`}/>
-          <Stat label="Punto de equilibrio" value={totals.breakEven == null ? '—' : fmt(totals.breakEven)} unit={totals.breakEven == null ? undefined : 't/ha'} hint={totals.above == null ? 'Rendimiento que cubre el costo' : `${totals.above} de ${rows.length} parcelas lo superan`}/>
+          <Stat label="Punto de equilibrio" value={totals.breakEven == null ? '—' : fmt(totals.breakEven)} unit={totals.breakEven == null ? undefined : 't/ha'} hint={totals.above == null ? 'Rendimiento que cubre el costo' : `${totals.above} de ${calc.length} parcelas lo superan`}/>
         </section>
-        <RegionError parcels={parcels} overall={m.mae_t_ha}/>
+        <RegionError all={parcels} shown={shown.map(r => r.parcel)} picked={new Set(picked.map(r => r.parcel.properties.id))} overall={m.mae_t_ha} onPick={pick}/>
       </div>
     </div>
 

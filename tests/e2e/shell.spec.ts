@@ -239,7 +239,8 @@ test('Dashboard tools: main page, the producer economics calculator and the Scri
   await expect(tools.getByRole('button', { name: 'Panel principal' })).toHaveAttribute('aria-pressed', 'true');
   await tools.getByRole('button', { name: 'Economía del productor' }).click();
   const econ = page.getByRole('region', { name: 'Economía del productor' });
-  await expect(econ.getByRole('heading', { name: 'Economía del productor' })).toBeVisible();
+  await expect(econ.getByRole('heading', { name: /^Calculado para todas las parcelas mostradas · 197$/ })).toBeVisible();
+  await expect(econ.getByText('Cotizaciones - calculadora')).toBeVisible();
   // Margin and break-even stay empty until the producer enters a cost.
   await expect(econ.getByText('Escribe tu costo por hectárea para calcularlo')).toBeVisible();
   await econ.getByRole('spinbutton', { name: 'Costo de producción en pesos por hectárea' }).fill('14000');
@@ -264,7 +265,18 @@ test('Dashboard tools: main page, the producer economics calculator and the Scri
   await region.getByRole('group', { name: 'Ver municipios de un estado' }).getByRole('button', { name: /^Hidalgo/ }).click();
   const munis = econ.getByRole('table', { name: 'Error esperado por municipio en Hidalgo' });
   await expect(munis.locator('tbody tr')).toHaveCount(6);
-  await expect(munis.getByText('poca muestra').first()).toBeVisible();
+  await expect(munis.getByText(/poca muestra/).first()).toBeVisible();
+  // Checking a municipality selects its parcels; the figures above say what they are calculated for.
+  await expect(econ.getByText(/^Calculado para todas las parcelas mostradas · 197$/)).toBeVisible();
+  await munis.locator('tbody tr').filter({ hasText: 'Almoloya' }).getByRole('checkbox').click();
+  await expect(econ.getByText(/^Calculado para 14 parcelas seleccionadas$/)).toBeVisible();
+  await expect(munis.locator('tbody tr').filter({ hasText: 'Almoloya' })).toContainText('14 de 14');
+  await econ.getByRole('button', { name: 'Quitar selección' }).click();
+  // Checked rows in the parcel table narrow the figures and the error chart.
+  await econ.getByRole('table', { name: 'Economía por parcela' }).locator('tbody tr').first().getByRole('checkbox').click();
+  await expect(econ.getByText(/^Calculado para 1 parcela seleccionada$/)).toBeVisible();
+  await expect(econ.getByText(/^1 parcela · /)).toBeVisible();
+  await econ.getByRole('button', { name: 'Quitar selección' }).click();
   await econ.getByRole('button', { name: 'Volver a los estados' }).click();
   await expect(econ.getByText('Haz clic en un estado para ver sus municipios')).toBeVisible();
   await tools.getByRole('button', { name: 'Scripts' }).click();
