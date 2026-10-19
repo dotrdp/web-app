@@ -111,3 +111,89 @@ test('Milli only takes CSV files: images are refused in plain words, a CSV is re
   await expect(answer).toContainText('rendimientos.csv', { timeout: 30_000 });
   await expect(answer).toContainText('Coinciden 2 parcelas');
 });
+
+test('Milli builds figures call by call, draws them in the chat with Plotly and reviews a PNG of each', async ({ page }) => {
+  test.setTimeout(90_000);
+  const chat = await openMilli(page);
+  await chat.getByRole('button', { name: /Grafica el rendimiento estimado contra el registrado/ }).click();
+  const fig = chat.getByRole('figure', { name: '¿Qué tan bien estima el modelo?' });
+  await expect(fig).toBeVisible({ timeout: 45_000 });
+  await expect(fig).toContainText('138 parcelas con rendimiento registrado');
+  // Plotly drew both panels: 138 dots (one series per state), the y = x line, the error bars and their legend.
+  await expect(fig.locator('.scatterlayer .point')).toHaveCount(138);
+  await expect(fig.locator('.shapelayer path')).toHaveCount(2);
+  await expect(fig.locator('.barlayer .point')).toHaveCount(6);
+  for (const label of ['Hidalgo', 'Puebla', 'Tlaxcala', 'MAE', 'RMSE']) await expect(fig.locator('[class*="legend"][class$="text"]').filter({ hasText: label })).toHaveCount(1);
+  await expect(fig.locator('.xtitle').first()).toHaveText('Registrado (t/ha)');
+  await expect(chat.getByLabel('Respuesta de Milli')).toContainText('MAE global');
+  // Each step is an action, and plot_show handed the model a review image.
+  await expect(chat.getByRole('button', { name: /^Nueva figura «¿Qué tan bien estima el modelo\?»,/ })).toBeVisible();
+  await chat.getByRole('button', { name: /^Mostrar la figura en el chat,/ }).click();
+  await expect(chat.getByText(/ancho del chat \(400 px, como la ve el usuario\)/)).toBeVisible();
+  // Full size.
+  await fig.getByRole('button', { name: 'Ampliar figura' }).click();
+  const dialog = page.getByRole('dialog', { name: '¿Qué tan bien estima el modelo?' });
+  await expect(dialog.locator('.scatterlayer .point')).toHaveCount(138);
+  await dialog.getByRole('button', { name: /close|cerrar/i }).click();
+});
+
+test('Milli tests spatial autocorrelation and maps the LISA clusters', async ({ page }) => {
+  test.setTimeout(90_000);
+  const chat = await openMilli(page);
+  await chat.getByRole('button', { name: /autocorrelación espacial/ }).click();
+  const fig = chat.getByRole('figure', { name: '¿El error del modelo se agrupa en el espacio?' });
+  await expect(fig).toBeVisible({ timeout: 45_000 });
+  await expect(fig.locator('.maplibregl-canvas')).toHaveCount(1);
+  await expect(fig.locator('[class*="legend"][class$="text"]').filter({ hasText: 'no significativo' })).toHaveCount(2); // the Moran panel's legend and the map's
+  await expect(fig.locator('.gtitle, .annotation-text').filter({ hasText: 'Semivariograma' })).toHaveCount(1);
+  await expect(chat.getByLabel('Respuesta de Milli')).toContainText('I de Moran del error');
+  await expect(chat.getByRole('button', { name: /^Autocorrelación espacial de error,/ })).toBeVisible();
+  // What Milli drew on the map figure is on the app's map too: a temporary layer, marked and removable.
+  const chip = page.getByRole('group', { name: 'Capa temporal de Milli: Clusters LISA (p < 0.05)' });
+  await expect(chip).toBeVisible();
+  await expect(chip).toContainText('no significativo');
+  await page.getByRole('button', { name: 'Cerrar Agente de IA Milli' }).click();
+  const panel = page.getByRole('region', { name: 'Capas y simbología' });
+  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Capas y simbología' }).first().click();
+  await expect(panel.getByLabel('Capas temporales de Milli').getByText('Clusters LISA (p < 0.05)')).toBeVisible();
+  await chip.getByRole('button', { name: 'Quitar la capa temporal «Clusters LISA (p < 0.05)»' }).click();
+  await expect(chip).toHaveCount(0);
+  await expect(page.getByLabel('Capas temporales de Milli')).toHaveCount(0);
+});
+
+test('An outside MCP agent works through this tab\'s own MCP address: shown in Ajustes, a figure shown here, a download only after «Permitir»', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+  await openMilli(page);
+  await page.getByRole('button', { name: 'Cerrar Agente de IA Milli' }).click();
+  // Ajustes → MCP de esta pestaña: the tab's own address.
+  await page.getByRole('button', { name: 'Ajustes' }).first().click();
+  const address = page.getByLabel('Dirección MCP de esta pestaña');
+  await expect(address).toHaveText(/\/mcp\/[\w-]{30,}$/);
+  const url = (await address.textContent())!;
+
+  const client = new Client({ name: 'Analista de prueba', version: '1' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(url)));
+  const call = (name: string, args: Record<string, unknown> = {}) => client.callTool({ name, arguments: args }) as Promise<{ isError?: boolean; content: { type: string; text?: string }[] }>;
+  expect(JSON.parse((await call('screen_info')).content[0].text!).connected).toBe(true);
+  // A figure the agent shows appears in this tab (it has no chat), and its PNG goes back to the agent.
+  await call('data_load', { source: 'parcelas', as: 'p', filters: { group: 'con_rendimiento' } });
+  await call('plot_figure', { title: 'Figura del agente' });
+  await call('plot_scatter', { dataset: 'p', x: 'observed', y: 'predicted', color_by: 'state' });
+  const shown = await call('plot_show', {});
+  expect(shown.content.some(c => c.type === 'image')).toBe(true);
+  const panel = page.getByRole('region', { name: 'Figura de Analista de prueba' });
+  await expect(panel.getByRole('figure', { name: 'Figura del agente' }).locator('.scatterlayer .point')).toHaveCount(138);
+  await panel.getByRole('button', { name: 'Cerrar la figura «Figura del agente»' }).click();
+  await expect(panel).toHaveCount(0);
+  // A download waits for the person here: the dialog names the agent; «Permitir» downloads.
+  const downloads: string[] = []; page.on('download', d => downloads.push(d.suggestedFilename()));
+  const pending = call('request_export', { kind: 'estimaciones_csv', scope: 'todas', reason: 'Para el informe' });
+  const dialog = page.getByRole('dialog', { name: '¿Permitir una descarga?' });
+  await expect(dialog).toContainText('Analista de prueba quiere descargar');
+  await dialog.getByRole('button', { name: 'Permitir descarga' }).click();
+  expect(JSON.parse((await pending).content[0].text!).approved).toBe(true);
+  await expect.poll(() => downloads.length).toBe(1);
+  await client.close();
+});

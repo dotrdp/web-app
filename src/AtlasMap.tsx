@@ -33,6 +33,8 @@ import { getArea, getLength } from 'ol/sphere';
 import type { Atlas, Geometry, ImageryManifest, LayerSettings, Parcel } from './types';
 import { fmt } from './lib';
 import { isOn, LAYERS, layerOf, zIndexOf } from './layers';
+import { tempExtent } from './milli/temp-layers';
+import type { TempLayer } from './milli/temp-layers';
 import type { LayerId, MapLayer } from './layers';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -69,8 +71,10 @@ interface Props {
   padding?: { left: number; right: number };
   highlightId?: string | null; swipe?: number | null; statusTarget?: HTMLElement | null; selectArea?: boolean;
   onHover?: (id: string | null, pixel: [number, number] | null) => void; onAreaSelect?: (ids: string[]) => void; onZoom?: (zoom: number) => void; onFullscreen?: (on: boolean) => void;
+  /** Milli's temporary layers (milli/temp-layers.ts), drawn above the data layers. */
+  tempLayers?: TempLayer[];
 }
-type Runtime = { heatmap: HeatmapLayer; dragBox: DragBox; clipped: Set<BaseLayer>; map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; rasters: globalThis.Map<LayerId, ImageLayer<ImageStatic>>; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; indices: Record<'ndvi' | 'water', TileLayer<XYZ>>; tileSources: globalThis.Map<string, XYZ>; municipalities: VectorLayer<VectorSource>; municipalityFill: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; measureEndedAt?: number; interaction: Draw | Modify | null; editingId: string | null };
+type Runtime = { heatmap: HeatmapLayer; dragBox: DragBox; clipped: Set<BaseLayer>; map: Map; source: VectorSource; parcels: VectorLayer<VectorSource>; clusters: VectorLayer<Cluster>; rasters: globalThis.Map<LayerId, ImageLayer<ImageStatic>>; bases: Partial<Record<Base, BaseLayer>>; imagery: TileLayer<XYZ>; indices: Record<'ndvi' | 'water', TileLayer<XYZ>>; tileSources: globalThis.Map<string, XYZ>; municipalities: VectorLayer<VectorSource>; municipalityFill: VectorLayer<VectorSource>; states: VectorLayer<VectorSource>; draftSource: VectorSource; draftLayer: VectorLayer<VectorSource>; measureSource: VectorSource; locationSource: VectorSource; measureTip: Overlay; measure: Draw | null; measureEndedAt?: number; interaction: Draw | Modify | null; editingId: string | null; temp: globalThis.Map<string, VectorLayer<VectorSource>> };
 
 function createBase(kind: Base): BaseLayer {
   if (kind === 'topo') return new TileLayer({ className: 'basemap-invertible', zIndex: 0, preload: 1, source: new XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', crossOrigin: 'anonymous', maxZoom: 19, attributions: ESRI_TOPO }) });
@@ -279,7 +283,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     const bases: Runtime['bases'] = { [initialBase]: createBase(initialBase) };
     const map = new Map({ target: host.current, layers: [bases[initialBase]!, indices.ndvi, indices.water, municipalityFill, imagery, municipalities, states, heatmap, parcels, clusters, draftLayer, measureLayer, locationLayer], overlays: [measureTip], view: new View({ center: fromLonLat([-98.4, 19.755]), zoom: 10.85, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }), controls: defaultControls({ zoom: false, rotate: false, attribution: false }) });
     map.addInteraction(dragBox); setMapReadyFlag(true);
-    runtime.current = { heatmap, dragBox, clipped: new Set(), map, source, parcels, clusters, bases, imagery, indices, rasters: new globalThis.Map(), tileSources: new globalThis.Map(), municipalities, municipalityFill, states, draftSource, draftLayer, measureSource, locationSource, measureTip, measure: null, interaction: null, editingId: null };
+    runtime.current = { heatmap, dragBox, clipped: new Set(), map, source, parcels, clusters, bases, imagery, indices, rasters: new globalThis.Map(), tileSources: new globalThis.Map(), municipalities, municipalityFill, states, draftSource, draftLayer, measureSource, locationSource, measureTip, measure: null, interaction: null, editingId: null, temp: new globalThis.Map() };
     map.on('singleclick', event => {
       // OpenLayers reports a single click 250 ms late; ignore one that began while measuring.
       if (runtime.current?.interaction || runtime.current?.measure || event.originalEvent.timeStamp < (runtime.current?.measureEndedAt ?? 0)) return;
@@ -315,6 +319,48 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
     heat.addFeatures(props.parcels.filter(p => p.properties.predictedYield != null).map(p => new Feature({ geometry: new Point(fromLonLat(p.properties.centroid)), production: p.properties.predictedYield! * p.properties.area })));
     if (!initialFit.current && !r.source.isEmpty()) { initialFit.current = true; fitAll(0); }
   }, [props.parcels]);
+  // Milli's temporary layers: one vector layer each, above the parcels and clusters; a new one is framed.
+  useEffect(() => {
+    const r = runtime.current; if (!r) return;
+    const wanted = props.tempLayers ?? [], ids = new Set(wanted.map(l => l.id));
+    for (const [id, layer] of r.temp) if (!ids.has(id)) { r.map.removeLayer(layer); layer.getSource()?.dispose(); r.temp.delete(id); }
+    const byId = (id: string) => r.source.getFeatures().find(f => f.get('id') === id);
+    let newest: TempLayer | null = null;
+    wanted.forEach((t, k) => {
+      const existing = r.temp.get(t.id);
+      if (existing && existing.get('addedAt') === t.addedAt) { existing.setZIndex(56 + k); return; }
+      if (existing) { r.map.removeLayer(existing); r.temp.delete(t.id); }
+      const source = new VectorSource(), features: Feature[] = [];
+      for (const [id, color] of t.parcels ?? []) { const f = byId(id); if (f) features.push(new Feature({ geometry: f.getGeometry()!.clone(), kind: 'parcel', color, centroid: f.get('centroid') })); }
+      for (const [lon, lat, color] of t.cells ?? []) { const { dx, dy } = t.cell ?? { dx: 0.005, dy: 0.005 }; features.push(new Feature({ geometry: new Polygon([[[lon - dx / 2, lat - dy / 2], [lon + dx / 2, lat - dy / 2], [lon + dx / 2, lat + dy / 2], [lon - dx / 2, lat + dy / 2], [lon - dx / 2, lat - dy / 2]].map(c => fromLonLat(c))]), kind: 'cell', color })); }
+      for (const [lon, lat, color, size] of t.points ?? []) features.push(new Feature({ geometry: new Point(fromLonLat([lon, lat])), kind: 'point', color, size }));
+      for (const [lon, lat, text] of t.labels ?? []) features.push(new Feature({ geometry: new Point(fromLonLat([lon, lat])), kind: 'label', text }));
+      for (const [lon, lat, text] of t.markers ?? []) features.push(new Feature({ geometry: new Point(fromLonLat([lon, lat])), kind: 'marker', text }));
+      source.addFeatures(features);
+      const alpha = (c: string, a: number) => { const m = /^#([0-9a-f]{6})$/i.exec(c); if (!m) return c; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+      const opacity = t.opacity ?? 0.8;
+      const layer = new VectorLayer({ source, zIndex: 56 + k, properties: { addedAt: t.addedAt }, style(f, resolution) {
+        const kind = f.get('kind') as string, color = f.get('color') as string;
+        if (kind === 'cell') return new Style({ fill: new Fill({ color: alpha(color, opacity * 0.85) }) });
+        if (kind === 'parcel') return resolution > 18
+          // Zoomed out a parcel is a few pixels: a dot at its centroid keeps it visible.
+          ? new Style({ geometry: new Point(fromLonLat(f.get('centroid') as number[])), image: new Circle({ radius: 6, fill: new Fill({ color }), stroke: new Stroke({ color: '#ffffff', width: 1.5 }) }) })
+          : new Style({ fill: new Fill({ color: alpha(color, opacity) }), stroke: new Stroke({ color: '#ffffff', width: 1.5 }) });
+        if (kind === 'point') return new Style({ image: new Circle({ radius: Math.max(3, Number(f.get('size') ?? 9) / 2), fill: new Fill({ color }), stroke: new Stroke({ color: '#ffffff', width: 1.5 }) }) });
+        const text = new Text({ text: String(f.get('text') ?? ''), font: `600 ${kind === 'marker' ? 12 : 11.5}px Geist, system-ui, sans-serif`, fill: new Fill({ color: '#171717' }), stroke: new Stroke({ color: 'rgba(255,255,255,.95)', width: 3.5 }), offsetY: kind === 'marker' ? -18 : 0, overflow: true });
+        if (kind === 'marker') return [new Style({ image: new Circle({ radius: 7, fill: new Fill({ color: '#d7191c' }), stroke: new Stroke({ color: '#ffffff', width: 2.5 }) }) }), new Style({ text })];
+        return new Style({ text });
+      } });
+      r.map.addLayer(layer); r.temp.set(t.id, layer);
+      if (!newest || t.addedAt > newest.addedAt) newest = t;
+    });
+    // Frame the newest layer (Milli just added it).
+    const t = newest as TempLayer | null;
+    if (t && Date.now() - t.addedAt < 4000) {
+      const ext = tempExtent(t, id => (byId(id)?.get('centroid') as [number, number] | undefined) ?? null);
+      if (ext) r.map.getView().fit(transformExtent([ext[0] - 0.01, ext[1] - 0.01, ext[2] + 0.01, ext[3] + 0.01], 'EPSG:4326', 'EPSG:3857'), { padding: pad(96, 72, 120), maxZoom: 15, duration: 500 });
+    }
+  }, [props.tempLayers, props.parcels]);
   // Heat map and Municipios: on/off, opacity and stack order.
   useEffect(() => {
     const r = runtime.current; if (!r) return;

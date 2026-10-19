@@ -4,11 +4,20 @@
 import { execute } from './bridge';
 import { milli } from './store';
 import type { StepStatus } from './store';
+import type { FigurePayload } from './figure';
 
 export const screenId: string = crypto.randomUUID();
+/** The short code this tab shows (first 4 characters of its id), to tell an outside agent which screen is yours. */
+export const screenCode = screenId.replace(/-/g, '').slice(0, 4).toUpperCase();
+/** This tab's own MCP address for outside agents (the server sends its secret key on connect). */
+let mcpKey: string | null = null; const mcpListeners = new Set<() => void>();
+export const mcpUrl = { get: () => mcpKey ? `${location.origin}/mcp/${mcpKey}` : null, subscribe: (l: () => void) => { mcpListeners.add(l); return () => { mcpListeners.delete(l); }; } };
+/** Which page this tab shows, reported so an agent listing the account's screens can tell them apart. */
+let page = 'mapa';
+export function reportPage(next: string) { page = next; void post({ page }); }
 
 type LiveEvent =
-  | { type: 'hello'; screen: string }
+  | { type: 'hello'; screen: string; mcp?: string }
   | { type: 'command'; cmdId: string; command: string; args: unknown }
   | { type: 'task'; phase: 'start'; task: { title: string; goal: string; steps: string[] } }
   | { type: 'task'; phase: 'update'; step: number; status: StepStatus; note?: string }
@@ -20,12 +29,30 @@ const post = (body: object) => fetch(`/api/live/${screenId}/reply`, { method: 'P
 /** Opens the channel; returns a function that closes it (logout, unmount). */
 export function startLive() {
   const source = new EventSource(`/api/live?screen=${encodeURIComponent(screenId)}`, { withCredentials: true });
-  source.onopen = () => milli.setConnected(true);
+  source.onopen = () => { milli.setConnected(true); void post({ page, following: milli.get().following }); };
   source.onerror = () => milli.setConnected(false); // EventSource reconnects by itself (retry: 2000)
   source.onmessage = async message => {
     let event: LiveEvent;
     try { event = JSON.parse(message.data); } catch { return; }
-    if (event.type === 'command') {
+    if (event.type === 'hello') { if (event.mcp && event.mcp !== mcpKey) { mcpKey = event.mcp; mcpListeners.forEach(l => l()); } return; }
+    if (event.type === 'command' && (event.command === 'ask_permission' || event.command === 'show_figure')) {
+      // Outside agents: a download needs the person's «Permitir»; figures appear in a panel (no chat).
+      const { askPermission, showAgentFigure } = await import('./agents');
+      const args = (event.args ?? {}) as Record<string, unknown>;
+      try {
+        if (event.command === 'ask_permission') void post({ cmdId: event.cmdId, ok: true, result: await askPermission(args) });
+        else { if (!(args.figure as FigurePayload | undefined)?.state) throw new Error('Figura no válida.'); void post({ cmdId: event.cmdId, ok: true, result: showAgentFigure(args as { figure: FigurePayload; agent?: string }) }); }
+      } catch (e) { void post({ cmdId: event.cmdId, ok: false, error: e instanceof Error ? e.message : 'No se pudo.' }); }
+    } else if (event.type === 'command' && event.command === 'render_figure') {
+      // plot_show: draw the figure offscreen and send the PNG back for the model to review. It never
+      // touches the view, so it runs whether or not the user is following.
+      const { figurePng } = await import('./figure');
+      const args = event.args as { figure?: FigurePayload; width?: number };
+      try {
+        if (!args?.figure?.state) throw new Error('Figura no válida.');
+        void post({ cmdId: event.cmdId, ok: true, result: { png: await figurePng(args.figure, Math.min(1600, Math.max(320, args.width ?? 400)), (args.width ?? 400) <= 600 ? 2 : 1) } });
+      } catch (e) { void post({ cmdId: event.cmdId, ok: false, error: e instanceof Error ? e.message : 'No se pudo dibujar la figura.' }); }
+    } else if (event.type === 'command') {
       const answer = await execute(event.command, event.args);
       void post({ cmdId: event.cmdId, ...answer, following: milli.get().following });
     } else if (event.type === 'task') {

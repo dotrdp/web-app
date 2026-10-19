@@ -15,6 +15,8 @@ import { createMilliMcp } from '../server/milli/mcp.mjs';
 import { loadAtlas, parcels } from '../server/milli/data.mjs';
 // @ts-expect-error
 import { createScriptedModel } from '../server/milli/models/scripted.mjs';
+// @ts-expect-error
+import { compile } from '../server/milli/analysis/figure.mjs';
 
 const dataDir = new URL('../public/data/', import.meta.url).pathname;
 const json = (r: { content: { type: string; text: string }[] }) => JSON.parse(r.content[0].text);
@@ -41,7 +43,7 @@ test('MCP: every tool is listed with a schema, and screen tools demand the conve
   const { tools } = await client.listTools();
   const names = tools.map(t => t.name);
   for (const n of ['start_task', 'update_task', 'finish_task', 'get_screen_state', 'read_table', 'read_notes', 'query_parcels', 'get_series', 'get_integrals', 'get_region_error', 'get_model_metrics', 'read_attachment',
-    'navigate', 'open_panel', 'map_fly_to', 'select_parcel', 'map_select_parcels', 'set_map_layer', 'set_map_filters', 'set_time', 'table_set', 'table_check', 'plot_set', 'calculator_set', 'region_error_drill', 'write_notes', 'request_export', 'create_plot'])
+    'navigate', 'open_panel', 'map_fly_to', 'select_parcel', 'map_select_parcels', 'set_map_layer', 'set_map_filters', 'set_time', 'table_set', 'table_check', 'plot_set', 'calculator_set', 'region_error_drill', 'write_notes', 'request_export', 'data_load', 'stats_spatial_autocorrelation', 'plot_figure', 'plot_show'])
     assert.ok(names.includes(n), `missing tool ${n}`);
   for (const t of tools) { assert.equal(t.inputSchema.type, 'object'); assert.ok((t.description ?? '').length > 20, `${t.name} needs a real description`); }
   const wrong = await client.callTool({ name: 'navigate', arguments: { screen_id: 'otra-pantalla-123456', page: 'panel' } });
@@ -91,23 +93,6 @@ test('MCP: task lifecycle, notes, and the plot animation for bulk reads', async 
   assert.deepEqual(notified.map(e => (e as { type: string; phase?: string }).phase ?? (e as { type: string }).type), ['start', 'update', 'show_series', 'finish']);
 });
 
-test('MCP: create_plot accepts coherent charts for the chat and explains incoherent ones', async () => {
-  const { client, sent } = await mcpClient();
-  const plot = async (args: Record<string, unknown>) => client.callTool({ name: 'create_plot', arguments: { title: 'Prueba', ...args } });
-  const line = json(await plot({ kind: 'line', x: ['ene', 'feb', 'mar'], series: [{ name: 'NDVI', values: [0.2, null, 0.4] }, { name: 'Lluvia', values: [10, 20, 30], type: 'bar', axis: 'right' }] }) as never);
-  assert.deepEqual(line, { ok: true, plot_id: 'grafica_1', kind: 'line', series: 2, points: 5, shown: 'en el chat' });
-  const scatter = json(await plot({ kind: 'scatter', identity_line: true, series: [{ name: 'Puebla', points: [{ x: 3, y: 3.2, label: 'AGC_001' }] }] }) as never);
-  assert.equal(scatter.plot_id, 'grafica_2');
-  const text = (r: unknown) => (r as { content: { text: string }[] }).content[0].text;
-  const short = await plot({ kind: 'bar', x: ['a', 'b'], series: [{ name: 'MAE', values: [1] }] });
-  assert.equal(short.isError, true); assert.match(text(short), /tiene 1 valores y x tiene 2/);
-  const noPoints = await plot({ kind: 'scatter', series: [{ name: 'Puebla', values: [1] }] });
-  assert.equal(noPoints.isError, true); assert.match(text(noPoints), /no tiene points/);
-  assert.equal((await plot({ kind: 'line', series: [{ name: 'x', values: [1] }] })).isError, true); // no x
-  assert.equal((await plot({ kind: 'pie', x: ['a'], series: [{ name: 'x', values: [1] }] })).isError, true);
-  assert.equal(sent.length, 0, 'plots go to the chat, not to the screen');
-});
-
 // ── Full conversations over HTTP, with a simulated browser tab on the live channel ────────────
 
 type Ev = Record<string, any>;
@@ -151,7 +136,7 @@ async function setup(options: Record<string, unknown> = {}) {
     return { status: 200, screen, commands, events, close: () => ctrl.abort() };
   }
   const chat = (body: unknown, cookieValue = cookie) => fetch(root + '/api/milli/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookieValue }, body: JSON.stringify(body) });
-  return { root, cookie, login, tab, chat, stateDir, close: () => new Promise<void>(r => server.close(() => r())) };
+  return { root, cookie, login, tab, chat, stateDir, close: () => new Promise<void>(r => { server.close(() => r()); server.closeAllConnections(); }) };
 }
 
 test('Conversation: NDVI analysis drives the screen, asks to export, resumes on approval and ends with finish_task', async () => {
@@ -162,7 +147,7 @@ test('Conversation: NDVI analysis drives the screen, asks to export, resumes on 
     const threadId = first.find(e => e.type === 'thread')!.id;
     const calls = first.filter(e => e.type === 'tool-call').map(e => e.name);
     assert.equal(calls[0], 'start_task');
-    for (const n of ['query_parcels', 'get_series', 'navigate', 'table_set', 'table_check', 'plot_set', 'write_notes', 'create_plot']) assert.ok(calls.includes(n), `expected ${n}`);
+    for (const n of ['query_parcels', 'get_series', 'navigate', 'table_set', 'table_check', 'plot_set', 'write_notes', 'plot_figure', 'plot_bar', 'plot_line', 'plot_show']) assert.ok(calls.includes(n), `expected ${n}`);
     assert.ok(first.some(e => e.type === 'reasoning'), 'reasoning streams to the chat');
     assert.equal(first.filter(e => e.type === 'tool-result' && e.isError).length, 0, JSON.stringify(first.filter(e => e.isError)));
     const approval = first.find(e => e.type === 'approval')!;
@@ -213,14 +198,28 @@ test('Conversation: declining the export, the calculator and the map scenarios a
     assert.ok(select.args.parcel_ids.length > 0);
     assert.ok(t.commands.some(c => c.command === 'set_map_filters' && c.args.state === 'Puebla'));
     assert.deepEqual(map.at(-1), { type: 'done', status: 'finished' });
-    // And plots in the chat: estimate against recorded (one series per state) and the error by state.
+    // And figures in the chat, built call by call: estimate against recorded, then spatial autocorrelation.
     const plots = await collect(await s.chat({ screenId: t.screen, threadId, message: { text: 'Grafica el rendimiento estimado contra el registrado y el error por estado' } }));
-    const drawn = plots.filter(e => e.type === 'tool-call' && e.name === 'create_plot');
-    assert.deepEqual(drawn.map(e => e.args.kind), ['scatter', 'bar']);
-    assert.equal(drawn[0].args.series.reduce((n: number, x: { points: unknown[] }) => n + x.points.length, 0), 138);
-    assert.deepEqual(drawn[1].args.x.slice().sort(), ['Hidalgo', 'Puebla', 'Tlaxcala']);
-    assert.ok(plots.filter(e => e.type === 'tool-result' && e.name === 'create_plot').every(e => !e.isError && JSON.parse(e.result).ok));
+    const names = plots.filter(e => e.type === 'tool-call').map(e => e.name);
+    for (const n of ['data_load', 'plot_figure', 'plot_scatter', 'plot_reference', 'plot_bar', 'plot_axes', 'plot_show']) assert.ok(names.includes(n), `expected ${n}`);
+    assert.equal(plots.filter(e => e.type === 'tool-result' && e.isError).length, 0, JSON.stringify(plots.filter(e => e.isError)));
+    const shown = plots.find(e => e.type === 'tool-result' && e.name === 'plot_show')!;
+    assert.equal(shown.figure.title, '¿Qué tan bien estima el modelo?');
+    // The chat compiles the figure for its width; the enlarged view keeps both panels' traces.
+    const drawn = compile(shown.figure.state, { width: 1000 }) as { data: { type: string; xaxis?: string; x: unknown[] }[] };
+    assert.equal(drawn.data.filter(d => d.type === 'scatter' && d.xaxis === 'x').reduce((n, d) => n + d.x.length, 0), 138);
+    assert.ok(!('figure' in JSON.parse(shown.result)), 'the model gets a summary, not the figure');
+    // The fake tab cannot draw, so the model is told there is no review image.
+    assert.match(JSON.parse(shown.result).review.join(' '), /Sin imagen de revisión/);
     assert.match(plots.find(e => e.type === 'answer')!.text, /MAE global es \*\*0[.,]32 t\/ha\*\*/);
+    const spatial = await collect(await s.chat({ screenId: t.screen, threadId, message: { text: '¿El error del modelo tiene autocorrelación espacial? Grafícalo' } }));
+    assert.equal(spatial.filter(e => e.type === 'tool-result' && e.isError).length, 0, JSON.stringify(spatial.filter(e => e.isError)));
+    const fig = compile(spatial.find(e => e.type === 'tool-result' && e.name === 'plot_show')!.figure.state) as { data: { type: string }[] };
+    assert.ok(fig.data.some(d => d.type === 'choroplethmap'), 'LISA map');
+    // …and the LISA map went to the tab's map as a temporary layer.
+    const temp = t.commands.find(c => c.command === 'show_temp_layer')!;
+    assert.equal(temp.args.title, 'Clusters LISA (p < 0.05)'); assert.equal(temp.args.parcels.length, 138);
+    assert.match(spatial.find(e => e.type === 'answer')!.text, /I de Moran del error: \*\*-?0[.,]0\d\d\*\*/);
     t.close();
   } finally { await s.close(); }
 });

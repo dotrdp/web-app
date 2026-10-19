@@ -28,6 +28,10 @@ import { LoadingState, LoadingValue } from './AgentProgress';
 import type { AgentStep } from './AgentProgress';
 import { BASEMAPS, BasemapPanel, BookmarksPanel, FiltersPanel, SectionTitle } from './MapPanels';
 import LayersPanel from './LayersPanel';
+import { TempLayerChips, TempLayerRows } from './milli/TempLayers';
+import { AgentFigures, AgentPermission, McpSettings } from './milli/agents';
+import { reportPage } from './milli/live';
+import { useTempLayers } from './milli/temp-layers';
 import { anyTemporal, DEFAULT_STACK, isOn, LAYERS, updateLayer } from './layers';
 import type { LayerId, MapLayer } from './layers';
 import TimeSlider from './TimeSlider';
@@ -131,6 +135,9 @@ export default function App() {
   const [identify, setIdentify] = useState<{ id: string; pixel: [number, number] } | null>(null);
   const [year, setYear] = useState(2025), [month, setMonth] = useState(6), [playing, setPlaying] = useState(false), [touring, setTouring] = useState(false);
   const [stack, setStack] = useState<MapLayer[]>(DEFAULT_STACK);
+  const tempList = useTempLayers();
+  // Outside agents listing the account's screens see which page each tab is on.
+  useEffect(() => { if (!IS_DEMO) reportPage(dashboard ? (economics ? 'economia' : 'panel') : 'mapa'); }, [dashboard, economics]);
   const [filters, setFilters] = useState<MapFilters>(EMPTY_FILTERS), [layers, setLayers] = useState<LayerSettings>(DEFAULT_LAYERS);
   const [rightPanel, setRightPanel] = useState<'export' | 'selection' | null>(null);
   const [measureKind, setMeasureKind] = useState<MeasureKind | null>(null), [measureValue, setMeasureValue] = useState<string | null>(null);
@@ -376,7 +383,9 @@ export default function App() {
               onHover={(id, pixel) => setIdentify(id && pixel ? { id, pixel } : null)}
               onAreaSelect={ids => { setSelection(ids); setRightPanel('selection'); setSelectArea(false); }}
               onSelect={id => { setRightPanel(null); chooseParcel(id); }} onDraft={setDraft} onCancel={() => { cancelDraft(); setMeasureKind(null); }}
-              onMapClick={draftMode === 'segment' && !adjusting ? coords => { if (!segmenting) void infer([...prompts, { coordinates: coords, label: promptLabel }]); } : undefined}/>
+              onMapClick={draftMode === 'segment' && !adjusting ? coords => { if (!segmenting) void infer([...prompts, { coordinates: coords, label: promptLabel }]); } : undefined} tempLayers={tempList}/>
+            <TempLayerChips className="absolute bottom-3 left-[calc(var(--left-w)+0.75rem)] z-[8]"/>
+            <AgentFigures className="pointer-events-none absolute top-14 right-[calc(var(--right-w)+0.75rem)] z-[9] flex max-h-[calc(100%-5rem)] w-[min(26rem,calc(100%-2rem))] flex-col gap-2 overflow-y-auto"/>
             {swipe != null && <SwipeDivider value={swipe} onChange={setSwipe} container={viewport} label={modeLabel}/>}
             {identified && <IdentifyCard parcel={identified} pixel={identify!.pixel} atlas={atlas} keyDate={key} container={viewport}/>}
           </div>
@@ -483,7 +492,7 @@ export default function App() {
             {left !== 'tabla' && <>
               <header className="flex items-center gap-2 pt-3 pr-3 pl-5"><h2 className="flex-1 text-sm font-medium">{panelTitle(left)}</h2><ShellButton label="Cerrar panel" side="bottom" onClick={() => setLeft(null)}><X/></ShellButton></header>
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4">
-                {left === 'layers' && <LayersPanel layers={stack} onChange={setStack}/>}
+                {left === 'layers' && <div className="grid gap-4"><TempLayerRows/><LayersPanel layers={stack} onChange={setStack}/></div>}
                 {left === 'basemap' && <BasemapPanel settings={layers} onBase={base => setLayers(l => ({ ...l, base }))}/>}
                 {left === 'filters' && <div className="grid gap-6">
                   <FiltersPanel state={filters.state} group={filters.group} band={filters.yieldBand} count={visibleParcels.length} total={parcels.length} onChange={next => setFilters(f => ({ ...f, ...next }))} onReset={() => setFilters(f => ({ ...f, state: 'all', group: 'all', yieldBand: null }))}/>
@@ -493,6 +502,7 @@ export default function App() {
                 {left === 'notes' && <NotesPanel/>}
                 {left === 'settings' && <SettingsPanel dark={dark} scheme={scheme} preview={schemePreview} onDark={setDark} onScheme={setScheme} onSources={() => setLeft('fuentes')}>
                   <PluginsPanel enabled={plugins} onToggle={togglePlugin}/>
+                  <McpSettings/>
                 </SettingsPanel>}
                 {left === 'fuentes' && <SourcesPage atlas={atlas}/>}
               </div>
@@ -519,6 +529,7 @@ export default function App() {
           </AnimatePresence>
         </div>
         {/* Opened on desktop, the chat swells out of the right edge while the island melts back into the top. */}
+        <AgentPermission/>
         <div data-milli className="pointer-events-none absolute inset-0 z-[60] *:pointer-events-auto">
           <AnimatePresence>
           {assistant && !isMobile && <Popout key="assistant-docked" edges={['right', 'top', 'bottom']} label={MILLI} className="top-0 right-0 bottom-0" style={{ width: chatWidth }}>
@@ -583,7 +594,8 @@ function SettingsPanel({ dark, scheme, preview, onDark, onScheme, onSources, chi
         </button>)}
       </div>
     </section>
-    <section className="grid gap-2"><SectionTitle>Complementos</SectionTitle>{children}</section>
+    <section className="grid gap-2"><SectionTitle>Complementos</SectionTitle>{Array.isArray(children) ? children[0] : children}</section>
+    {Array.isArray(children) && children[1] && <section className="grid gap-2"><SectionTitle>MCP de esta pestaña</SectionTitle>{children[1]}</section>}
     <section className="grid gap-2"><SectionTitle>Datos</SectionTitle>
       <button type="button" onClick={onSources} className="flex items-center gap-3 rounded-2xl bg-tile px-3 py-2.5 text-left hover:bg-tile-strong"><span className="grid size-9 place-items-center rounded-full bg-primary-container text-on-primary-container"><Database className="size-4"/></span><span className="grid flex-1 leading-tight"><span className="text-sm font-medium">Datos y fuentes</span><span className="text-xs text-muted-foreground">Procedencia, periodos y descargas</span></span></button>
     </section>

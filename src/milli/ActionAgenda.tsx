@@ -50,7 +50,7 @@ export default function ActionAgenda({ actions, running }: { actions: Action[]; 
       onEventClick={e => setOpen(o => o === e.id ? null : e.id)} className="milli-agenda max-h-[300px] min-h-0"/>
     {selected && <details open className="rounded-xl bg-tile px-3 py-2 text-[11.5px]">
       <summary className="cursor-pointer text-muted-foreground">{actionTitle(selected.name, selected.args)} · <code>{selected.name}</code></summary>
-      <pre className="mt-1.5 max-h-48 overflow-auto font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-foreground/80">{JSON.stringify({ argumentos: selected.args, resultado: getOutcome(selected.id)?.result ?? selected.result }, null, 2)}</pre>
+      <pre className="mt-1.5 max-h-48 overflow-auto font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-foreground/80">{JSON.stringify({ argumentos: selected.args, resultado: getOutcome(selected.id)?.result ?? selected.result }, (k, v) => k === 'figure' ? '(figura en el chat)' : v, 2)}</pre>
     </details>}
   </div>;
 }

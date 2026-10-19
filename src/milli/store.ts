@@ -41,6 +41,7 @@ export const milli = {
 export function categoryOf({ command, args }: Deferred) {
   if (command === 'table_set' || command === 'table_check') return `${command}:${String(args.table)}`;
   if (command === 'map_fly_to' || command === 'select_parcel' || command === 'map_select_parcels') return 'map_view';
+  if (command === 'show_temp_layer') return `temp_layer:${String(args.id)}`;
   return command;
 }
 

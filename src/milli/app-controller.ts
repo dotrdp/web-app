@@ -8,6 +8,8 @@ import type { Atlas, LayerSettings, MapFilters, Parcel, Phase } from '../types';
 import { anyTemporal, LAYERS, updateLayer } from '../layers';
 import type { LayerId, MapLayer } from '../layers';
 import { callWhenReady, peek, useMilliController } from './bridge';
+import { tempLayers } from './temp-layers';
+import type { TempLayer } from './temp-layers';
 
 type Left = 'layers' | 'basemap' | 'tabla' | 'filters' | 'settings' | 'scripts' | 'notes' | 'fuentes';
 const LEFT_OF = { capas: 'layers', mapa_base: 'basemap', tabla: 'tabla', filtros: 'filters', ajustes: 'settings', notas: 'notes', ninguno: null } as const;
@@ -70,6 +72,7 @@ export function useAppMilli(a: AppMilli) {
         mapa: {
           capas: a.stack.map(x => ({ id: x.id, nombre: LAYERS[x.id].name, activa: x.on, opacidad: round(x.opacity, 2), ...(x.threshold != null ? { umbral: x.threshold } : {}) })),
           capas_activas: a.stack.filter(x => x.on).map(x => LAYERS[x.id].name).join(', ') || 'ninguna (solo parcelas)',
+          capas_temporales_de_milli: tempLayers.get().map(l => ({ id: l.id, titulo: l.title })),
           mapa_base: l.base,
           filtros: { estado: f.state, conjunto: GROUP_NAME[f.group] ?? f.group, rango_rendimiento: f.yieldBand ?? null, busqueda: f.query || null },
           año: a.year, mes: a.month + 1, mes_nombre: MONTH_NAMES[a.month],
@@ -111,6 +114,13 @@ export function useAppMilli(a: AppMilli) {
         const area = chosen.reduce((t, p) => t + p.properties.area, 0), production = chosen.reduce((t, p) => t + (p.properties.predictedYield ?? 0) * p.properties.area, 0);
         return { seleccionadas: chosen.length, no_encontradas: wanted.filter(id => !chosen.some(p => p.properties.id.toUpperCase() === id)), superficie_ha: round(area, 2), produccion_estimada_t: round(production, 1) };
       },
+      // A temporary layer from one of Milli's map figures: shown on the map (the map frames it), removable with one click.
+      show_temp_layer: args => {
+        a.setDashboard(false);
+        tempLayers.add(args as unknown as Omit<TempLayer, 'addedAt'>);
+        return { capa_temporal: String(args.title), capas_temporales: tempLayers.get().map(l => l.title) };
+      },
+      clear_temp_layers: ({ id }) => { if (id) tempLayers.remove(String(id)); else tempLayers.clear(); return { capas_temporales: tempLayers.get().map(l => l.title) }; },
       set_map_layer: args => {
         a.setDashboard(false);
         a.setStack(stack => {

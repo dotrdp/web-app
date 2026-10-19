@@ -77,6 +77,13 @@ const SCHEMAS: Record<string, z.ZodTypeAny> = {
     coverage: z.enum(['0.5', '0.8', '0.9']).optional(), scope: z.enum(['all', 'prediction', 'training']).optional(), checked_parcel_ids: ids.optional() }),
   region_error_drill: z.object({ state: z.enum(['Hidalgo', 'Puebla', 'Tlaxcala']).nullable() }),
   show_notes: z.object({ text: z.string().max(50_000) }),
+  show_temp_layer: z.object({ id: z.string().max(80), title: z.string().max(120), figureId: z.string().max(40).optional(),
+    parcels: z.array(z.tuple([z.string().max(64), z.string().max(40)])).max(3000).optional(), points: z.array(z.tuple([z.number(), z.number(), z.string().max(40), z.number()])).max(5000).optional(),
+    cells: z.array(z.tuple([z.number(), z.number(), z.string().max(40)])).max(15000).optional(), cell: z.object({ dx: z.number(), dy: z.number() }).optional(),
+    labels: z.array(z.tuple([z.number(), z.number(), z.string().max(80)])).max(500).optional(), markers: z.array(z.tuple([z.number(), z.number(), z.string().max(200)])).max(50).optional(),
+    legend: z.object({ items: z.array(z.tuple([z.string().max(80), z.string().max(40)])).max(40).optional(), scale: z.object({ title: z.string().max(60), min: z.number(), max: z.number(), colors: z.array(z.string().max(40)).max(20) }).optional() }).optional(),
+    opacity: z.number().min(0.1).max(1).optional() }),
+  clear_temp_layers: z.object({ id: z.string().max(80).optional() }),
   download: z.object({ kind: z.enum(['estimaciones_csv', 'entrega_csv', 'parcelas_geojson', 'mapa_png', 'seleccion_csv']), scope: z.enum(['mostradas', 'seleccionadas', 'todas']).default('mostradas'), reason: z.string().optional() }),
 };
 
@@ -91,6 +98,7 @@ function route(command: string, args: Args): { owner: string; page?: Page; secti
     case 'state': return { owner: 'app' };
     case 'download': return { owner: 'app' };
     case 'show_notes': return { owner: 'app', section: 'notas' };
+    case 'show_temp_layer': case 'clear_temp_layers': return { owner: 'app', section: 'mapa' };
     default: return { owner: 'app', section: command === 'navigate' || command === 'open_panel' ? 'vista' : 'mapa' };
   }
 }

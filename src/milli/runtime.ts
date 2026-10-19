@@ -7,6 +7,8 @@ import { useSyncExternalStore } from 'react';
 import type { AttachmentAdapter, ChatModelAdapter, ChatModelRunResult, CompleteAttachment, PendingAttachment, ThreadAssistantMessagePart } from '@assistant-ui/react';
 import { screenId } from './live';
 import { milli } from './store';
+import { noteFigure } from './figure';
+import type { FigurePayload } from './figure';
 
 export const APPROVAL_TOOL = 'request_export';
 export const END_TOOL = 'finish_task';
@@ -34,7 +36,7 @@ type ServerEvent =
   | { type: 'reasoning' | 'text'; delta: string }
   | { type: 'tool-call'; id: string; name: string; args: Record<string, unknown>; at: number }
   | { type: 'tool-start'; id: string; name: string; at: number }
-  | { type: 'tool-result'; id: string; name: string; result: string; isError: boolean; at: number }
+  | { type: 'tool-result'; id: string; name: string; result: string; isError: boolean; figure?: unknown; at: number }
   | { type: 'approval'; id: string; name: string; args: unknown }
   | { type: 'answer'; text: string }
   | { type: 'error'; message: string }
@@ -103,7 +105,10 @@ export const milliAdapter: ChatModelAdapter = {
         } else if (e.type === 'tool-start') {
           const i = byId.get(e.id); if (i != null) parts[i] = { ...parts[i], timing: { startedAt: Date.now() } } as Part;
         } else if (e.type === 'tool-result') {
-          const i = byId.get(e.id), result = parse(e.result);
+          // plot_show also carries the compiled figure for the chat (the model only sees its summary).
+          const i = byId.get(e.id), parsed = parse(e.result), result = e.figure && parsed && typeof parsed === 'object' ? { ...parsed, figure: e.figure } : parsed;
+          if (e.figure) noteFigure({ shown: e.figure as FigurePayload });
+          if (e.name === 'plot_withdraw' && !e.isError) noteFigure({ withdrawn: (parsed as { withdrawn?: string })?.withdrawn });
           if (i == null) { setOutcome(e.id, { result, isError: e.isError }); continue; } // an approved export from the earlier run
           const ended = Date.now(), started = (parts[i].timing as { startedAt?: number } | undefined)?.startedAt ?? ended;
           parts[i] = { ...parts[i], result, isError: e.isError, timing: { startedAt: started, completedAt: ended } } as Part;

@@ -18,7 +18,7 @@ const mean = xs => { const v = xs.filter(x => x != null && !Number.isNaN(x)); re
 export async function loadAtlas(dataDir) {
   const read = async name => JSON.parse(await readFile(path.join(dataDir, name), 'utf8'));
   const [geo, predictions, details] = await Promise.all([read('parcels.geojson'), read('predictions.json'), read('parcel-data.json')]);
-  return { geo, predictions, details };
+  return { geo, predictions, details, dataDir };
 }
 
 /** Parcels as the app merges them (lib.ts mergedParcels): ensemble predictions plus the account's own fields. */

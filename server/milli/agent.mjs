@@ -8,10 +8,13 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { randomUUID } from 'node:crypto';
 import { createThreads } from './threads.mjs';
 import { createMilliMcp, APPROVAL_TOOLS, END_TOOL } from './mcp.mjs';
+import { createSession } from './analysis/frame.mjs';
 import { parseCsv, parcels } from './data.mjs';
 import path from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
 
-const LIMITS = { toolCalls: 60, runMs: 10 * 60_000, text: 4000, attachments: 3, attachmentBytes: 2 * 1024 * 1024 };
+// Plotting is granular (one call per artist), so a run allows many calls; a relayed model is slow, so the time limit is configurable.
+const LIMITS = { toolCalls: 200, runMs: Number(process.env.MILLI_RUN_MINUTES || 20) * 60_000, text: 4000, attachments: 3, attachmentBytes: 2 * 1024 * 1024 };
 const REMINDER = '[sistema] Aún no terminaste. Resume tu respuesta y llama finish_task con ella; no dejes la tarea abierta.';
 
 function systemPrompt({ account, screenId, notesText, now }) {
@@ -25,7 +28,7 @@ Cómo trabajas:
 1. Empieza SIEMPRE con start_task: título, objetivo y pasos concretos.
 2. Avanza paso a paso y márcalos con update_task. Para analizar usa las herramientas de datos (query_parcels, get_series, get_integrals, get_region_error, get_model_metrics): no dependen de la pantalla.
 3. Muestra lo que haces en la pantalla del usuario (navigate, map_*, table_*, plot_set, calculator_set, set_map_*): es parte del servicio. Si una herramienta responde shown: false, el usuario dejó de seguirte; sigue trabajando sin insistir.
-4. Cuando una figura lo explique mejor, dibújala en el chat con create_plot (líneas, barras, área o dispersión) usando los datos que ya leíste; menciónala en tu respuesta.
+4. Eres analista de datos. Para análisis carga datasets (data_load, data_transform) y usa estadística (stats_correlation, stats_regression, stats_compare_groups, stats_spatial_autocorrelation, stats_variogram…). Para mostrar resultados dibuja figuras en el chat como en matplotlib: plot_figure → artistas (plot_line, plot_scatter, plot_bar, plot_hist, plot_box, plot_heatmap, plot_map, plot_regression…) → plot_axes / plot_legend → plot_show. plot_show te devuelve un PNG: revísalo y corrige antes de responder. Si dudas cómo armar una figura, lee plot_guide. Lo que escribes sobre lugares también va al mapa de la app: si hablas de parcelas, zonas o clusters, dibújalos en unos ejes de tipo map (plot_map, y tus notas con plot_annotate en lon/lat); al mostrar la figura aparecen en el mapa como capa temporal que el usuario puede quitar.
 5. Pide permiso antes de descargar: usa request_export y respeta la decisión.
 6. Termina SIEMPRE con finish_task y la respuesta completa en español (markdown, cifras con unidades, breve). Es el fin de la secuencia: después no llames más herramientas.
 
@@ -45,6 +48,10 @@ export function createMilli({ stateDir, atlas, workspace, notes, account, live, 
   const threads = createThreads(path.join(stateDir, 'milli'));
   const running = new Set();
   const allParcels = () => parcels(atlas, workspace());
+  // Datasets and figures per conversation, in memory (the most recent 50 conversations).
+  const sessions = new Map();
+  const sessionOf = id => { let s = sessions.get(id); if (!s) { s = createSession(); sessions.set(id, s); if (sessions.size > 50) sessions.delete(sessions.keys().next().value); } return s; };
+  const imageDir = path.join(stateDir, 'milli', 'images');
 
   async function chat(req, res) {
     const { screenId, threadId, message, approval } = req.body ?? {};
@@ -113,7 +120,7 @@ export function createMilli({ stateDir, atlas, workspace, notes, account, live, 
     }
 
     const attachments = new Map(Object.entries(thread.attachments));
-    const server = createMilliMcp({ screenId, sessionHash, live, atlas, allParcels, notes, run: runApi, attachments });
+    const server = createMilliMcp({ screenId, sessionHash, live, atlas, allParcels, notes, run: runApi, attachments, workspace, session: sessionOf(thread.id) });
     const client = new Client({ name: 'milli-agent', version: '1.0.0' });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide); await client.connect(clientSide);
@@ -127,8 +134,16 @@ export function createMilli({ stateDir, atlas, workspace, notes, account, live, 
       try { result = await client.callTool({ name: call.name, arguments: call.args }); }
       catch (e) { result = { content: [{ type: 'text', text: e.message }], isError: true }; }
       const textOut = (result.content ?? []).map(c => c.type === 'text' ? c.text : '').join('\n');
-      thread.messages.push({ role: 'tool', id: call.id, name: call.name, result: textOut, isError: !!result.isError, at: new Date().toISOString() });
-      emit({ type: 'tool-result', id: call.id, name: call.name, result: textOut, isError: !!result.isError, at: Date.now() });
+      // Images (plot_show's PNG) are saved for the model to look at; the figure itself goes only to the chat.
+      const images = [];
+      for (const [k, c] of (result.content ?? []).entries()) if (c.type === 'image') {
+        await mkdir(imageDir, { recursive: true });
+        const file = path.join(imageDir, `${thread.id}-${call.id}-${k}.png`.replace(/[^\w.-]/g, '_'));
+        await writeFile(file, Buffer.from(c.data, 'base64')); images.push({ path: file, mimeType: c.mimeType });
+      }
+      const figure = result._meta?.['agrocebada/figure'];
+      thread.messages.push({ role: 'tool', id: call.id, name: call.name, result: textOut, isError: !!result.isError, ...(images.length ? { images } : {}), at: new Date().toISOString() });
+      emit({ type: 'tool-result', id: call.id, name: call.name, result: textOut, isError: !!result.isError, ...(figure ? { figure } : {}), at: Date.now() });
     };
     const finishIfDone = async () => {
       if (run.finished == null) return false;
@@ -227,7 +242,7 @@ export function createMilli({ stateDir, atlas, workspace, notes, account, live, 
   async function connectAgent({ screenId, sessionHash }) {
     const finished = [];
     const runApi = { startTask() {}, updateTask() {}, finish: answer => finished.push(answer) };
-    const server = createMilliMcp({ screenId, sessionHash, live, atlas, allParcels, notes, run: runApi, attachments: new Map() });
+    const server = createMilliMcp({ screenId, sessionHash, live, atlas, allParcels, notes, run: runApi, attachments: new Map(), workspace, session: createSession() });
     const client = new Client({ name: 'milli-driver', version: '1.0.0' });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide); await client.connect(clientSide);

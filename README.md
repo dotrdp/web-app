@@ -31,6 +31,19 @@ The shell follows Noctalia / Caelestia (Quickshell): the map is the wallpaper in
 
 Yield estimates come from `public/data/predictions.json`, exported without refitting by `python3 -I scripts/export_predictions.py` from `../final-model` (fixed 90/10 attention ensemble; 5-fold CV over 138 parcels: MAE 0.322, RMSE 0.487 t/ha, R² 0.670). Training parcels show out-of-fold estimates; the 59 reserved parcels use the mean of the fold models. Intervals are empirical quantiles of the out-of-fold absolute errors. Drawn parcels have no estimate.
 
+## MCP for outside agents
+
+Milli's tools (data, statistics, matplotlib-style figures, and control of the browser tab) are also published as the MCP server `agrocebada` over Streamable HTTP (`server/milli/mcp-http.mjs`).
+
+- **One MCP per tab**: every logged-in browser tab gets its own secret address, `/mcp/<key>`, shown in Ajustes → MCP de esta pestaña (with a ready client configuration to copy). An agent there acts only on that tab; `screen_id` is optional. Any account, any number of people and tabs at once.
+- **Alive while logged in**: logging out, the login expiring, or the tab staying closed ends the address and its sessions; a reloaded tab gets a new one.
+- **Client configuration**: `{"mcpServers": {"agrocebada": {"type": "http", "url": "http://localhost:8080/mcp/<key>"}}}`
+- **Isolation**: several agents can share a tab's address; each MCP session has its own datasets and figures, and Milli's chat keeps working in every tab.
+- **Without a chat**: `plot_show` shows the figure in a panel on the tab and returns its PNG; `request_export` asks the person on the tab (a dialog, two minutes) and downloads only on «Permitir».
+- **Shared notes**: agents append atomically; the Notas editor sends the version it started from, and concurrent edits are merged instead of overwritten.
+
+Tested end to end in `tests/mcp-http.test.ts` (two logins, two agents on one tab, permissions, logout, a tab closing) and `tests/e2e/milli.spec.ts`.
+
 ## Rig service
 
 Use **uv** and a CUDA GPU. `services/model-version.json` pins the official SAM commit and checkpoint SHA-256. No training or weight updates occur. The supplied systemd units target `%h/code/fira2026/webapp`; adjust paths if installing elsewhere.

@@ -7,7 +7,8 @@ import path from 'node:path';
 import { validateGeometry } from './geometry.mjs';
 import { createLive } from './milli/live.mjs';
 import { createMilli } from './milli/agent.mjs';
-import { loadAtlas } from './milli/data.mjs';
+import { mountMcpHttp } from './milli/mcp-http.mjs';
+import { loadAtlas, parcels } from './milli/data.mjs';
 import { createScriptedModel } from './milli/models/scripted.mjs';
 import { createRelayModel } from './milli/models/relay.mjs';
 export { validateGeometry } from './geometry.mjs';
@@ -50,8 +51,9 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
   const app = express();
   app.disable('x-powered-by');
   // Milli's chat carries up to three 2 MB CSV attachments; every other endpoint keeps a small body limit.
-  const smallJson = express.json({ limit: '256kb' }), chatJson = express.json({ limit: '7mb' });
-  app.use((req, res, next) => (req.path === '/api/milli/chat' ? chatJson : smallJson)(req, res, next));
+  // A tab's reply to plot_show carries the figure's PNG.
+  const smallJson = express.json({ limit: '256kb' }), chatJson = express.json({ limit: '7mb' }), replyJson = express.json({ limit: '8mb' });
+  app.use((req, res, next) => req.path === '/mcp' || req.path.startsWith('/mcp/') ? next() : (req.path === '/api/milli/chat' ? chatJson : /^\/api\/live\/[^/]+\/reply$/.test(req.path) ? replyJson : smallJson)(req, res, next));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
@@ -100,10 +102,17 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
   });
   app.post('/api/auth/logout', (req, res) => {
     const token = (req.headers.cookie || '').split(';').map(c => c.trim()).find(c => c.startsWith(cookieName + '='))?.slice(cookieName.length + 1);
-    if (token) sessions.delete(sha(token));
+    // Logging out also ends the MCP sessions of this login's tabs.
+    if (token) { sessions.delete(sha(token)); mcpHttp.endLogin(sha(token)); }
     res.clearCookie(cookieName, { httpOnly: true, sameSite: 'lax', path: '/' });
     res.json({ ok: true });
   });
+  // Milli's live channel to each tab, and the MCP endpoint for outside agents (token auth, its own).
+  const live = createLive(liveTimeoutMs ? { timeoutMs: liveTimeoutMs } : {});
+  const atlas = await loadAtlas(dataDir);
+  const notesStore = { get: () => ({ text: state.notes ?? '', updatedAt: state.notesUpdatedAt ?? null }), set: async text => { state.notes = text; state.notesUpdatedAt = new Date().toISOString(); await persist(); } };
+  const workspace = () => ({ overrides: state.overrides, fields: state.fields });
+  const mcpHttp = mountMcpHttp(app, { live, atlas, workspace, notes: notesStore, allParcels: () => parcels(atlas, workspace()), loggedIn: hash => (sessions.get(hash)?.expires ?? 0) > Date.now() });
   app.use('/api', (req, res, next) => req.user ? next() : res.status(401).json({ error: 'Inicia sesión para continuar.' }));
   app.get('/api/workspace', (_req, res) => res.json({ overrides: state.overrides, fields: state.fields }));
   // Free-text notes from the Notas side menu, saved with the rest of the workspace.
@@ -111,6 +120,10 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
   app.put('/api/notes', async (req, res, next) => {
     const text = req.body?.text;
     if (typeof text !== 'string' || text.length > MAX_NOTES) return res.status(400).json({ error: `Las notas deben ser texto de hasta ${MAX_NOTES.toLocaleString('es-MX')} caracteres.` });
+    // Several people (and agents) share these notes: a save based on an older version is refused,
+    // with the current text, so the editor can merge instead of overwriting someone else's edit.
+    const base = req.body?.base;
+    if (base !== undefined && (base ?? null) !== (state.notesUpdatedAt ?? null)) return res.status(409).json({ error: 'Las notas cambiaron en otra pantalla.', text: state.notes ?? '', updatedAt: state.notesUpdatedAt ?? null });
     try { state.notes = text; state.notesUpdatedAt = new Date().toISOString(); await persist(); res.json({ text: state.notes, updatedAt: state.notesUpdatedAt }); } catch (e) { next(e); }
   });
   app.post('/api/fields', async (req, res, next) => {
@@ -131,17 +144,14 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
       state.overrides[id] = override; await persist(); res.json(override);
     } catch (e) { if (e.code) return next(e); res.status(400).json({ error: e.message }); }
   });
-  // Milli: the live channel to each tab, and the agent (chat, thread, feedback).
-  const live = createLive(liveTimeoutMs ? { timeoutMs: liveTimeoutMs } : {});
-  const milli = createMilli({ stateDir, atlas: await loadAtlas(dataDir), account: state.user.name, live, model,
-    workspace: () => ({ overrides: state.overrides, fields: state.fields }),
-    notes: { get: () => ({ text: state.notes ?? '', updatedAt: state.notesUpdatedAt ?? null }), set: async text => { state.notes = text; state.notesUpdatedAt = new Date().toISOString(); await persist(); } } });
+  // Milli: the agent in each tab's chat (chat, thread, feedback).
+  const milli = createMilli({ stateDir, atlas, account: state.user.name, live, model, workspace, notes: notesStore });
   app.get('/api/live', live.connect);
   app.post('/api/live/:screen/reply', live.reply);
   app.post('/api/milli/chat', milli.chat);
   app.get('/api/milli/thread/:id', milli.getThread);
   app.post('/api/milli/feedback', milli.feedback);
-  app.locals.milli = { live, connectAgent: milli.connectAgent };
+  app.locals.milli = { live, connectAgent: milli.connectAgent, mcpSessions: mcpHttp.sessions };
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Este recurso no existe.' }));
   app.use((err, _req, res, _next) => { console.error(err.message); res.status(err.type === 'entity.parse.failed' ? 400 : 500).json({ error: err.type === 'entity.parse.failed' ? 'El cuerpo de la solicitud no es válido.' : 'No pudimos guardar el cambio. Intenta de nuevo.' }); });
   return app;

@@ -46,6 +46,7 @@ const PANEL: Record<string, string> = { capas: 'Capas', mapa_base: 'Mapa base', 
 const TABLE: Record<string, string> = { estimaciones: 'estimaciones', municipios: 'municipios', economia: 'economía', error_municipios: 'error por municipio', atributos: 'atributos' };
 const EXPORT: Record<string, string> = { estimaciones_csv: 'la tabla de estimaciones (CSV)', entrega_csv: 'la entrega del reto (CSV, 59 parcelas)', parcelas_geojson: 'las parcelas (GeoJSON)', mapa_png: 'la imagen del mapa (PNG)', seleccion_csv: 'la selección (CSV)' };
 const LAYER_NAMES: Record<string, string> = { ndvi: 'Vegetación', water: 'Agua', precipitation: 'Lluvia', tmax: 'Temperatura máxima', tmin: 'Temperatura mínima', elevation: 'Elevación', slope: 'Pendiente', heatmap: 'Mapa de calor', municipalities: 'Municipios' };
+const SOURCES: Record<string, string> = { parcelas: 'las parcelas', serie_mensual: 'la serie mensual', error_regional: 'el error regional', embeddings: 'los embeddings satelitales', adjunto: 'el CSV adjunto' };
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const count = (v: unknown, one: string, many: string) => { const n = Array.isArray(v) ? v.length : 0; return `${n} ${n === 1 ? one : many}`; };
 
@@ -78,7 +79,48 @@ export function actionTitle(name: string, a: Record<string, unknown>) {
     case 'calculator_set': return 'Calcular la economía';
     case 'region_error_drill': return a.state ? `Error por municipio en ${a.state}` : 'Error por estado';
     case 'write_notes': return 'Escribir en Notas';
-    case 'create_plot': return `Graficar «${a.title}»`;
+    case 'data_load': return `Cargar ${SOURCES[String(a.source)] ?? a.source}${a.as ? ` como ${a.as}` : ''}`;
+    case 'data_create': return `Crear el dataset ${a.as}`;
+    case 'data_transform': return `Transformar ${a.dataset}${a.as && a.as !== a.dataset ? ` → ${a.as}` : ''}`;
+    case 'data_describe': return `Describir ${a.dataset}`;
+    case 'data_view': return `Leer filas de ${a.dataset}`;
+    case 'data_list': return 'Listar datasets y figuras';
+    case 'stats_correlation': return `Correlaciones (${a.method ?? 'pearson'}) de ${count(a.columns, 'variable', 'variables')}`;
+    case 'stats_regression': return `Regresión de ${a.y}`;
+    case 'stats_compare_groups': return `Comparar ${a.value} por ${a.group}`;
+    case 'stats_spatial_autocorrelation': return `Autocorrelación espacial de ${a.column}`;
+    case 'stats_variogram': return `Variograma de ${a.column}`;
+    case 'stats_correlogram': return `Correlograma de ${a.column}`;
+    case 'stats_interpolate': return `Interpolar ${a.column} en una malla`;
+    case 'stats_pca': return 'Análisis de componentes principales';
+    case 'map_show_figure': return 'Mostrar la figura en el mapa';
+    case 'map_clear_temp_layers': return 'Quitar las capas temporales del mapa';
+    case 'plot_update': return 'Ajustar un elemento de la figura';
+    case 'plot_withdraw': return 'Retirar una figura del chat';
+    case 'plot_figure': return a.title ? `Nueva figura «${a.title}»` : 'Nueva figura';
+    case 'plot_line': return 'Dibujar líneas';
+    case 'plot_scatter': return 'Dibujar puntos';
+    case 'plot_bar': return 'Dibujar barras';
+    case 'plot_hist': return 'Dibujar un histograma';
+    case 'plot_hist2d': return 'Dibujar un histograma 2D';
+    case 'plot_box': return a.kind === 'violin' ? 'Dibujar violines' : a.kind === 'strip' ? 'Dibujar puntos por categoría' : 'Dibujar cajas';
+    case 'plot_kde': return 'Dibujar la densidad';
+    case 'plot_errorbar': return 'Dibujar barras de error';
+    case 'plot_fill_between': return 'Sombrear una banda';
+    case 'plot_heatmap': return 'Dibujar un mapa de calor';
+    case 'plot_contour': return 'Dibujar curvas de nivel';
+    case 'plot_surface': return 'Dibujar una superficie 3D';
+    case 'plot_regression': return `Ajuste ${a.fit === 'lowess' ? 'LOWESS' : a.fit === 'poly' ? 'polinomial' : 'lineal'}`;
+    case 'plot_pie': return 'Dibujar un pastel';
+    case 'plot_map': return `Capa del mapa: ${a.layer}`;
+    case 'plot_reference': return 'Línea de referencia';
+    case 'plot_annotate': return 'Anotar la figura';
+    case 'plot_axes': return 'Dar formato a los ejes';
+    case 'plot_legend': return 'Ajustar la leyenda';
+    case 'plot_remove': return 'Quitar un elemento de la figura';
+    case 'plot_inspect': return 'Revisar la figura';
+    case 'plot_guide': return 'Leer la guía de gráficas';
+    case 'plot_show': return 'Mostrar la figura en el chat';
     case 'request_export': return `Descargar ${EXPORT[String(a.kind)] ?? a.kind}`;
     default: return name;
   }
@@ -101,8 +143,15 @@ export function actionDetail(action: Action): string {
     case 'get_region_error': { const o = r.overall as Record<string, number> | undefined; return o ? `MAE ${o.mae?.toFixed(2)} t/ha en ${o.n} parcelas` : ''; }
     case 'map_select_parcels': return `${r.seleccionadas} seleccionadas`;
     case 'write_notes': return `${Number(r.characters).toLocaleString('es-MX')} caracteres`;
-    case 'create_plot': return `${Number(r.points).toLocaleString('es-MX')} puntos · en el chat`;
+    case 'data_load': case 'data_create': case 'data_transform': return `${Number(r.rows).toLocaleString('es-MX')} filas · ${(r.columns as unknown[])?.length ?? 0} columnas`;
+    case 'stats_spatial_autocorrelation': return `I de Moran ${r.moran_i} · p ${r.p_permutation ?? r.p_normal}`;
+    case 'stats_regression': return `R² ${r.r2} · n ${r.n}`;
+    case 'stats_correlation': return `${Object.keys(r.matrix as object ?? {}).length} variables`;
+    case 'stats_compare_groups': { const an = r.anova as { p?: number } | undefined; return `ANOVA p ${an?.p ?? '—'}`; }
+    case 'stats_variogram': { const f = r.fit as { practical_range_km?: number } | null; return f ? `alcance ${f.practical_range_km} km` : `${(r.bins as unknown[])?.length ?? 0} clases`; }
+    case 'plot_show': return `En el chat · versión ${r.version}${Array.isArray(r.on_app_map) && r.on_app_map.length ? ' · y en el mapa' : ''}`;
+    case 'stats_pca': { const e = r.explained as { variance_share: number }[] | undefined; return e ? `PC1 ${Math.round(e[0].variance_share * 100)} % · PC2 ${Math.round((e[1]?.variance_share ?? 0) * 100)} %` : ''; }
     case 'request_export': return r.archivo ? `${r.archivo}` : '';
-    default: return 'Hecho';
+    default: return action.name.startsWith('plot_') && typeof r.points === 'number' ? `${Number(r.points).toLocaleString('es-MX')} puntos` : 'Hecho';
   }
 }

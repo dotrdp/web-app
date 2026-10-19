@@ -58,10 +58,12 @@ const ndviScenario = {
       const ranked = Object.keys(s.by_parcel).filter(id => july(id) != null).sort((a, b) => july(b) - july(a));
       return { reasoning: `En julio de 2025 el NDVI medio del grupo fue ${fmt(s.average[6]?.ndvi_mean, 3)} con ${fmt(s.average[6]?.precip_mm, 0)} mm de lluvia. La más verde es ${ranked[0]} (${fmt(july(ranked[0]), 3)}) y la menos ${ranked.at(-1)} (${fmt(july(ranked.at(-1)), 3)}). Ahora las marco en la tabla del panel para que la gráfica las muestre.`,
         calls: [['update_task', { screen_id: screen, step: 1, status: 'done', note: `NDVI julio ${fmt(s.average[6]?.ndvi_mean, 3)}` }], ['update_task', { screen_id: screen, step: 2, status: 'running' }],
-          ['create_plot', { title: `NDVI y lluvia 2025 · ${ranked.length} parcelas`, subtitle: 'Promedio del grupo por mes', kind: 'line', x: MONTH_LABELS,
-            y_label: 'NDVI', y_min: 0, y_max: 1, y2_label: 'Lluvia', y2_unit: 'mm',
-            series: [{ name: 'NDVI medio', values: s.average.map(m => m.ndvi_mean ?? null), color: 'verde' }, { name: 'Lluvia', values: s.average.map(m => m.precip_mm ?? null), type: 'bar', axis: 'right', color: 'azul' }],
-            reference_lines: [{ axis: 'x', value: 'jul', label: 'Julio' }], note: 'NDVI de FIRA (Sentinel-2, ≤30 % nubes) y lluvia CHIRPS.' }],
+          ['plot_figure', { title: `NDVI y lluvia 2025 · ${ranked.length} parcelas`, subtitle: 'Promedio del grupo por mes', caption: 'NDVI de FIRA (Sentinel-2, ≤30 % nubes) y lluvia CHIRPS.' }],
+          ['plot_bar', { x: MONTH_LABELS, y: s.average.map(m => m.precip_mm ?? null), y_axis: 'right', color: 'azul', alpha: 0.45, label: 'Lluvia (mm)' }],
+          ['plot_line', { x: MONTH_LABELS, y: s.average.map(m => m.ndvi_mean ?? null), color: 'verde', marker: true, label: 'NDVI medio', sort: false }],
+          ['plot_reference', { kind: 'vline', value: 'jul', label: 'Julio' }],
+          ['plot_axes', { x: { label: 'Mes 2025', order: MONTH_LABELS }, y: { label: 'NDVI', lim: [0, 1] }, y2: { label: 'Lluvia (mm)' } }],
+          ['plot_show', {}],
           ['navigate', { screen_id: screen, page: 'panel' }], ['table_set', { screen_id: screen, table: 'estimaciones', set_tab: 'reservadas', search: '' }],
           ['table_check', { screen_id: screen, table: 'estimaciones', mode: 'set', parcel_ids: ranked }], ['plot_set', { screen_id: screen, year: 2025 }]], memo: { ranked } };
     },
@@ -79,7 +81,7 @@ const ndviScenario = {
       const s = results.get_series, july = id => s.by_parcel[id]?.[6]?.ndvi_mean;
       const ranked = Object.keys(s.by_parcel).filter(id => july(id) != null).sort((a, b) => july(b) - july(a));
       const approved = results.request_export?.approved !== false && !results.request_export?.error;
-      const answer = `**NDVI de julio de 2025 · ${ranked.length} parcelas reservadas**\n\n- NDVI medio del grupo: **${fmt(s.average[6]?.ndvi_mean, 3)}** (lluvia de julio: ${fmt(s.average[6]?.precip_mm, 0)} mm).\n- Más verdes: ${ranked.slice(0, 3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n- Menos verdes: ${ranked.slice(-3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n\nLa gráfica de arriba muestra la temporada del grupo. Las dejé marcadas en el panel con su gráfica de 2025 y anoté el resumen en Notas. ${approved ? 'Descargué la tabla en CSV.' : 'No descargué la tabla porque no diste permiso.'}`;
+      const answer = `**NDVI de julio de 2025 · ${ranked.length} parcelas reservadas**\n\n- NDVI medio del grupo: **${fmt(s.average[6]?.ndvi_mean, 3)}** (lluvia de julio: ${fmt(s.average[6]?.precip_mm, 0)} mm).\n- Más verdes: ${ranked.slice(0, 3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n- Menos verdes: ${ranked.slice(-3).map(id => `**${id}** ${fmt(july(id), 3)}`).join(', ')}.\n\nLa figura de arriba muestra la temporada del grupo. Las dejé marcadas en el panel con su gráfica de 2025 y anoté el resumen en Notas. ${approved ? 'Descargué la tabla en CSV.' : 'No descargué la tabla porque no diste permiso.'}`;
       return { reasoning: 'Tengo todo: cierro la tarea con la respuesta.',
         calls: [['update_task', { screen_id: screen, step: 4, status: approved ? 'done' : 'skipped' }], ['finish_task', { screen_id: screen, answer }]] };
     },
@@ -87,29 +89,72 @@ const ndviScenario = {
 };
 
 const plotScenario = {
-  match: t => /gr[aá]fic|plot|dispersi|diagrama/i.test(t),
+  match: t => /gr[aá]fic|plot|dispersi|diagrama|figura/i.test(t),
   steps: [
-    ({ screen }) => ({ reasoning: 'Quieren ver qué tan bien estima el modelo. Leo las parcelas con rendimiento registrado, mido el error por estado y lo dibujo en el chat: dispersión de estimado contra registrado y barras del error.',
-      calls: [['start_task', { screen_id: screen, title: 'Estimado contra registrado', goal: 'Graficar el rendimiento estimado contra el registrado y el error por estado.', steps: ['Leer las parcelas con rendimiento registrado', 'Medir el error por estado', 'Graficar', 'Responder'] }]] }),
-    ({ screen }) => ({ reasoning: 'Busco las parcelas con rendimiento registrado y su estimado fuera de partición.',
-      calls: [['update_task', { screen_id: screen, step: 0, status: 'running' }], ['query_parcels', { has_observed: true, fields: ['id', 'state', 'municipality', 'observed', 'predicted'], limit: 500 }]] }),
-    ({ screen, results }) => ({ reasoning: `Son ${results.query_parcels.total} parcelas. Ahora el error medido por estado.`,
-      calls: [['update_task', { screen_id: screen, step: 0, status: 'done', note: `${results.query_parcels.total} parcelas` }], ['update_task', { screen_id: screen, step: 1, status: 'running' }], ['get_region_error', { level: 'estado' }]] }),
-    ({ screen, results }) => {
-      const rows = results.query_parcels.rows.filter(r => r.observed != null && r.predicted != null), regions = results.get_region_error.regions;
-      return { reasoning: 'Dibujo las dos gráficas: una serie por estado en la dispersión, con la recta y = x, y el MAE y RMSE de cada estado en barras.',
-        calls: [['update_task', { screen_id: screen, step: 1, status: 'done' }], ['update_task', { screen_id: screen, step: 2, status: 'running' }],
-          ['create_plot', { title: 'Rendimiento estimado contra registrado', subtitle: `${rows.length} parcelas · estimado fuera de partición`, kind: 'scatter', x_label: 'Registrado (t/ha)', y_label: 'Estimado', y_unit: 't/ha', identity_line: true,
-            series: STATES.map(st => ({ name: st, points: rows.filter(r => r.state === st).map(r => ({ x: r.observed, y: r.predicted, label: `${r.id} · ${r.municipality}` })) })).filter(x => x.points.length),
-            note: 'Sobre la diagonal, el modelo estimó de más; debajo, de menos.' }],
-          ['create_plot', { title: 'Error del modelo por estado', kind: 'bar', x: regions.map(r => r.name), y_label: 'Error', y_unit: 't/ha',
-            series: [{ name: 'MAE', values: regions.map(r => r.measured?.mae ?? null), color: 'verde' }, { name: 'RMSE', values: regions.map(r => r.measured?.rmse ?? null), color: 'ambar' }],
-            reference_lines: [{ axis: 'y', value: results.get_region_error.overall.mae, label: 'MAE global' }] }]] };
-    },
+    ({ screen }) => ({ reasoning: 'Quieren ver qué tan bien estima el modelo. Cargo las parcelas con rendimiento registrado y el error por estado como datasets y armo una figura de dos paneles: dispersión de estimado contra registrado y barras del error.',
+      calls: [['start_task', { screen_id: screen, title: 'Estimado contra registrado', goal: 'Graficar el rendimiento estimado contra el registrado y el error por estado.', steps: ['Cargar las parcelas con rendimiento registrado', 'Medir el error por estado', 'Graficar', 'Responder'] }]] }),
+    ({ screen }) => ({ reasoning: 'Cargo las parcelas con rendimiento registrado (estimado fuera de partición).',
+      calls: [['update_task', { screen_id: screen, step: 0, status: 'running' }], ['data_load', { source: 'parcelas', as: 'p', filters: { group: 'con_rendimiento' } }]] }),
+    ({ screen, results }) => ({ reasoning: `Son ${results.data_load.rows} parcelas. Ahora el error por estado.`,
+      calls: [['update_task', { screen_id: screen, step: 0, status: 'done', note: `${results.data_load.rows} parcelas` }], ['update_task', { screen_id: screen, step: 1, status: 'running' }],
+        ['data_load', { source: 'error_regional', level: 'estado', as: 'e' }], ['get_region_error', { level: 'estado' }]] }),
+    ({ screen, results }) => ({ reasoning: 'Armo la figura: arriba la dispersión por estado con la recta y = x, abajo el MAE y RMSE de cada estado con el MAE global como referencia. Luego reviso la imagen.',
+      calls: [['update_task', { screen_id: screen, step: 1, status: 'done' }], ['update_task', { screen_id: screen, step: 2, status: 'running' }],
+        ['plot_figure', { title: '¿Qué tan bien estima el modelo?', subtitle: '138 parcelas con rendimiento registrado · estimado fuera de partición', mosaic: [['disp'], ['err']], subplot_titles: ['Estimado contra registrado', 'Error por estado'], height: 640 }],
+        ['plot_scatter', { ax: 'disp', dataset: 'p', x: 'observed', y: 'predicted', color_by: 'state', hover: ['id', 'municipality'] }],
+        ['plot_reference', { ax: 'disp', kind: 'identity', label: 'y = x' }],
+        ['plot_axes', { ax: 'disp', x: { label: 'Registrado (t/ha)' }, y: { label: 'Estimado (t/ha)' }, equal_aspect: true }],
+        ['plot_bar', { ax: 'err', dataset: 'e', x: 'region', y: 'mae', color: 'verde', label: 'MAE', labels: true, label_format: '.2f' }],
+        ['plot_bar', { ax: 'err', dataset: 'e', x: 'region', y: 'rmse', color: 'ambar', label: 'RMSE', labels: true, label_format: '.2f' }],
+        ['plot_reference', { ax: 'err', kind: 'hline', value: results.get_region_error.overall.mae, label: 'MAE global' }],
+        ['plot_axes', { ax: 'err', x: { label: 'Estado' }, y: { label: 'Error (t/ha)' } }],
+        ['plot_show', {}]] }),
     ({ screen, results }) => {
       const e = results.get_region_error, worst = [...e.regions].sort((a, b) => (b.measured?.mae ?? 0) - (a.measured?.mae ?? 0))[0];
-      const answer = `Dibujé dos gráficas con las **${results.query_parcels.total} parcelas** que tienen rendimiento registrado:\n\n1. **Estimado contra registrado**: cada punto es una parcela, por estado; cuanto más cerca de la diagonal, mejor la estimación.\n2. **Error por estado**: ${e.regions.map(r => `${r.name} MAE ${fmt(r.measured?.mae)} t/ha`).join(', ')}.\n\nEl MAE global es **${fmt(e.overall.mae)} t/ha**; ${worst.name} es donde más se equivoca el modelo.`;
-      return { reasoning: 'Cierro con la lectura de las gráficas.', calls: [['update_task', { screen_id: screen, step: 2, status: 'done' }], ['update_task', { screen_id: screen, step: 3, status: 'done' }], ['finish_task', { screen_id: screen, answer }]] };
+      const answer = `Armé una figura de dos paneles con las **${e.overall.n} parcelas** que tienen rendimiento registrado:\n\n1. **Estimado contra registrado**: cada punto es una parcela, por estado; cuanto más cerca de la diagonal y = x, mejor la estimación.\n2. **Error por estado**: ${e.regions.map(r => `${r.name} MAE ${fmt(r.measured?.mae)} t/ha`).join(', ')}.\n\nEl MAE global es **${fmt(e.overall.mae)} t/ha**; ${worst.name} es donde más se equivoca el modelo.`;
+      return { reasoning: 'La imagen se lee bien. Cierro con la lectura de la figura.', calls: [['update_task', { screen_id: screen, step: 2, status: 'done' }], ['update_task', { screen_id: screen, step: 3, status: 'done' }], ['finish_task', { screen_id: screen, answer }]] };
+    },
+  ],
+};
+
+const spatialScenario = {
+  match: t => /espacial|autocorrel|moran|lisa|variograma|vecin/i.test(t),
+  steps: [
+    ({ screen }) => ({ reasoning: 'Me preguntan si el error del modelo tiene estructura espacial. Cargo las parcelas con error medido, pruebo la autocorrelación (Moran global y LISA), calculo el variograma y lo dibujo: diagrama de Moran, mapa LISA y variograma.',
+      calls: [['start_task', { screen_id: screen, title: 'Autocorrelación espacial del error', goal: 'Saber si las parcelas cercanas tienen errores parecidos y dónde.', steps: ['Cargar las parcelas con error medido', 'Probar la autocorrelación (Moran y LISA)', 'Calcular el variograma', 'Graficar', 'Responder'] }]] }),
+    ({ screen }) => ({ reasoning: 'Cargo las parcelas con rendimiento registrado: tienen el error fuera de partición y su centroide.',
+      calls: [['update_task', { screen_id: screen, step: 0, status: 'running' }], ['data_load', { source: 'parcelas', as: 'p', filters: { group: 'con_rendimiento' } }]] }),
+    ({ screen, results }) => ({ reasoning: `Son ${results.data_load.rows} parcelas. Pruebo la autocorrelación del error con 8 vecinos más cercanos y 999 permutaciones.`,
+      calls: [['update_task', { screen_id: screen, step: 0, status: 'done', note: `${results.data_load.rows} parcelas` }], ['update_task', { screen_id: screen, step: 1, status: 'running' }],
+        ['stats_spatial_autocorrelation', { dataset: 'p', column: 'error', weights: { type: 'knn', k: 8 }, permutations: 999 }]] }),
+    ({ screen, results }) => {
+      const m = results.stats_spatial_autocorrelation;
+      return { reasoning: `I de Moran = ${fmt(m.moran_i, 3)} (p = ${fmt(m.p_permutation, 3)}): ${m.reading}. Ahora el variograma para ver a qué distancia llega la dependencia.`,
+        calls: [['update_task', { screen_id: screen, step: 1, status: 'done', note: `I = ${fmt(m.moran_i, 3)}, p = ${fmt(m.p_permutation, 3)}` }], ['update_task', { screen_id: screen, step: 2, status: 'running' }],
+          ['stats_variogram', { dataset: 'p', column: 'error', model: 'spherical', bins: 12 }]] };
+    },
+    ({ screen, results }) => {
+      const v = results.stats_variogram;
+      return { reasoning: 'Armo la figura de tres paneles: diagrama de Moran (la pendiente es I), mapa LISA de las parcelas con los límites municipales y el variograma con su modelo.',
+        calls: [['update_task', { screen_id: screen, step: 2, status: 'done' }], ['update_task', { screen_id: screen, step: 3, status: 'running' }],
+          ['plot_figure', { title: '¿El error del modelo se agrupa en el espacio?', subtitle: 'Error = estimado − registrado · 8 vecinos más cercanos', mosaic: [['moran'], ['lisa'], ['vario']], axes_types: { lisa: 'map' }, subplot_titles: ['Diagrama de Moran', 'Clusters LISA (p < 0.05)', 'Semivariograma'], height: 1020 }],
+          ['plot_scatter', { ax: 'moran', dataset: 'p', x: 'error_z', y: 'error_lag', color_by: 'error_lisa', hover: ['id', 'municipality', 'error'] }],
+          ['plot_regression', { ax: 'moran', dataset: 'p', x: 'error_z', y: 'error_lag', scatter: false, color: 'gris', label: 'I de Moran' }],
+          ['plot_reference', { ax: 'moran', kind: 'hline', value: 0, dash: 'dot' }], ['plot_reference', { ax: 'moran', kind: 'vline', value: 0, dash: 'dot' }],
+          ['plot_axes', { ax: 'moran', x: { label: 'Error estandarizado (z)' }, y: { label: 'Rezago espacial de z' } }],
+          ['plot_map', { ax: 'lisa', layer: 'parcelas', dataset: 'p', color_by: 'error_lisa', hover: ['id', 'municipality', 'error'] }],
+          ['plot_map', { ax: 'lisa', layer: 'limites', which: 'municipios' }],
+          ['plot_scatter', { ax: 'vario', dataset: v.datasets[0], x: 'lag_km', y: 'gamma', size_by: 'pairs', color: 'verde', label: 'Empírico' }],
+          ...(v.fit ? [['plot_line', { ax: 'vario', dataset: v.datasets[1], x: 'lag_km', y: 'gamma', color: 'ambar', label: v.fit.model === 'pepita pura' ? 'Modelo: pepita pura (sin estructura)' : `Modelo esférico (alcance ${fmt(v.fit.practical_range_km, 1)} km)` }]] : []),
+          ['plot_reference', { ax: 'vario', kind: 'hline', value: v.sample_variance, label: 'Varianza' }],
+          ['plot_axes', { ax: 'vario', x: { label: 'Distancia (km)' }, y: { label: 'Semivarianza (t/ha)²' } }],
+          ['plot_legend', { position: 'top' }],
+          ['plot_show', {}]] };
+    },
+    ({ screen, results }) => {
+      const m = results.stats_spatial_autocorrelation, v = results.stats_variogram, c = m.lisa_counts ?? {};
+      const answer = `**${m.reading[0].toUpperCase()}${m.reading.slice(1)}.**\n\n- I de Moran del error: **${fmt(m.moran_i, 3)}** (esperado ${fmt(m.expected_i, 3)}; p por permutaciones = ${fmt(m.p_permutation, 3)}). C de Geary = ${fmt(m.geary_c, 3)}.\n- Clusters LISA significativos: ${['HH', 'LL', 'HL', 'LH'].map(k => `${k} ${c[k] ?? 0}`).join(', ')} de ${m.n} parcelas.\n${v.fit ? (v.fit.model === 'pepita pura' ? `- Variograma: ${v.fit.dependence}.\n` : `- Variograma esférico: pepita ${fmt(v.fit.nugget, 3)}, meseta ${fmt(v.fit.sill, 3)}, alcance práctico ${fmt(v.fit.practical_range_km, 1)} km; dependencia ${v.fit.dependence}.\n`) : ''}\nLa figura muestra el diagrama de Moran (pendiente = I), el mapa de clusters y el variograma.`;
+      return { reasoning: 'Cierro con la interpretación.', calls: [['update_task', { screen_id: screen, step: 3, status: 'done' }], ['update_task', { screen_id: screen, step: 4, status: 'done' }], ['finish_task', { screen_id: screen, answer }]] };
     },
   ],
 };
@@ -198,7 +243,7 @@ const screenScenario = {
   ],
 };
 
-export const SCENARIOS = [csvScenario, plotScenario, ndviScenario, economicsScenario, mapScenario, screenScenario];
+export const SCENARIOS = [csvScenario, spatialScenario, plotScenario, ndviScenario, economicsScenario, mapScenario, screenScenario];
 
 export function createScriptedModel({ scenarios = SCENARIOS, pace = 18 } = {}) {
   return {

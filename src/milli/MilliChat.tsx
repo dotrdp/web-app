@@ -18,7 +18,7 @@ import { MILLI, MilliAvatar, MilliName } from '../shell/Milli';
 import ActionAgenda from './ActionAgenda';
 import { replayDeferred } from './bridge';
 import ExportApproval from './ExportApproval';
-import PlotPart from './MilliPlot';
+import FigurePart from './FigurePart';
 import { readMessage } from './parts';
 import { APPROVAL_TOOL, attachmentSummary, CsvAttachmentAdapter, getThreadId, LIMITS, milliAdapter, rejectReason, resetThread } from './runtime';
 import { milli, useMilli } from './store';
@@ -68,6 +68,7 @@ const SUGGESTIONS = [
   '¿Cuánto ganaría en Hidalgo con un costo de 15,000 por hectárea?',
   'Muéstrame en el mapa las parcelas de Puebla y selecciónalas',
   'Grafica el rendimiento estimado contra el registrado y el error por estado',
+  '¿El error del modelo tiene autocorrelación espacial? Grafícalo',
 ];
 
 export default function MilliChat({ docked = false, onClose }: { docked?: boolean; onClose: () => void }) {
@@ -163,7 +164,7 @@ function AssistantMessage() {
     {view.task ? <TaskCard task={view.task} thoughts={view.thoughts} running={running} finished={finished}/> : <Exploration thoughts={view.thoughts} running={running} defaultOpen/>}
     {running && !view.thoughts.length && !view.actions.length && <TypingIndicator people={[{ id: 'milli', name: 'Milli' }]} labels={{ one: 'está empezando' }}/>}
     <ActionAgenda actions={view.actions} running={running}/>
-    <MessagePrimitive.Parts components={{ Text: Nothing, Reasoning: Nothing, tools: { by_name: { [APPROVAL_TOOL]: ExportApproval, create_plot: PlotPart }, Fallback: Nothing } }}/>
+    <MessagePrimitive.Parts components={{ Text: Nothing, Reasoning: Nothing, tools: { by_name: { [APPROVAL_TOOL]: ExportApproval, plot_show: FigurePart }, Fallback: Nothing } }}/>
     {view.answer != null
       ? <div className="grid gap-2 text-[13.5px]" aria-label="Respuesta de Milli"><ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>{view.answer}</ReactMarkdown></div>
       : !running && narration && !view.task && <div className="grid gap-2 text-[13.5px]"><ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>{narration}</ReactMarkdown></div>}
