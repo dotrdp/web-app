@@ -83,7 +83,7 @@ Pesos: knn (k 6–10) es robusto con parcelas agrupadas; distance {km} solo si t
 - Mismas escalas (share_y, color_range) al comparar paneles.
 - Barras desde 0; para cambios pequeños usa puntos o líneas.
 - Señala lo importante con plot_annotate (arrow) o plot_reference (umbral, media, punto de equilibrio).
-- Leyenda: cada ejes tiene la suya ("top" por defecto, se acomoda en filas dentro de sus ejes; "bottom", "right", esquinas internas o "best"); en facetas hay una sola para toda la figura. group_labels renombra categorías ({"training": "Con rendimiento"}).
+- Leyenda: cada ejes tiene la suya ("top" por defecto, se acomoda en filas dentro de sus ejes; "bottom", "right", esquinas internas o "best"); en facetas hay una sola para toda la figura. labels renombra categorías ({"training": "Con rendimiento"}).
 - Ejes compartidos (share_x/share_y) muestran etiquetas solo en los paneles exteriores, como matplotlib.
 - Valores con signo menos se escriben con «−»; las fechas salen en español.
 - Fechas: x "date" (AAAA-MM-01) con tickformat "%b %Y".

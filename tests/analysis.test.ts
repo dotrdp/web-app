@@ -229,10 +229,6 @@ test('Plot tools: a figure built call by call compiles to Plotly subplots, maps,
   await ok('plot_map', { dataset: 'p', layer: 'parcelas', color_by: 'observed', colormap: 'ylgn' });
   const cont = tempLayerOf(((await ok('plot_show', {}))._meta!['agrocebada/figure'] as { state: never }).state, 'ax1');
   assert.equal(cont.legend.scale.colors.length, 9); assert.ok(new Set(cont.parcels.map((p: [string, string]) => p[1])).size > 20, 'a colour per value');
-  // Renaming groups (group_labels) and value labels on bars (labels) don't collide.
-  await ok('plot_figure', {});
-  const bars = await ok('plot_bar', { dataset: 'p', x: 'state', y: 'observed', aggregate: 'mean', group_by: 'group', group_labels: { training: 'Con rendimiento' }, labels: true });
-  assert.equal(bars.json.trace_ids.length, 1);
   const guide = await ok('plot_guide', { topic: 'espacial' });
   assert.match(guide.content[0].text, /Diagrama de Moran/);
 });
