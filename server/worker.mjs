@@ -1,5 +1,8 @@
 const unavailable = () => Response.json({ error: 'Servicio de imágenes no disponible. Puedes seguir usando el atlas.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
-const permitted = pathname => /^\/api\/imagery\/(health|manifests\/202[2-5]-(0[1-9]|1[0-2])|tiles\/s2-v1-[a-f0-9]{16}\/202[2-5]-(0[1-9]|1[0-2])\/(rgb|ndvi|mndwi)\/\d{1,2}\/\d{1,6}\/\d{1,6}\.png)$/.test(pathname) || pathname === '/api/segmentation/proposals';
+const permitted = pathname => /^\/api\/imagery\/(health|manifests\/202[2-5]-(0[1-9]|1[0-2])|tiles\/s2-v1-[a-f0-9]{16}\/202[2-5]-(0[1-9]|1[0-2])\/(rgb|ndvi|mndwi)\/\d{1,2}\/\d{1,6}\/\d{1,6}\.png)$/.test(pathname) || /^\/api\/segmentation\/(crops|proposals|model|models\/sam2\.1-tiny-(encoder|decoder)-[a-f0-9]{16}\.onnx)$/.test(pathname);
+// The browser runs the segmentation model; it posts points for a crop, then its masks as run lengths.
+const segmentationPost = pathname => /^\/api\/segmentation\/(crops|proposals)$/.test(pathname);
+const bodyLimit = pathname => pathname === '/api/segmentation/proposals' ? 262144 : 16384;
 let originCache = { value: null, until: 0 };
 
 export default {
@@ -15,14 +18,14 @@ export default {
     }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (!permitted(url.pathname)) return Response.json({ error: 'Este recurso no existe.' }, { status: 404 });
-    const segmentation = url.pathname.startsWith('/api/segmentation/');
+    const segmentation = segmentationPost(url.pathname);
     if (request.method !== (segmentation ? 'POST' : 'GET')) return Response.json({ error: 'Método no permitido.' }, { status: 405 });
-    if (Number(request.headers.get('Content-Length') || 0) > 16384) return Response.json({ error: 'Solicitud demasiado grande.' }, { status: 413 });
+    if (Number(request.headers.get('Content-Length') || 0) > bodyLimit(url.pathname)) return Response.json({ error: 'Solicitud demasiado grande.' }, { status: 413 });
     if (segmentation && request.headers.get('Origin') && request.headers.get('Origin') !== url.origin) return Response.json({ error: 'Origen no permitido.' }, { status: 403 });
-    const tile = url.pathname.endsWith('.png');
-    if (tile && [...url.searchParams.keys()].some(key => key !== 'threshold')) return Response.json({ error: 'Parámetros no válidos.' }, { status: 422 });
+    const tile = url.pathname.endsWith('.png'), modelFile = url.pathname.endsWith('.onnx');
+    if (tile && [...url.searchParams.keys()].some(key => key !== 'threshold') || modelFile && url.search) return Response.json({ error: 'Parámetros no válidos.' }, { status: 422 });
     const cacheKey = new Request(url.toString(), { method: 'GET' });
-    if (tile) { const cached = await caches.default.match(cacheKey); if (cached) return cached; }
+    if (tile || modelFile) { const cached = await caches.default.match(cacheKey); if (cached) return cached; }
     if (!env.SERVICE_TOKEN || !env.AGROCEBADA_SERVICE) return unavailable();
     if (originCache.until < Date.now()) originCache = { value: await env.AGROCEBADA_SERVICE.get('rig-origin'), until: Date.now() + 15000 };
     if (!originCache.value) return unavailable();
@@ -30,13 +33,13 @@ export default {
     if (segmentation) headers.set('Content-Type', 'application/json');
     try {
       const body = segmentation ? await request.arrayBuffer() : undefined;
-      if (body && body.byteLength > 16384) return Response.json({ error: 'Solicitud demasiado grande.' }, { status: 413 });
+      if (body && body.byteLength > bodyLimit(url.pathname)) return Response.json({ error: 'Solicitud demasiado grande.' }, { status: 413 });
       const response = await fetch(originCache.value + url.pathname + url.search, { method: request.method, headers, body, signal: AbortSignal.timeout(segmentation ? 95000 : 95000) });
-      if (!response.headers.get('Content-Type')?.match(/application\/json|image\/png/)) return unavailable();
+      if (!response.headers.get('Content-Type')?.match(modelFile ? /application\/octet-stream/ : /application\/json|image\/png/)) return unavailable();
       const forwarded = new Response(response.body, response);
       forwarded.headers.set('X-Content-Type-Options', 'nosniff');
       forwarded.headers.set('Referrer-Policy', 'same-origin');
-      if (tile && response.ok) context.waitUntil(caches.default.put(cacheKey, forwarded.clone()));
+      if ((tile || modelFile) && response.ok) context.waitUntil(caches.default.put(cacheKey, forwarded.clone()));
       return forwarded;
     } catch { return unavailable(); }
   },

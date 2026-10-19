@@ -92,6 +92,8 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
   const runtime = useRef<Runtime | null>(null);
   const [error, setError] = useState('');
   const [viewZoom, setViewZoom] = useState(11);
+  /** Centre (lon, lat) and Web Mercator metres per pixel after each move, for tests that click a coordinate. */
+  const [viewState, setViewState] = useState('');
   const initialFit = useRef(false);
   const tileFailures = useRef(new globalThis.Map<XYZ, Set<string>>());
   const pendingTiles = useRef(new globalThis.Map<XYZ, Set<string>>());
@@ -304,7 +306,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       host.current!.style.cursor = runtime.current?.interaction || runtime.current?.dragBox.getActive() ? 'crosshair' : hovered || map.hasFeatureAtPixel(event.pixel, { layerFilter: l => l === clusters }) ? 'pointer' : '';
       latest.current.onHover?.(hovered ? hovered.get('id') : null, hovered ? [event.pixel[0], event.pixel[1]] : null);
     });
-    map.on('moveend', () => latest.current.onZoom?.(map.getView().getZoom() || 11));
+    map.on('moveend', () => { latest.current.onZoom?.(map.getView().getZoom() || 11); const v = map.getView(), c = toLonLat(v.getCenter() ?? [0, 0]); setViewState(`${c[0].toFixed(6)},${c[1].toFixed(6)},${(v.getResolution() ?? 0).toFixed(4)}`); });
     for (const layer of [imagery, indices.ndvi, indices.water, municipalityFill, heatmap, parcels]) clip(layer);
     const syncZoom = () => setViewZoom(map.getView().getZoom() ?? 11);
     map.getView().on('change:resolution', syncZoom); syncZoom();
@@ -489,7 +491,7 @@ export default forwardRef<MapHandle, Props>(function AtlasMap(props, ref) {
       else await document.documentElement.requestFullscreen();
     } catch { setError('No pudimos abrir la pantalla completa en este navegador.'); }
   }
-  return <div className="map-canvas-wrap absolute inset-0" data-testid="map" data-layers={props.layers.filter(l => l.on).map(l => l.id).join(' ')} data-base={props.settings.base} data-zoom={viewZoom.toFixed(2)} data-parcel-count={props.parcels.length} data-period={props.keyDate} data-detail={viewZoom >= DETAIL_ZOOM || undefined}>
+  return <div className="map-canvas-wrap absolute inset-0" data-testid="map" data-layers={props.layers.filter(l => l.on).map(l => l.id).join(' ')} data-base={props.settings.base} data-zoom={viewZoom.toFixed(2)} data-view={viewState || undefined} data-parcel-count={props.parcels.length} data-period={props.keyDate} data-detail={viewZoom >= DETAIL_ZOOM || undefined}>
     {error && <div role="status" className={cn('rounded-full bg-frame shadow-md', 'map-status absolute top-12 left-1/2 z-20 flex max-w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 px-3 py-2 text-sm', error && 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200')}><span>{error}</span>{isOn(props.layers, 'ndvi') || isOn(props.layers, 'water') || props.imageryVisible ? <Button size="sm" variant="outline" onClick={() => { for (const source of shownSources()) { tileFailures.current.get(source)?.clear(); source.refresh(); } setError(''); }}>Reintentar imágenes</Button> : null}</div>}
 
     {mapReadyFlag && (() => {

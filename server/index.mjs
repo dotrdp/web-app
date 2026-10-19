@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { validateGeometry } from './geometry.mjs';
@@ -72,11 +73,19 @@ export async function createApp({ stateDir = process.env.STATE_DIR || path.join(
     else if (token) sessions.delete(sha(token));
     next();
   });
+  // The onnxruntime-web runtime for the in-browser segmentation model (src/segmentation/sam.worker.ts).
+  const ortDir = path.join(root, 'node_modules/onnxruntime-web/dist'), ortVersion = JSON.parse(readFileSync(path.join(root, 'node_modules/onnxruntime-web/package.json'), 'utf8')).version;
+  app.get('/ort/:version/:file', (req, res) => {
+    if (req.params.version !== ortVersion || !/^ort-wasm-simd-threaded\.asyncify\.(mjs|wasm)$/.test(req.params.file)) return res.status(404).end();
+    res.sendFile(path.join(ortDir, req.params.file), { maxAge: '365d', immutable: true });
+  });
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: 'ensemble-predictions', port: Number(process.env.PORT || 8080) }));
   app.use(['/api/imagery', '/api/segmentation'], async (req, res) => {
     try {
       const token = process.env.AGROCEBADA_SERVICE_TOKEN || await readFile(path.join(root,'.data-cache/deployment/service-token'),'utf8').then(s=>s.trim()).catch(()=> '');
-      const response = await fetch('http://127.0.0.1:8090'+req.originalUrl, { method: req.method, headers: { 'Content-Type':'application/json', 'X-AgroCebada-Service-Token': token }, body: req.method==='POST' ? JSON.stringify(req.body) : undefined, signal: AbortSignal.timeout(95000) });
+      const response = await fetch((process.env.IMAGERY_SERVICE_URL || 'http://127.0.0.1:8090')+req.originalUrl, { method: req.method, headers: { 'Content-Type':'application/json', 'X-AgroCebada-Service-Token': token, 'X-Demo-Client': req.ip || 'local' }, body: req.method==='POST' ? JSON.stringify(req.body) : undefined, signal: AbortSignal.timeout(95000) });
+      // The browser keeps the segmentation model files (immutable, content-hashed names) and tiles.
+      const cache = response.headers.get('Cache-Control'); if (cache) res.set('Cache-Control', cache);
       res.status(response.status).set('Content-Type',response.headers.get('Content-Type') || 'application/json').send(Buffer.from(await response.arrayBuffer()));
     } catch { res.status(503).json({ error:'Servicio de imágenes no disponible. Puedes seguir usando el atlas.' }); }
   });

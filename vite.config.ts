@@ -5,10 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
 
 const serviceToken = process.env.AGROCEBADA_SERVICE_TOKEN || (existsSync('.data-cache/deployment/service-token') ? readFileSync('.data-cache/deployment/service-token','utf8').trim() : '');
-const serviceProxy: ProxyOptions = { target: 'http://127.0.0.1:8090', headers: { 'X-AgroCebada-Service-Token': serviceToken }, configure(proxy) { proxy.on('error', (_error, _request, response) => { if ('writeHead' in response && !response.headersSent) { response.writeHead(503, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ error: 'Servicio de imágenes no disponible. Puedes seguir usando el atlas.' })); } }); } };
+const serviceProxy: ProxyOptions = { target: process.env.IMAGERY_SERVICE_URL || 'http://127.0.0.1:8090', headers: { 'X-AgroCebada-Service-Token': serviceToken }, configure(proxy) { proxy.on('error', (_error, _request, response) => { if ('writeHead' in response && !response.headersSent) { response.writeHead(503, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ error: 'Servicio de imágenes no disponible. Puedes seguir usando el atlas.' })); } }); } };
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()], resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } }, server: { strictPort: true, allowedHosts: ['.ngrok-free.app'], watch: { ignored: ['**/.data-cache/**','**/.venv/**','**/test-results/**','**/playwright-report/**'] }, proxy: { '/api/imagery': serviceProxy, '/api/segmentation': serviceProxy } },
+  plugins: [react(), tailwindcss()], resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)),
+    // onnxruntime-web without its 27 MB runtime bundled in: the worker loads it from /ort/<version>/
+    // (server/index.mjs) or, on the Cloudflare demo (25 MiB file limit), from jsDelivr.
+    'onnxruntime-web/webgpu': fileURLToPath(new URL('./node_modules/onnxruntime-web/dist/ort.webgpu.min.mjs', import.meta.url)) } },
+  worker: { format: 'es' }, optimizeDeps: { exclude: ['onnxruntime-web'] }, server: { strictPort: true, allowedHosts: ['.ngrok-free.app'], watch: { ignored: ['**/.data-cache/**','**/.venv/**','**/test-results/**','**/playwright-report/**'] }, proxy: { '/api/imagery': serviceProxy, '/api/segmentation': serviceProxy } },
   preview: { allowedHosts: ['.ngrok-free.app'] },
   build: { rollupOptions: { output: { manualChunks: { mapping: ['ol', 'proj4', 'ol-mapbox-style'], react: ['react', 'react-dom'] } } } },
 });

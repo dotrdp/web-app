@@ -3,5 +3,20 @@
   "checkpointSha256": "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69",
   "codeVersion": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
   "checkpointUrl": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt",
-  "weights": "fixed-pretrained"
+  "weights": "fixed-pretrained",
+  "browser": {
+    "runtime": "onnxruntime-web (WebGPU, WebAssembly fallback)",
+    "files": {
+      "encoder": {
+        "file": "sam2.1-tiny-encoder-016997303513ced8.onnx",
+        "sha256": "016997303513ced88a8a3553a12907ff9d1321d24cba85ff3c5a36b6a2f16739",
+        "bytes": 55030395
+      },
+      "decoder": {
+        "file": "sam2.1-tiny-decoder-e64432ef35862b63.onnx",
+        "sha256": "e64432ef35862b6356da68bd02e0516fc1748df72fce148fd2516d00605c9ea3",
+        "bytes": 8486950
+      }
+    }
+  }
 }

@@ -5,7 +5,7 @@
 // map) and Estimar, the dashboard page that the map and its controls fade away for. the Agente de IA Milli lives in the top island.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { BoxSelect, ChartSpline, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Calculator, CodeXml, Search, Send, Settings, SquareDashed, Sun, Table2, TriangleAlert, WandSparkles, X } from 'lucide-react';
+import { BoxSelect, ChartSpline, Cpu, ChevronDown, ChevronUp, Columns2, Database, Download, FileJson, FileSpreadsheet, Home, ImageDown, Layers3, LocateFixed, LogOut, Maximize, Minus, MousePointerClick, Moon, Palette, PencilRuler, PenLine, Plus, Ruler, Calculator, CodeXml, Search, Send, Settings, SquareDashed, Sun, Table2, TriangleAlert, WandSparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -57,6 +57,7 @@ import EstimationPanel, { Stat } from './panels/EstimationPanel';
 import EconomicsPanel from './panels/EconomicsPanel';
 import NotesPanel from './panels/NotesPanel';
 import AttributeTable from './panels/AttributeTable';
+import { modelCached, segmentCrop, type SegmentationCrop } from './segmentation/sam';
 import type { Atlas, Field as WorkspaceField, Geometry, ImageryManifest, LayerSettings, MapFilters, Override, Parcel, Phase, SegmentationPrompt, SegmentationProposal, User, Workspace } from './types';
 import './map.css';
 import './shell/shell.css';
@@ -144,7 +145,7 @@ export default function App() {
   const [swipe, setSwipe] = useState<number | null>(null), [selectArea, setSelectArea] = useState(false), [selection, setSelection] = useState<string[]>([]);
   const [locating, setLocating] = useState(false), [fullscreen, setFullscreen] = useState(false);
   const [draftMode, setDraftMode] = useState<'draw' | 'edit' | 'segment' | null>(null), [draft, setDraft] = useState<Geometry | null>(null), [fieldName, setFieldName] = useState('Mi parcela');
-  const [saving, setSaving] = useState(false), [segmenting, setSegmenting] = useState(false), [segmentError, setSegmentError] = useState('');
+  const [saving, setSaving] = useState(false), [segmenting, setSegmenting] = useState(false), [segmentError, setSegmentError] = useState(''), [segmentStatus, setSegmentStatus] = useState(''), [samCached, setSamCached] = useState<boolean | null>(null);
   const [compactDelineation, setCompactDelineation] = useState(false);
   const [promptLabel, setPromptLabel] = useState<0 | 1>(1), [prompts, setPrompts] = useState<SegmentationPrompt[]>([]), [proposal, setProposal] = useState<SegmentationProposal | null>(null), [adjusting, setAdjusting] = useState(false);
   const [manifest, setManifest] = useState<ImageryManifest | null>(null), [imageryError, setImageryError] = useState('');
@@ -244,24 +245,42 @@ export default function App() {
     setDashboard(false); setSelection(chosen.map(p => p.properties.id)); setRightPanel('selection'); setTimeout(() => map.current?.fitBounds(bounds), 60);
   }
   function nextParcel(direction: number) { const list = visibleParcels.filter(p => p.properties.predictedYield != null || p.properties.group === 'custom'); if (!list.length) return; const index = list.findIndex(p => p.properties.id === selectedId); chooseParcel(list[(index + direction + list.length) % list.length].properties.id, true); }
-  function cancelDraft() { queuedPrompts.current = null; controller.current?.abort(); requestRevision.current++; map.current?.cancel(); setDraftMode(null); setDraft(null); setProposal(null); setPrompts([]); setSegmentError(''); setSegmenting(false); setAdjusting(false); }
+  function cancelDraft() { queuedPrompts.current = null; controller.current?.abort(); requestRevision.current++; map.current?.cancel(); setDraftMode(null); setDraft(null); setProposal(null); setPrompts([]); setSegmentError(''); setSegmentStatus(''); setSegmenting(false); setAdjusting(false); }
   function stopTools() { if (measureKind) { setMeasureKind(null); setMeasureValue(null); map.current?.measure(null); } setSelectArea(false); }
   function startDraw() { cancelDraft(); stopTools(); setPlaying(false); setDraftMode('draw'); setCompactDelineation(false); setFieldName('Mi parcela'); setTimeout(() => map.current?.draw(), 50); }
-  function startSegment() { cancelDraft(); stopTools(); setSelectedId(null); setPlaying(false); segmentationMonth.current = dateKey(year < 2022 ? 2025 : year, year < 2022 ? 6 : month); if (year < 2022) { setYear(2025); setMonth(6); } setDraftMode('segment'); setCompactDelineation(true); setFieldName('Mi parcela'); setPromptLabel(1); }
+  function startSegment() { cancelDraft(); stopTools(); setSelectedId(null); setPlaying(false); segmentationMonth.current = dateKey(year < 2022 ? 2025 : year, year < 2022 ? 6 : month); if (year < 2022) { setYear(2025); setMonth(6); } setDraftMode('segment'); setCompactDelineation(true); void modelCached().then(setSamCached); setFieldName('Mi parcela'); setPromptLabel(1); }
   function startEdit() { if (!selected) return; cancelDraft(); stopTools(); setPlaying(false); setDraftMode('edit'); setCompactDelineation(false); setFieldName(selected.properties.name || selected.properties.id); map.current?.edit(selected); }
   async function infer(nextPrompts: SegmentationPrompt[]) {
     // A click that lands before this month's imagery manifest is kept and sent once it arrives.
     if (!manifest && !imageryError && nextPrompts.some(p => p.label === 1)) { queuedPrompts.current = nextPrompts; setPrompts(nextPrompts); setSegmenting(true); setSegmentError(''); return; }
     if (!manifest || !nextPrompts.some(p => p.label === 1)) { setSegmenting(false); setSegmentError(imageryError || 'Selecciona primero un punto dentro de tu terreno.'); return; }
     controller.current?.abort(); const abort = new AbortController(); controller.current = abort;
-    const revision = ++requestRevision.current; setSegmenting(true); setSegmentError(''); setPrompts(nextPrompts);
-    const timeout = window.setTimeout(() => abort.abort(), 90000);
+    const revision = ++requestRevision.current; setSegmenting(true); setSegmentStatus(''); setSegmentError(''); setPrompts(nextPrompts);
+    const current = () => requestRevision.current === revision && !abort.signal.aborted;
+    // The 90 s limit starts once the model is in the browser, so a slow first download is not cut off.
+    let timeout = 0; const arm = () => { if (!timeout) timeout = window.setTimeout(() => abort.abort(), 90000); };
+    const requestId = String(revision), base = { requestId, imageryVersion: manifest.version, month: key, prompts: nextPrompts };
     try {
-      const result = await api<SegmentationProposal>('/api/segmentation/proposals', { method: 'POST', signal: abort.signal, body: JSON.stringify({ requestId: String(revision), imageryVersion: manifest.version, month: key, prompts: nextPrompts }) });
-      if (requestRevision.current !== revision || abort.signal.aborted || result.requestId !== String(revision)) return;
-      setProposal(result); setDraft(result.geometry); setCompactDelineation(false); map.current?.proposal(result.geometry);
+      // The server cuts the satellite crop, the browser runs SAM 2.1 on it, the server checks the
+      // masks. A field that reaches the crop's edge comes back as {expand} and is tried larger.
+      let side: number | undefined;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (current()) setSegmentStatus(attempt ? 'La parcela es más grande: ampliando la imagen…' : '');
+        const crop = await api<SegmentationCrop>('/api/segmentation/crops', { method: 'POST', signal: abort.signal, body: JSON.stringify(side ? { ...base, side } : base) });
+        if (!current()) return;
+        // The model is fetched here, after the toolbar click and a click on the map, never before.
+        const out = await segmentCrop(crop, p => { if (p.stage !== 'download') arm(); if (current()) setSegmentStatus(p.stage === 'download' ? `Descargando el modelo de delimitación (solo la primera vez) · ${Math.floor(p.loaded / p.total * 100)} %` : p.stage === 'load' ? 'Preparando el modelo en tu navegador…' : p.device === 'webgpu' ? 'Delimitando en tu navegador con WebGPU…' : 'Delimitando en tu navegador…'); });
+        setSamCached(true);
+        if (!current()) return;
+        const result = await api<SegmentationProposal | { requestId: string; expand: number }>('/api/segmentation/proposals', { method: 'POST', signal: abort.signal, body: JSON.stringify({ requestId, cropId: crop.cropId, masks: out.masks, scores: out.scores, device: out.device }) });
+        if (!current() || result.requestId !== requestId) return;
+        if ('expand' in result) { side = result.expand; continue; }
+        setProposal(result); setDraft(result.geometry); setCompactDelineation(false); map.current?.proposal(result.geometry);
+        return;
+      }
+      setSegmentError('No se obtuvo una propuesta válida. Dibuja el terreno manualmente.');
     } catch (e) { if (requestRevision.current === revision) setSegmentError(abort.signal.aborted ? 'La solicitud tardó demasiado. Puedes volver a intentar.' : (e as Error).message); }
-    finally { clearTimeout(timeout); if (requestRevision.current === revision) setSegmenting(false); }
+    finally { clearTimeout(timeout); if (requestRevision.current === revision) { setSegmenting(false); setSegmentStatus(''); } }
   }
   async function saveDraft() {
     if (!draft) return; setSaving(true);
@@ -332,7 +351,7 @@ export default function App() {
     { id: 'esquema', title: 'Esquema de color', subtitle: 'Una paleta por cultivo: maíz, sorgo, trigo, arroz, cebada y mijo', icon: <Palette/>, keywords: 'tema color scheme cultivo', carousel: 'scheme' },
     { id: dark ? 'claro' : 'oscuro', title: dark ? 'Tema claro' : 'Tema oscuro', subtitle: 'Cambia la luminosidad del marco', icon: dark ? <Sun/> : <Moon/>, run: () => setDark(d => !d) },
     ...(Object.entries(LAYERS) as [LayerId, (typeof LAYERS)[LayerId]][]).map(([id, l]) => ({ id: 'capa ' + l.name.toLowerCase(), title: `Capa · ${l.name}${isOn(stack, id) ? ' · apagar' : ''}`, subtitle: l.subtitle, icon: <l.icon/>, keywords: `capa ${id}`, run: () => setStack(s => updateLayer(s, id, { on: !isOn(s, id) })) })),
-    ...(enabledTool('sam') ? [{ id: 'delimitar', title: 'Delimitar con IA', subtitle: 'SAM 2.1 sobre Sentinel-2', icon: <WandSparkles/>, run: startSegment }] : []),
+    // Delimitar con IA starts only from the map toolbar: it downloads and runs a 64 MB model in the browser.
     ...(enabledTool('draw') ? [{ id: 'dibujar', title: 'Dibujar parcela', subtitle: 'Polígono manual', icon: <PenLine/>, run: startDraw }] : []),
     ...(enabledTool('measure') ? [{ id: 'medir', title: 'Medir distancia', subtitle: 'Distancia geodésica', icon: <Ruler/>, run: () => toggleMeasure('distance') }] : []),
     ...(enabledTool('area') ? [{ id: 'area', title: 'Medir área', subtitle: 'Superficie en hectáreas', icon: <SquareDashed/>, run: () => toggleMeasure('area') }] : []),
@@ -423,11 +442,13 @@ export default function App() {
                 <div className="grid gap-1"><span className="w-fit rounded-full bg-primary-container px-2.5 py-0.5 text-xs text-on-primary-container">{draftMode === 'segment' ? 'SAM 2.1 · Sentinel-2 RGB' : draftMode === 'edit' ? 'Edición de límites' : 'Dibujo manual'}</span>
                   {!compactDelineation && <p className="text-[13px] leading-relaxed text-muted-foreground">{draftMode === 'segment' ? 'Haz clic dentro del terreno. Añade puntos para incluir o excluir áreas y revisa la propuesta antes de guardarla.' : 'Ajusta los vértices. Al dibujar, un doble clic cierra el polígono.'}</p>}</div>
                 {draftMode === 'segment' && <>
+                  {/* The tool runs SAM 2.1 in this browser: say so before the first click starts the download. */}
+                  <p className="flex gap-2 rounded-2xl bg-tile px-3 py-2 text-xs leading-relaxed text-muted-foreground" aria-label="Cómo funciona la delimitación con IA"><Cpu className="mt-0.5 size-3.5 shrink-0"/><span>{samCached ? 'La IA corre en tu navegador con el modelo SAM 2.1 ya descargado, en la GPU de tu equipo (WebGPU) o en el procesador.' : 'La IA corre en tu navegador: al hacer clic en el terreno se descarga una sola vez el modelo SAM 2.1 (64 MB) y se ejecuta en la GPU de tu equipo (WebGPU) o, si no está disponible, en el procesador. Puede tardar unos segundos.'}</span></p>
                   <div role="group" aria-label="Tipo de punto" className="grid grid-cols-2 gap-1 rounded-full bg-tile p-1">
                     {([[1, '+ Incluir', 'bg-emerald-500'], [0, '− Excluir', 'bg-rose-500']] as const).map(([value, label, dot]) => <button key={label} type="button" aria-pressed={promptLabel === value && !adjusting} onClick={() => { setAdjusting(false); map.current?.proposal(draft); setPromptLabel(value); }} className="flex h-8 items-center justify-center gap-2 rounded-full text-sm text-muted-foreground aria-pressed:bg-frame aria-pressed:text-foreground aria-pressed:shadow-sm"><span className={cn('size-2 rounded-full', dot)}/>{label}</button>)}
                   </div>
                   {!compactDelineation && <p className="text-xs text-muted-foreground">{MONTH_NAMES[month]} {year} · límites aproximados de 10 m · {prompts.length} {prompts.length === 1 ? 'punto' : 'puntos'}</p>}
-                  {segmenting && <div className="rounded-2xl bg-tile px-3 py-2 text-sm"><LoadingState label="Buscando límites de la parcela…"/></div>}
+                  {segmenting && <div className="rounded-2xl bg-tile px-3 py-2 text-sm"><LoadingState label={segmentStatus || 'Buscando límites de la parcela…'}/></div>}
                   {segmentError && <Alert className="rounded-2xl"><TriangleAlert/><AlertDescription>{segmentError}</AlertDescription></Alert>}
                   {proposal?.warnings.map(w => <p key={w} className="rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">{w}</p>)}
                   <div className="flex flex-wrap gap-1.5"><Button variant="outline" size="sm" className="rounded-full bg-transparent" disabled={segmenting || !prompts.length} onClick={() => void infer(prompts)}>Reintentar</Button><Button variant="outline" size="sm" className="rounded-full bg-transparent" disabled={!draft || segmenting} onClick={() => { setAdjusting(true); setCompactDelineation(true); map.current?.editDraft(draft!); }}>Ajustar vértices</Button><Button variant="ghost" size="sm" className="rounded-full" onClick={startDraw}><PencilRuler/>Dibujar manualmente</Button></div>
