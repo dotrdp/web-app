@@ -200,9 +200,10 @@ const legendItems = traces => { const seen = new Set(), out = []; for (const t o
 /** Entries of a horizontal legend packed into rows that fit widthPx. Plotly only wraps a legend at
  *  the figure's right edge, so each row becomes its own legend (side-by-side panels stay apart). */
 function legendRows(items, widthPx, title) {
-  // An entry: symbol (≈40 px) + text (≈6.4 px per character at 10.5 px).
-  const rows = [[]]; let x = title ? String(title).length * 6.6 + 10 : 0;
-  for (const it of items) { const w = String(it).replace(/<[^>]+>/g, '').length * 6.4 + 46; if (rows.at(-1).length && x + w > widthPx) { rows.push([]); x = 0; } rows.at(-1).push(it); x += w; }
+  // An entry: symbol and gaps (≈56 px) + text (≈7 px per character at 10.5 px, digits and capitals
+  // included). Erring wide costs a little space; erring narrow lets Plotly wrap over the title.
+  const rows = [[]]; let x = title ? String(title).length * 7 + 12 : 0;
+  for (const it of items) { const w = String(it).replace(/<[^>]+>/g, '').length * 7 + 56; if (rows.at(-1).length && x + w > widthPx) { rows.push([]); x = 0; } rows.at(-1).push(it); x += w; }
   return { rows, px: rows.length * 19 + 4 };
 }
 /** Break a title into lines that fit widthPx (bold 12 px ≈ 7 px per character). */
@@ -238,6 +239,15 @@ export function compile(input, { width = CHAT_WIDTH } = {}) {
   const fig = reflow(input, width);
   const layout = { showlegend: true, hovermode: 'closest', separators: '.,', barmode: fig.barmode ?? 'group', bargap: 0.18, bargroupgap: 0.06 };
   const axes = fig.order.map(n => fig.axes[n]), byAx = n => fig.traces.filter(t => t.ax === n);
+  // Long category labels on the left of a panel (municipalities on horizontal bars, heatmap rows)
+  // get room inside that panel's own space, so the other panels (a map above) keep their width.
+  const ML = MARGIN.l;
+  const labelPad = a => {
+    if (a.type !== 'xy') return 0;
+    const labels = byAx(a.name).flatMap(t => (t.trace.orientation === 'h' || t.trace.type === 'heatmap') && Array.isArray(t.trace.y) ? t.trace.y : []).concat(a.y.order ?? []);
+    const longest = Math.max(0, ...labels.filter(v => typeof v === 'string').map(v => v.length));
+    return longest ? Math.max(0, Math.min(width * 0.42, longest * 6.3 + 22 + (a.y.label ? 18 : 0)) - ML) : 0;
+  };
   // Legends: one per axes that has something to tell apart; small multiples share one for the figure (like FacetGrid).
   const legends = {}, facets = axes.length > 1 && axes.every(a => a.facet);
   let figLegend = null;
@@ -257,15 +267,15 @@ export function compile(input, { width = CHAT_WIDTH } = {}) {
   const gaps = Array.from({ length: fig.cols }, (_, c) => gapAfter(c)), free = 1 - gaps.reduce((t, g) => t + g, 0);
   const wr = fig.widthRatios?.length === fig.cols ? fig.widthRatios : Array(fig.cols).fill(1), wsum = wr.reduce((t, v) => t + v, 0), colW = c => free * wr[c] / wsum;
   const colX = c => Array.from({ length: c }, (_, k) => colW(k) + gaps[k]).reduce((t, v) => t + v, 0);
-  const xDom = a => [colX(a.cell.c0), colX(a.cell.c1) + colW(a.cell.c1)].map(round3);
-  const widthPx = a => (width - MARGIN.l - MARGIN.r) * (xDom(a)[1] - xDom(a)[0]);
+  const xDom = a => [colX(a.cell.c0) + labelPad(a) / (width - ML - MARGIN.r), colX(a.cell.c1) + colW(a.cell.c1)].map(round3);
+  const widthPx = a => (width - ML - MARGIN.r) * (xDom(a)[1] - xDom(a)[0]);
   // Rows (pixels): headroom above (title, legend) and room below (tick labels, x title, legend).
   const lg = a => legends[a.name], lgRows = a => legendRows(lg(a).items, widthPx(a), lg(a).title), lgPx = a => lg(a) && ['top', 'bottom'].includes(lg(a).position) ? lgRows(a).px : 0;
-  const figLegendRows = figLegend ? legendRows(figLegend.items, width - MARGIN.l - MARGIN.r, figLegend.title) : null;
+  const figLegendRows = figLegend ? legendRows(figLegend.items, width - ML - MARGIN.r, figLegend.title) : null;
   const titleLines = a => a.title ? wrapText(a.title, widthPx(a)) : [];
   // Reference labels at the top of a line or span stick out above the axes.
   const topLabels = a => fig.shapes.some(sh => sh.ax === a.name && sh.shape.label?.text && (sh.kind === 'vline' || sh.kind === 'vspan' || sh.kind === 'hspan'));
-  const above = a => titleLines(a).length * 16 + (a.title ? 6 : 0) + (lg(a)?.position === 'top' ? lgPx(a) + 2 : 0) + (a.type === 'polar' ? 18 : 0) + (topLabels(a) && !a.title && lg(a)?.position !== 'top' ? 14 : 0);
+  const above = a => titleLines(a).length * 16 + (a.title ? 6 : 0) + (lg(a)?.position === 'top' ? lgPx(a) + 2 : 0) + (a.type === 'polar' ? 18 : 0) + (topLabels(a) ? 14 : 0);
   // Shared axes keep tick labels and titles only on the outer panels (matplotlib's label_outer).
   const innerX = a => fig.share.x && a.type === 'xy' && axes.some(o => o !== a && o.type === 'xy' && o.cell.r0 > a.cell.r1 && o.cell.c0 <= a.cell.c1 && o.cell.c1 >= a.cell.c0);
   const innerY = a => fig.share.y && a.type === 'xy' && axes.some(o => o !== a && o.type === 'xy' && o.cell.c1 < a.cell.c0 && o.cell.r0 <= a.cell.r1 && o.cell.r1 >= a.cell.r0);
@@ -284,7 +294,7 @@ export function compile(input, { width = CHAT_WIDTH } = {}) {
   const tops = []; let y = 0; rows.forEach((r, i) => { if (i) y += rows[i - 1].below + r.above; tops.push(y); y += r.base; });
   const yDom = a => [1 - (tops[a.cell.r1] + rows[a.cell.r1].base) / paperH, 1 - tops[a.cell.r0] / paperH].map(v => round3(Math.min(1, Math.max(0, v))));
   const lastCol = axes.filter(a => a.cell.c1 === fig.cols - 1);
-  layout.margin = { l: MARGIN.l, r: MARGIN.r + (lastCol.some(hasBar) ? 62 : 0) + (lastCol.some(hasY2) ? 46 : 0) + (lastCol.some(a => lg(a)?.position === 'right') ? 120 : 0), t: marginT, b: marginB };
+  layout.margin = { l: ML, r: MARGIN.r + (lastCol.some(hasBar) ? 62 : 0) + (lastCol.some(hasY2) ? 46 : 0) + (lastCol.some(a => lg(a)?.position === 'right') ? 120 : 0), t: marginT, b: marginB };
   for (const n of fig.annotations) if (n.coords === 'figure') {
     const yv = Number(n.ann.y), lines = String(n.ann.text).split('<br>').length * 15;
     if (yv < 0) layout.margin.b += Math.ceil(-yv * paperH) + lines; else if (yv > 1) layout.margin.t += Math.ceil((yv - 1) * paperH) + lines;
@@ -345,7 +355,7 @@ export function compile(input, { width = CHAT_WIDTH } = {}) {
         legendIds[name] = new Proxy({}, { get: () => id });
       }
     }
-    if (a.title) annotations.push({ text: `<b>${titleLines(a).map(esc).join('<br>')}</b>`, x: (dom.x[0] + dom.x[1]) / 2, y: dom.y[1], xref: 'paper', yref: 'paper', xanchor: 'center', yanchor: 'bottom', yshift: 3 + (L?.position === 'top' ? lgPx(a) + 2 : 0) + (a.type === 'polar' ? 18 : 0), showarrow: false, font: { size: 12 } });
+    if (a.title) annotations.push({ text: `<b>${titleLines(a).map(esc).join('<br>')}</b>`, x: (dom.x[0] + dom.x[1]) / 2, y: dom.y[1], xref: 'paper', yref: 'paper', xanchor: 'center', yanchor: 'bottom', yshift: 3 + (L?.position === 'top' ? lgPx(a) + 2 : 0) + (a.type === 'polar' ? 18 : 0) + (topLabels(a) ? 14 : 0), showarrow: false, font: { size: 12 } });
   }
 
   for (const t of fig.traces) {

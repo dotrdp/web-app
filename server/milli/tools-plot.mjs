@@ -36,7 +36,7 @@ const groupArgs = {
   group_by: z.string().optional().describe('Columna categórica: una serie por valor, con colores de la paleta (como hue en seaborn).'),
   order: z.array(z.union([z.string(), z.number()])).max(60).optional().describe('Orden de los grupos o categorías.'),
   color_map: z.record(z.string(), z.string()).optional().describe('Color por grupo: {"Puebla": "rojo", …}.'),
-  labels: z.record(z.string(), z.string().max(60)).optional().describe('Nombre en la leyenda por valor: {"training": "Con rendimiento", …}.'),
+  group_labels: z.record(z.string(), z.string().max(60)).optional().describe('Nombre en la leyenda por valor del grupo: {"training": "Con rendimiento", …}.'),
 };
 const colormapArg = z.string().optional().describe(`Mapa de color: ${Object.keys(COLORMAPS).join(', ')} (agrega _r para invertir). Secuencial por defecto viridis; para valores con signo (errores, residuos) usa uno divergente (rdbu_r, coolwarm, rdylgn) con color_mid 0.`);
 const colorScaleArgs = {
@@ -111,6 +111,8 @@ export function registerPlotTools(server, ctx) {
   const levelsOf = (vals, order) => { const u = uniq(vals.filter(v => v != null && v !== '')); if (order?.length) return [...order.filter(o => u.some(v => String(v) === String(o))), ...u.filter(v => !order.some(o => String(o) === String(v)))]; return u.sort((a, b) => isNum(a) && isNum(b) ? a - b : String(a).localeCompare(String(b), 'es')); };
   const groupColor = (args, level, k, levels) => {
     if (args.color_map?.[String(level)]) return colorOf(args.color_map[String(level)]);
+    // One colour for every group (e.g. many parcels' lines in green), as with matplotlib's color=.
+    if (args.color) return colorOf(args.color);
     if (levels.every(l => String(l) in LISA_COLORS)) return LISA_COLORS[String(level)];
     return PALETTE[k % PALETTE.length];
   };
@@ -123,7 +125,7 @@ export function registerPlotTools(server, ctx) {
     // LISA classes: background first, significant clusters drawn on top (and first in the legend).
     if (!args.order && levels.every(l => String(l) in LISA_COLORS)) levels = ['no significativo', 'LH', 'HL', 'LL', 'HH'].filter(l => levels.includes(l));
     if (levels.length > 40) throw new Error(`group_by «${args.group_by}» tiene ${levels.length} grupos; usa una columna con menos categorías o color_by continuo.`);
-    return levels.map((level, k) => make({ idx: g.map((v, i) => String(v) === String(level) ? i : -1).filter(i => i >= 0), level: args.labels?.[String(level)] ?? level, raw: level, color: groupColor(args, level, k, levels), k }));
+    return levels.map((level, k) => make({ idx: g.map((v, i) => String(v) === String(level) ? i : -1).filter(i => i >= 0), level: args.group_labels?.[String(level)] ?? level, raw: level, color: groupColor(args, level, k, levels), k }));
   };
   const pick = (arr, idx) => arr == null ? null : idx ? idx.map(i => arr[i]) : arr;
   /** Hover text: the extra columns as customdata lines under the trace's own values. */

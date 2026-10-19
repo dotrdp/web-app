@@ -96,8 +96,9 @@ export function themedLayout(fig: FigurePayload, compiled: Compiled, t: FigureTh
     const wrap = (text: string, px: number, size: number) => { const max = Math.max(20, Math.floor(px / (size * 0.56))), lines: string[] = []; for (const w of text.split(/\s+/)) { const last = lines.at(-1); if (last != null && (last + ' ' + w).length <= max) lines[lines.length - 1] = `${last} ${w}`; else lines.push(w); } return lines; };
     const titleLines = fig.title ? wrap(fig.title, width - 24, 14) : [], subLines = fig.subtitle ? wrap(fig.subtitle, width - 24, 11) : [], capLines = fig.caption ? wrap(fig.caption, width - 20, 10) : [];
     const headPx = titleLines.length * 19 + subLines.length * 15 + (titleLines.length || subLines.length ? 14 : 0), capPx = capLines.length * 14 + (capLines.length ? 10 : 0);
-    if (headPx) { layout.title = { text: [titleLines.length ? `<b>${titleLines.map(esc).join('<br>')}</b>` : '', subLines.length ? `<span style="font-size:11px">${subLines.map(esc).join('<br>')}</span>` : ''].filter(Boolean).join('<br>'), x: 0.01, xanchor: 'left', xref: 'paper', y: 1, yref: 'container', yanchor: 'top', pad: { t: 16 }, font: { size: 14, color: t.fg } }; m.t = (m.t ?? 30) + headPx + 6; }
-    if (capPx) { m.b = (m.b ?? 48) + capPx; layout.annotations = [...(layout.annotations as object[] ?? []), { text: capLines.map(esc).join('<br>'), xref: 'paper', yref: 'paper', x: 0, y: 0, yshift: -(m.b - capPx - 4), xanchor: 'left', yanchor: 'top', align: 'left', showarrow: false, font: { size: 10, color: t.muted } }]; }
+    // Title and caption start at the image's left edge, whatever the plot's left margin.
+    if (headPx) { layout.title = { text: [titleLines.length ? `<b>${titleLines.map(esc).join('<br>')}</b>` : '', subLines.length ? `<span style="font-size:11px">${subLines.map(esc).join('<br>')}</span>` : ''].filter(Boolean).join('<br>'), x: 12 / width, xanchor: 'left', xref: 'container', y: 1, yref: 'container', yanchor: 'top', pad: { t: 16 }, font: { size: 14, color: t.fg } }; m.t = (m.t ?? 30) + headPx + 6; }
+    if (capPx) { m.b = (m.b ?? 48) + capPx; const plotW = width - (m.l ?? 56) - (m.r ?? 20); layout.annotations = [...(layout.annotations as object[] ?? []), { text: capLines.map(esc).join('<br>'), xref: 'paper', yref: 'paper', x: -((m.l ?? 56) - 12) / plotW, y: 0, yshift: -(m.b - capPx - 4), xanchor: 'left', yanchor: 'top', align: 'left', showarrow: false, font: { size: 10, color: t.muted } }]; }
     layout.height = (layout.height as number) + headPx + (headPx ? 6 : 0) + capPx;
   }
   return layout;
@@ -114,7 +115,25 @@ export async function drawFigure(el: HTMLElement, fig: FigurePayload, compiled: 
 
 /** The figure as a PNG data URL, laid out and themed as the user sees it at `width` (2× pixels), for the model to review. */
 export async function figurePng(fig: FigurePayload, width = 400, scale = 2) {
+  const hidden = document.visibilityState === 'hidden';
+  const work = renderPng(fig, width, scale, hidden);
+  // A background tab draws slowly or not at all: give up after 20 s with a clear reason.
+  const limit = new Promise<never>((_, reject) => setTimeout(() => reject(new Error(hidden || document.visibilityState === 'hidden'
+    ? 'la pestaña está en segundo plano y el navegador pausa el dibujo; la figura sí se muestra en el chat cuando la persona la vea'
+    : 'el dibujo tardó demasiado')), 20_000));
+  return Promise.race([work, limit]);
+}
+
+async function renderPng(fig: FigurePayload, width: number, scale: number, hidden: boolean) {
   const Plotly = await loadPlotly();
+  // Browsers stop animation frames in background tabs; Plotly waits on them, so lend it timers meanwhile.
+  const raf = window.requestAnimationFrame, caf = window.cancelAnimationFrame;
+  if (hidden) { window.requestAnimationFrame = cb => window.setTimeout(() => cb(performance.now()), 16); window.cancelAnimationFrame = id => window.clearTimeout(id); }
+  try { return await drawPng(Plotly, fig, width, scale); }
+  finally { if (hidden) { window.requestAnimationFrame = raf; window.cancelAnimationFrame = caf; } }
+}
+
+async function drawPng(Plotly: PlotlyModule, fig: FigurePayload, width: number, scale: number) {
   const layout = themedLayout(fig, compileAt(fig, width), readTheme(), { image: true, width });
   const host = document.createElement('div');
   host.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${layout.height}px;pointer-events:none;`;
