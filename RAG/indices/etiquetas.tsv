@@ -1,0 +1,177 @@
+etiqueta_sin_acentos	documentos
+acame	rag-03-agronomia
+adabella	rag-03-agronomia
+agricultura de conservacion	rag-05-crecimiento-piso
+agricultura por contrato	rag-15-mercado
+alphaearth	rag-20-datos-mcp
+altiplano	rag-05-crecimiento-piso rag-13-variedades
+altiplano central	rag-14-clima
+altitud	rag-18-fisiologia
+amplitud	rag-04-amplitud
+amplitud estacional	rag-04-amplitud
+amplitud termica	rag-04-amplitud
+analisis de datos	rag-12-guia-resenas
+analisis de resenas	rag-12-guia-resenas
+ancho de intervalo	rag-04-amplitud
+anomalia	rag-06-plagas-danos
+area de parcela	rag-09-experimentos-tabulares
+autorreporte	rag-17-medicion-rendimiento
+bootstrap	rag-10-validacion
+cadena cebada malta cerveza	rag-15-mercado
+calibracion entre sensores	rag-07-teledeteccion
+calidad industrial	rag-16-malteo-calidad
+calidad maltera	rag-03-agronomia
+calor	rag-18-fisiologia
+cebada	rag-06-plagas-danos rag-07-teledeteccion rag-11-literatura
+cebada maltera	rag-02-glosario rag-03-agronomia rag-08-experimentos-profundos rag-13-variedades rag-15-mercado rag-16-malteo-calidad
+censo agropecuario 2022	rag-19-socioeconomia
+chirps	rag-01-reto-datos rag-14-clima rag-20-datos-mcp
+chirts-era5	rag-01-reto-datos rag-04-amplitud rag-14-clima
+cimmyt	rag-11-literatura
+clima de temporal	rag-12-guia-resenas rag-14-clima
+cobertura de espiga	rag-07-teledeteccion
+componentes del rendimiento	rag-18-fisiologia
+cosecha de muestra	rag-17-medicion-rendimiento
+costos de produccion	rag-15-mercado
+credito rural	rag-11-literatura
+credito y seguro	rag-19-socioeconomia
+crop cut	rag-17-medicion-rendimiento
+curvas sigmoides	rag-07-teledeteccion
+dataset parcelas	rag-01-reto-datos
+datos	rag-20-datos-mcp
+degradacion del suelo	rag-05-crecimiento-piso
+deteccion de dano	rag-06-plagas-danos
+dona josefa	rag-03-agronomia rag-13-variedades
+dos hileras	rag-13-variedades
+dos y seis hileras	rag-18-fisiologia
+ecofisiologia	rag-18-fisiologia
+eficiencia de uso del agua	rag-18-fisiologia
+enfermedades	rag-06-plagas-danos
+enso	rag-14-clima
+erosion	rag-05-crecimiento-piso
+error de medicion	rag-17-medicion-rendimiento
+errores frecuentes	rag-12-guia-resenas
+esmeralda	rag-03-agronomia rag-13-variedades
+estimacion de rendimiento	rag-08-experimentos-profundos
+experimentos	rag-09-experimentos-tabulares
+extracto	rag-16-malteo-calidad
+fenologia	rag-04-amplitud rag-09-experimentos-tabulares rag-18-fisiologia
+fenologia de la cebada	rag-02-glosario
+fenologia satelital	rag-07-teledeteccion
+fertilizacion	rag-03-agronomia
+fertilizacion nitrogenada	rag-05-crecimiento-piso
+fira	rag-11-literatura rag-15-mercado
+fira 2026	rag-01-reto-datos
+fisiologia de cebada	rag-18-fisiologia
+fisiologia de la cebada	rag-12-guia-resenas
+fuga de informacion	rag-02-glosario rag-10-validacion
+germinacion	rag-16-malteo-calidad
+glosario	rag-02-glosario
+grados-dia	rag-04-amplitud rag-14-clima
+granizo	rag-03-agronomia
+haying-off	rag-05-crecimiento-piso
+heaping	rag-10-validacion rag-17-medicion-rendimiento
+heladas	rag-03-agronomia rag-04-amplitud rag-14-clima rag-18-fisiologia
+herramientas	rag-20-datos-mcp
+hidalgo	rag-15-mercado
+hidalgo puebla tlaxcala	rag-01-reto-datos
+hls	rag-20-datos-mcp
+humedad del grano	rag-17-medicion-rendimiento
+indices de vegetacion	rag-02-glosario
+industria maltera	rag-19-socioeconomia
+inegi	rag-17-medicion-rendimiento
+intervalo de prediccion	rag-04-amplitud
+intervalos de confianza	rag-10-validacion
+jerga agronomica	rag-12-guia-resenas
+kumo	rag-09-experimentos-tabulares
+landsat	rag-20-datos-mcp
+linea base	rag-04-amplitud
+llanos de apan	rag-19-socioeconomia
+lluvia	rag-09-experimentos-tabulares
+malezas	rag-06-plagas-danos
+malteo	rag-16-malteo-calidad
+malteo y calidad	rag-12-guia-resenas
+mapa de documentos	rag-12-guia-resenas
+materia organica	rag-05-crecimiento-piso
+mcp	rag-20-datos-mcp
+mecanizacion	rag-19-socioeconomia
+medicion del rendimiento	rag-12-guia-resenas
+mercado de la cebada	rag-12-guia-resenas
+mmst-vit	rag-08-experimentos-profundos
+modelos de cultivo	rag-08-experimentos-profundos
+modelos fundacionales	rag-08-experimentos-profundos rag-09-experimentos-tabulares rag-11-literatura
+monocultivo cebada	rag-05-crecimiento-piso
+mtci	rag-09-experimentos-tabulares
+muestras pequenas	rag-10-validacion
+ndvi	rag-04-amplitud rag-06-plagas-danos rag-07-teledeteccion rag-09-experimentos-tabulares
+nitrogeno	rag-18-fisiologia
+nmx-ff-043	rag-16-malteo-calidad
+nubosidad	rag-07-teledeteccion
+organizaciones de productores	rag-19-socioeconomia
+parcelas	rag-20-datos-mcp
+piso de arado	rag-05-crecimiento-piso
+plagas	rag-06-plagas-danos
+planet	rag-01-reto-datos rag-20-datos-mcp
+plantillas de respuesta	rag-12-guia-resenas
+pocas etiquetas	rag-08-experimentos-profundos
+poder diastasico	rag-16-malteo-calidad
+precio de contrato	rag-15-mercado
+prediccion conformal	rag-04-amplitud
+prithvi	rag-08-experimentos-profundos
+produccion para el bienestar	rag-15-mercado
+productores de cebada	rag-19-socioeconomia
+proteina	rag-16-malteo-calidad rag-18-fisiologia
+puebla	rag-15-mercado
+radiacion	rag-18-fisiologia
+rechazo de lotes	rag-16-malteo-calidad
+red-edge	rag-07-teledeteccion
+redes profundas	rag-08-experimentos-profundos
+redondeo	rag-17-medicion-rendimiento
+redondeo de rendimientos	rag-10-validacion
+regionalismos	rag-02-glosario
+regresion espacial	rag-09-experimentos-tabulares
+rendimiento	rag-11-literatura rag-17-medicion-rendimiento
+rendimiento cebada	rag-01-reto-datos
+resolucion espacial	rag-07-teledeteccion
+reto agrocebada	rag-01-reto-datos rag-03-agronomia rag-12-guia-resenas
+rmse	rag-02-glosario rag-09-experimentos-tabulares rag-10-validacion
+roya	rag-06-plagas-danos
+roya amarilla	rag-13-variedades
+rubrica de evaluacion	rag-12-guia-resenas
+ruido de etiquetas	rag-10-validacion
+seguro parametrico	rag-11-literatura
+seis hileras	rag-13-variedades
+senal intramunicipal	rag-09-experimentos-tabulares
+sentinel-2	rag-01-reto-datos rag-07-teledeteccion rag-20-datos-mcp
+sequia	rag-03-agronomia rag-14-clima
+sesgo de seleccion	rag-10-validacion
+siap	rag-03-agronomia rag-17-medicion-rendimiento rag-20-datos-mcp
+siembra	rag-03-agronomia
+spei	rag-14-clima
+spi	rag-14-clima
+sql	rag-20-datos-mcp
+sqlite	rag-20-datos-mcp
+superficie sembrada	rag-15-mercado
+tabpfn	rag-08-experimentos-profundos
+techo de error	rag-09-experimentos-tabulares
+techo de informacion	rag-08-experimentos-profundos
+teledeteccion	rag-06-plagas-danos rag-07-teledeteccion rag-11-literatura
+temperatura base	rag-04-amplitud
+temporal	rag-02-glosario rag-03-agronomia rag-13-variedades rag-15-mercado
+tenencia de la tierra	rag-19-socioeconomia
+tepetate	rag-05-crecimiento-piso
+tipologia de productores	rag-19-socioeconomia
+tlaxcala	rag-15-mercado
+tmax tmin	rag-04-amplitud
+topografia cem	rag-01-reto-datos
+transferencia	rag-11-literatura
+unidades de produccion	rag-19-socioeconomia
+validacion cruzada	rag-02-glosario rag-08-experimentos-profundos rag-09-experimentos-tabulares rag-10-validacion
+validacion espacial	rag-10-validacion rag-11-literatura
+valles altos	rag-03-agronomia rag-06-plagas-danos
+variedades	rag-13-variedades
+ventana critica	rag-07-teledeteccion
+ventana de siembra	rag-04-amplitud
+verificacion de afirmaciones	rag-12-guia-resenas
+voyager	rag-03-agronomia rag-13-variedades
+zadoks	rag-02-glosario

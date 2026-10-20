@@ -1,0 +1,47 @@
+@id: rag-06-plagas-danos-068
+@documento: rag-06-plagas-danos | temas/06_plagas_enfermedades_y_deteccion_de_danos.md
+@categoria: plagas
+@titulo: Errores frecuentes y cómo detectarlos
+@titulo_documento: Plagas, enfermedades y detección de daños en cebada de temporal con satélite
+@etiquetas: plagas; enfermedades; cebada; valles altos; detección de daño; ndvi; anomalía; teledetección; malezas; roya
+@claves: plagas enfermedades cebada valles altos deteccion de dano ndvi anomalia teledeteccion malezas roya correccion afirmacion erronea altos valles dano cifras ficha agua solo resumen importancia mexico perdida perdidas pero rendimiento adabella amarilla cifra cita
+@fuente: [segmentation_pests_ndvi_water__research__prior_work.md, iterate_20261017__research__B1_damage_detection.md, iterate_20261017__research__A2_outlier_forensics.md, webapp__README.md, webapp__PLAN.md, error-spotting-ai-agent-dataset__barley-agronomy-mexico-2026-10-02__problems.csv]
+# Errores frecuentes y cómo detectarlos
+
+- **Afirmación errónea:** "Las plagas no causan daños de importancia económica en la cebada de Valles Altos." → **Corrección:** Sólo como cita de la ficha de Adabella (2008), que lo afirma sin datos de pérdidas y con la excepción del pulgón ruso en plántula. La ficha INIFAP 2022 describe pulgones que causan
+  amarillamiento y muerte prematura de hojas, y el pulgón ruso que provoca líneas blanquecinas o amarillentas. La cita de Adabella sobre "no importancia económica" está en el texto completo, pero sin datos de pérdidas; el resumen no menciona plagas.
+- **Afirmación errónea:** "Una caída de NDVI indica plaga." → **Corrección:** El NDVI no atribuye causa. Adams et al. (2021) no pudieron separar langosta de senescencia; Buchaillot et al. (2022) concluyen que las series de vegetación y las anomalías no identifican de forma única al gusano cogollero; en una de sus
+  relaciones, el NDVI frente al nivel de infestación dio R² = 0.401 (corrección verificada en la ronda 4).
+- **Afirmación errónea:** "Existe un modelo publicado que segmenta cultivo, agua y daño a la vez." → **Corrección:** La búsqueda de tres vías no halló ninguno. Los antecedentes son clasificadores de un solo tipo de dato o capas separadas.
+- **Afirmación errónea:** "DSWx-HLS mapea daño por plagas." → **Corrección:** DSWx-HLS sólo mapea agua (no agua, agua abierta, agua parcial). Es útil para etiquetar agua, no daño.
+- **Afirmación errónea:** "Los 18 reinicios son granizo o daño." → **Corrección:** Son más probablemente labranza de una fase verde con malezas antes de una siembra tardía. No hay evidencia de daño (B1 §3.2).
+- **Afirmación errónea:** "No hubo granizo en 2025, por tanto no hubo daño." → **Corrección:** La cobertura de septiembre es escasa (mediana de 0.13), así que la ausencia de un trayecto de granizo no es prueba. B1 lo dice explícitamente.
+- **Afirmación errónea:** "Las parcelas atípicas tienen una señal de plaga o de daño detectable." → **Corrección:** Ningún puntaje preregistrado pasó la corrección de Holm (menor p ajustado 0.24). Las banderas no predicen mayor error (A2 §5c).
+- **Afirmación errónea:** "Quitar los atípicos mejora el modelo." → **Corrección:** Con RMSE, recortar los atípicos no ayuda; el residual medio de Chignahuapan es −0.026 y subirlo 0.04 t/ha aumenta el RMSE unos 0.002 (A2 §7).
+- **Afirmación errónea:** "El PlanetScope del proyecto ya está bien parseado." → **Corrección:** La línea 117 de la carpeta de literatura lee dd/mm/aaaa como mm/dd. 28,304 de 47,804 filas quedan NaT (A2 §6).
+- **Afirmación errónea:** "La roya amarilla redujo la cebada 50 % en 1988 en Valles Altos (cita SciELO agritm v34n4a12)." → **Corrección:** Esa URL corresponde al artículo de Adabella (Zamora Díaz et al., 2008), no a un estudio de roya de 1988; su resumen no menciona roya de 1988. No se encontró fuente para la cifra de
+  1988, que debe eliminarse o marcarse como sin evidencia. La cifra verificable es hasta 53 % de pérdida en el ensayo de 2018 (Rodríguez-García et al., 2021).
+- **Afirmación errónea:** "En 2022 la roya amarilla afectó 5.4–6.7 % de la cebada de Valles Altos." → **Corrección:** Son severidades de ensayos en dos localidades (Nanacamilpa y Tlaxco) en un año, no un promedio regional. La publicación que el corpus parece citar (volumen 43) no pudo confirmar estas cifras.
+- **Afirmación errónea:** "Las cifras de Rhynchosporium y Pyrenophora (10–45 %, 10–40 %) son de México." → **Corrección:** Provienen de Etiopía y Australia. En México no se encontraron cifras de pérdida verificables.
+- **Afirmación errónea:** "El gusano cogollero o el chapulín dañan la cebada de Valles Altos." → **Corrección:** Las fuentes documentan estas plagas en maíz y sorgo, y el chapulín en general. La ficha SENASICA de chapulines registra la cebada (*Hordeum vulgare*) como hospedero de *Sphenarium purpurascens*, pero no
+  cuantifica daño en cebada de Valles Altos.
+- **Afirmación errónea:** "Windels (2000), *Fusarium head blight of barley*, Phytopathology 90:17–21, documenta la pérdida de rendimiento de la cebada." → **Corrección:** El título de ese volumen verificable es "Economic and social impacts of Fusarium head blight" (impactos económicos y sociales en las Grandes Llanuras
+  del Norte). Citar sólo el título correcto y no atribuirle cifras de cebada sin revisarlo.
+- **Afirmación errónea:** "La escaldadura es una de las enfermedades más importantes de la cebada en México (Boletín 1988)." → **Corrección:** El artículo de 1988 (Carvajal-Moreno) es una revisión de distribución: confirma presencia en Hidalgo, Puebla y Tlaxcala, pero no mide importancia relativa.
+
+- **Afirmación errónea:** "La roya amarilla de 2022 tuvo severidades de 5.4–6.7 % en Nanacamilpa y Tlaxco (INIFAP 2025, G77), que es un promedio regional." → **Corrección:** Las cifras existen y están en el Cuadro 1 de Rodríguez-García et al. (2025): 6.66 % en La Unión y 5.41 % en Nanacamilpa. El error sería
+  generalizarlas: son promedios de un año en dos localidades.
+- **Afirmación errónea:** "Doña Josefa y Voyager responden igual a los fungicidas." → **Corrección:** Según el resumen de Rodríguez-García et al. (2021), las variedades respondieron de forma diferente. Los valores de Voyager requieren el texto completo.
+- **Afirmación errónea:** "Cada punto de macollos infestados equivale a 0.28 % de pérdida en Valles Altos." → **Corrección:** Ese valor es australiano (2018–2019, cebada, trigo y durum). No hay equivalente local documentado.
+- **Afirmación errónea:** "La roya de la hoja causa pérdidas de rendimiento medidas en Valles Altos." → **Corrección:** El resumen de González González et al. (2018) reporta dosis de control, sin cifras de rendimiento; la importancia económica no está cuantificada.
+
+- **Afirmación errónea:** "La fusariosis de la espiga redujo 17 % el rendimiento de cebada en Valles Altos (Ireta y Gilchrist, 1994)." → **Corrección:** Ese 17 % es de trigo en Valles Altos. Para cebada no hay cifra local documentada (Bobadilla Meléndez et al., 2019).
+- **Afirmación errónea:** "El producto DIST-ALERT-HLS tiene precisión de 94.2 % y recall de 93.9 %." → **Corrección:** El ATBD v1 sólo especifica metas de exactitud superiores a 80 % (alertas de 50 % o más) y 90 % (DIST-ANN). Las cifras de 94.2 % y 93.9 % no aparecen en ese documento.
+- **Afirmación errónea:** "Prithvi-EO-2.0 usa parches de 14 × 14 píxeles en todas sus tareas." → **Corrección:** El resumen de Szwarcman et al. (2024) reporta 4.2 millones de muestras a 30 m, pero no el tamaño de parche; el 14 × 14 sólo sirve como ejemplo de cálculo.
+- **Afirmación errónea:** "En México no hay registros de BYDV en cebada." → **Corrección:** Mezzalama y Burnett (1990) registraron aislados transmitidos por *Rhopalosiphum padi*. Lo que no está documentado es la prevalencia actual en Valles Altos.
+- **Afirmación errónea:** "La ficha de chapulines documenta daños en Chihuahua, Durango y Zacatecas." → **Corrección:** La ficha SENASICA menciona pérdidas económicas en Chihuahua, Guanajuato, Puebla, Querétaro, Tlaxcala y Zacatecas; Durango no aparece en esa frase.
+- **Afirmación errónea:** "Si el NDVI no cambia, no hay plaga en la parcela." → **Corrección:** Zarco-Tejada et al. (2018) encontraron que el NDVI no difería de forma significativa entre árboles asintomáticos y sintomáticos. La ausencia de cambio en el NDVI no excluye una infección temprana.
+- **Afirmación errónea:** "La inspección visual de expertos detecta todas las infecciones antes que el satélite." → **Corrección:** En el mismo estudio, la evaluación visual tuvo 77.62% de exactitud (κ = 0.55) frente a qPCR, porque no puede ver infecciones asintomáticas.
+- **Afirmación errónea:** "Un foco menor de 30 m siempre aparece en HLS." → **Corrección:** El píxel integra la señal de todo su interior (900 m²). Un foco pequeño puede quedar diluido en el promedio de suelo y tejido sano; esta es una inferencia a partir de las áreas calculadas, no una medición en cebada.
+- **Afirmación errónea:** "Sentinel-2 y HLS observan cada parcela a diario." → **Corrección:** Sentinel-2 tiene revisita de 5 días y Landsat de 16 días, según la especificación HLS. La revisita combinada de HLS (2 a 3 días en una ficha NASA) no se verificó en texto primario.
+- **Afirmación errónea:** "La gallina ciega siempre muestra síntomas visibles en el dosel." → **Corrección:** La ficha de SENASICA indica que las plantas con raíces más fuertes a menudo toleran las lesiones, de modo que el daño radicular puede ser alto con síntomas poco evidentes.
